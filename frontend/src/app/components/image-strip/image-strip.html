@@ -1,0 +1,13 @@
+<div class="strip-container" #stripContainer>
+  @for (photo of photos; track photo.filename; let i = $index) {
+    <div
+      class="thumbnail"
+      [class.active]="i === currentIndex"
+      (click)="onThumbnailClick(i)">
+      <img [src]="getThumbnailUrl(photo.filename)" [alt]="photo.filename" loading="lazy" />
+    </div>
+  }
+  @empty {
+    <div class="empty">No images found</div>
+  }
+</div>

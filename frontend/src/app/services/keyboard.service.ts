@@ -1,0 +1,29 @@
+import { Injectable, NgZone, inject } from '@angular/core';
+import { Subject } from 'rxjs';
+
+export type PhotoAction = 'next' | 'prev' | 'select' | 'dust' | 'undo';
+
+@Injectable({ providedIn: 'root' })
+export class KeyboardService {
+  private zone = inject(NgZone);
+  action$ = new Subject<PhotoAction>();
+
+  init(): void {
+    this.zone.runOutsideAngular(() => {
+      document.addEventListener('keydown', (event: KeyboardEvent) => {
+        let action: PhotoAction | null = null;
+
+        if (event.key === 'ArrowRight') action = 'next';
+        else if (event.key === 'ArrowLeft') action = 'prev';
+        else if (event.key === '+' || event.key === '=') action = 'select';
+        else if (event.key === 'Delete') action = 'dust';
+        else if (event.key === 'z' && event.ctrlKey) action = 'undo';
+
+        if (action) {
+          event.preventDefault();
+          this.zone.run(() => this.action$.next(action!));
+        }
+      });
+    });
+  }
+}

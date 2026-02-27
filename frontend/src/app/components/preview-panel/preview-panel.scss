@@ -1,0 +1,24 @@
+:host {
+  display: block;
+  height: 100%;
+}
+
+.preview-container {
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+  background: #0a0a0a;
+}
+
+.full-image {
+  display: block;
+}
+
+.no-image {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #555;
+  font-size: 18px;
+}

@@ -1,0 +1,7 @@
+<div class="preview-container">
+  @if (imageUrl) {
+    <img [src]="imageUrl" [alt]="info?.filename ?? ''" class="full-image" />
+  } @else {
+    <div class="no-image">No image selected</div>
+  }
+</div>

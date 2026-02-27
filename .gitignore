@@ -1,0 +1,9 @@
+static/
+test_photos/
+node_modules/
+.angular/
+.playwright-mcp/
+nul
+__pycache__/
+*.pyc
+Screenshot *.png

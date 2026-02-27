@@ -1,0 +1,18 @@
+<div class="app-container">
+  <div class="strip-area">
+    <pp-image-strip
+      [photos]="photos"
+      [currentIndex]="currentIndex"
+      (photoSelected)="selectPhoto($event)">
+    </pp-image-strip>
+  </div>
+
+  <div class="bottom-area">
+    <div class="preview-area">
+      <pp-preview-panel [info]="currentInfo"></pp-preview-panel>
+    </div>
+    <div class="info-area">
+      <pp-info-panel [info]="currentInfo"></pp-info-panel>
+    </div>
+  </div>
+</div>
