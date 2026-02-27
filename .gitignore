@@ -1,4 +1,5 @@
 static/
+release/
 test_photos/
 node_modules/
 .angular/

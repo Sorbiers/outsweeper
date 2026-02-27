@@ -1,0 +1,9 @@
+{
+  "name": "photo-parser",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "cd frontend && npx ng build",
+    "release": "node scripts/release.js"
+  }
+}
