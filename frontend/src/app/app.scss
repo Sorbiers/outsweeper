@@ -11,24 +11,43 @@
 }
 
 .strip-area {
-  height: 25vh;
-  flex-shrink: 0;
-  border-bottom: 1px solid #333;
+  flex: none;
+  overflow: hidden;
+}
+
+.divider-h {
+  flex: none;
+  height: 4px;
+  background: #333;
+  cursor: row-resize;
+  &:hover, &:active {
+    background: #666;
+  }
 }
 
 .bottom-area {
-  height: 75vh;
+  flex: none;
   display: flex;
   flex-direction: row;
+  overflow: hidden;
 }
 
 .preview-area {
-  width: 65vw;
+  flex: none;
   overflow: auto;
-  border-right: 1px solid #333;
+}
+
+.divider-v {
+  flex: none;
+  width: 4px;
+  background: #333;
+  cursor: col-resize;
+  &:hover, &:active {
+    background: #666;
+  }
 }
 
 .info-area {
-  width: 35vw;
+  flex: none;
   overflow-y: auto;
 }

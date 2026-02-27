@@ -1,5 +1,5 @@
 <div class="app-container">
-  <div class="strip-area">
+  <div class="strip-area" [style.height.%]="stripHeight">
     <pp-image-strip
       [photos]="photos"
       [currentIndex]="currentIndex"
@@ -7,11 +7,14 @@
     </pp-image-strip>
   </div>
 
-  <div class="bottom-area">
-    <div class="preview-area">
+  <div class="divider-h" (mousedown)="onHDividerDown($event)"></div>
+
+  <div class="bottom-area" [style.height.%]="100 - stripHeight">
+    <div class="preview-area" [style.width.%]="previewWidth">
       <pp-preview-panel [info]="currentInfo"></pp-preview-panel>
     </div>
-    <div class="info-area">
+    <div class="divider-v" (mousedown)="onVDividerDown($event)"></div>
+    <div class="info-area" [style.width.%]="100 - previewWidth">
       <pp-info-panel [info]="currentInfo"></pp-info-panel>
     </div>
   </div>

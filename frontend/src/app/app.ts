@@ -24,6 +24,13 @@ export class App implements OnInit, OnDestroy {
   currentInfo: PhotoInfo | null = null;
   private sub!: Subscription;
 
+  // Resizable layout percentages
+  stripHeight = 25;
+  previewWidth = 65;
+  private dragging: 'h' | 'v' | null = null;
+  private boundDrag = (e: MouseEvent) => this.onDrag(e);
+  private boundDragEnd = () => this.onDragEnd();
+
   ngOnInit(): void {
     this.keyboard.init();
     this.loadPhotos();
@@ -52,6 +59,36 @@ export class App implements OnInit, OnDestroy {
     this.photoService.getInfo(photo.filename).subscribe(info => {
       this.currentInfo = info;
     });
+  }
+
+  onHDividerDown(e: MouseEvent): void {
+    e.preventDefault();
+    this.dragging = 'h';
+    document.addEventListener('mousemove', this.boundDrag);
+    document.addEventListener('mouseup', this.boundDragEnd);
+  }
+
+  onVDividerDown(e: MouseEvent): void {
+    e.preventDefault();
+    this.dragging = 'v';
+    document.addEventListener('mousemove', this.boundDrag);
+    document.addEventListener('mouseup', this.boundDragEnd);
+  }
+
+  private onDrag(e: MouseEvent): void {
+    if (this.dragging === 'h') {
+      const pct = (e.clientY / window.innerHeight) * 100;
+      this.stripHeight = Math.min(50, Math.max(10, pct));
+    } else if (this.dragging === 'v') {
+      const pct = (e.clientX / window.innerWidth) * 100;
+      this.previewWidth = Math.min(80, Math.max(20, pct));
+    }
+  }
+
+  private onDragEnd(): void {
+    this.dragging = null;
+    document.removeEventListener('mousemove', this.boundDrag);
+    document.removeEventListener('mouseup', this.boundDragEnd);
   }
 
   private handleAction(action: PhotoAction): void {
