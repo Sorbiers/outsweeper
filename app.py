@@ -98,10 +98,8 @@ def extract_comfyui_data(filepath):
 
 
 def extract_exif(filepath):
-    """Extract EXIF data from JPEG files."""
+    """Extract EXIF data from any image file that supports it."""
     result = {}
-    if filepath.suffix.lower() not in {'.jpg', '.jpeg'}:
-        return result
     try:
         img = Image.open(filepath)
         exif_data = img._getexif()
@@ -111,6 +109,22 @@ def extract_exif(filepath):
                 if isinstance(value, bytes) and len(value) > 256:
                     continue
                 result[str(tag_name)] = str(value)
+    except Exception:
+        pass
+    return result
+
+
+def extract_png_metadata(filepath):
+    """Extract all PNG text chunks (tEXt/iTXt/zTXt) from a PNG file."""
+    result = {}
+    if filepath.suffix.lower() != '.png':
+        return result
+    try:
+        img = Image.open(filepath)
+        for key, value in img.info.items():
+            if not isinstance(value, str):
+                continue
+            result[key] = value
     except Exception:
         pass
     return result
@@ -160,6 +174,7 @@ def create_app(source, selected_dir, dust_dir):
             'format': fmt,
             'comfyui': extract_comfyui_data(filepath),
             'exif': extract_exif(filepath),
+            'png_metadata': extract_png_metadata(filepath),
         }
         return jsonify(info)
 

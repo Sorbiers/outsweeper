@@ -1,4 +1,4 @@
-import { Component, Input, ElementRef, ViewChild, inject } from '@angular/core';
+import { Component, Input, ElementRef, ViewChild, OnChanges, SimpleChanges, inject } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { PhotoInfo } from '../../models/photo.model';
 import { PhotoService } from '../../services/photo.service';
@@ -13,7 +13,7 @@ const ZOOM_MAX = 20;
   styleUrl: './preview-panel.scss',
   imports: [MatButtonModule],
 })
-export class PreviewPanel {
+export class PreviewPanel implements OnChanges {
   @Input() info: PhotoInfo | null = null;
   @ViewChild('container') containerRef!: ElementRef<HTMLDivElement>;
   @ViewChild('img') imgRef!: ElementRef<HTMLImageElement>;
@@ -22,6 +22,13 @@ export class PreviewPanel {
   zoomLevel = 1;
 
   private photoService = inject(PhotoService);
+
+  ngOnChanges(changes: SimpleChanges): void {
+    if (changes['info']) {
+      this.zoomMode = 'fit';
+      this.zoomLevel = 1;
+    }
+  }
 
   get imageUrl(): string | null {
     return this.info ? this.photoService.getImageUrl(this.info.filename) : null;

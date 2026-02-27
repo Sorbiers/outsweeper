@@ -1,7 +1,7 @@
 import { Injectable, NgZone, inject } from '@angular/core';
 import { Subject } from 'rxjs';
 
-export type PhotoAction = 'next' | 'prev' | 'select' | 'dust' | 'undo';
+export type PhotoAction = 'next' | 'prev' | 'first' | 'last' | 'select' | 'dust' | 'undo';
 
 @Injectable({ providedIn: 'root' })
 export class KeyboardService {
@@ -15,6 +15,8 @@ export class KeyboardService {
 
         if (event.key === 'ArrowRight') action = 'next';
         else if (event.key === 'ArrowLeft') action = 'prev';
+        else if (event.key === 'Home') action = 'first';
+        else if (event.key === 'End') action = 'last';
         else if (event.key === '+' || event.key === '=') action = 'select';
         else if (event.key === 'Delete') action = 'dust';
         else if (event.key === 'z' && event.ctrlKey) action = 'undo';

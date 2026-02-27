@@ -99,6 +99,12 @@ export class App implements OnInit, OnDestroy {
       case 'prev':
         this.selectPhoto(this.currentIndex - 1);
         break;
+      case 'first':
+        this.selectPhoto(0);
+        break;
+      case 'last':
+        this.selectPhoto(this.photos.length - 1);
+        break;
       case 'select':
         this.moveCurrentPhoto('selected');
         break;

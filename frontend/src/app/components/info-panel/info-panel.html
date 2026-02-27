@@ -92,6 +92,21 @@
           }
         }
 
+        @if (pngMeta; as meta) {
+          <mat-divider />
+          <h3>PNG Metadata</h3>
+          @for (item of meta | keyvalue; track item.key) {
+            <div class="meta-block">
+              <span class="label">{{ item.key }}</span>
+              @if (isLongValue(item.value)) {
+                <div class="prompt-text">{{ item.value }}</div>
+              } @else {
+                <span class="value">{{ item.value }}</span>
+              }
+            </div>
+          }
+        }
+
         @if (info.exif && (info.exif | keyvalue)?.length) {
           <mat-divider />
           <h3>EXIF Data</h3>

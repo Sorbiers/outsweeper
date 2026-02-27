@@ -37,6 +37,24 @@
   }
 }
 
+.meta-block {
+  margin: 8px 0;
+
+  .label {
+    display: block;
+    font-size: 11px;
+    text-transform: uppercase;
+    color: #888;
+    letter-spacing: 0.5px;
+  }
+
+  .value {
+    display: block;
+    font-size: 14px;
+    word-break: break-all;
+  }
+}
+
 .prompt-text {
   background: #1a1a2e;
   padding: 12px;
