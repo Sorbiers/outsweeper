@@ -1,6 +1,14 @@
-<div class="preview-container">
+<div class="preview-container" #container [class.zoom-fit]="zoomMode === 'fit'" (wheel)="onWheel($event)">
   @if (imageUrl) {
-    <img [src]="imageUrl" [alt]="info?.filename ?? ''" class="full-image" />
+    <div class="toolbar">
+      <button mat-flat-button [class.active]="zoomMode === 'fit'" (click)="setFit()">Fit</button>
+      <button mat-flat-button [class.active]="isFull" (click)="setFull()">100%</button>
+    </div>
+    @if (zoomMode === 'fit') {
+      <img #img [src]="imageUrl" [alt]="info?.filename ?? ''" class="full-image zoom-fit" />
+    } @else {
+      <img #img [src]="imageUrl" [alt]="info?.filename ?? ''" class="full-image" [style.width.px]="scaledWidth" [style.height.px]="scaledHeight" />
+    }
   } @else {
     <div class="no-image">No image selected</div>
   }
