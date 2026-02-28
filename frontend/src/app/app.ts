@@ -1,6 +1,11 @@
 import { Component, OnInit, OnDestroy, inject } from '@angular/core';
 import { Subscription } from 'rxjs';
+import { finalize } from 'rxjs/operators';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
+import { MatFabButton } from '@angular/material/button';
+import { MatIconModule } from '@angular/material/icon';
+import { MatMenuModule } from '@angular/material/menu';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { PhotoService } from './services/photo.service';
 import { KeyboardService, PhotoAction } from './services/keyboard.service';
 import { PhotoListItem, PhotoInfo } from './models/photo.model';
@@ -10,7 +15,7 @@ import { PreviewPanel } from './components/preview-panel/preview-panel';
 
 @Component({
   selector: 'pp-root',
-  imports: [MatSnackBarModule, ImageStrip, InfoPanel, PreviewPanel],
+  imports: [MatSnackBarModule, MatFabButton, MatIconModule, MatMenuModule, MatProgressSpinnerModule, ImageStrip, InfoPanel, PreviewPanel],
   templateUrl: './app.html',
   styleUrl: './app.scss',
 })
@@ -22,6 +27,8 @@ export class App implements OnInit, OnDestroy {
   photos: PhotoListItem[] = [];
   currentIndex = 0;
   currentInfo: PhotoInfo | null = null;
+  currentFolder: 'source' | 'selected' | 'dust' = 'source';
+  loading = false;
   private sub!: Subscription;
 
   // Resizable layout percentages
@@ -42,23 +49,32 @@ export class App implements OnInit, OnDestroy {
   }
 
   loadPhotos(): void {
-    this.photoService.listPhotos().subscribe(res => {
-      this.photos = res.photos;
-      if (this.photos.length > 0) {
-        this.selectPhoto(0);
-      } else {
-        this.currentInfo = null;
-      }
-    });
+    this.loading = true;
+    this.photoService.listPhotos(this.currentFolder)
+      .pipe(finalize(() => this.loading = false))
+      .subscribe(res => {
+        this.photos = res.photos;
+        if (this.photos.length > 0) {
+          this.selectPhoto(0);
+        } else {
+          this.currentInfo = null;
+        }
+      });
   }
 
   selectPhoto(index: number): void {
     if (index < 0 || index >= this.photos.length) return;
     this.currentIndex = index;
     const photo = this.photos[index];
-    this.photoService.getInfo(photo.filename).subscribe(info => {
+    this.photoService.getInfo(photo.filename, this.currentFolder).subscribe(info => {
       this.currentInfo = info;
     });
+  }
+
+  switchFolder(folder: 'source' | 'selected' | 'dust'): void {
+    if (folder === this.currentFolder) return;
+    this.currentFolder = folder;
+    this.loadPhotos();
   }
 
   onHDividerDown(e: MouseEvent): void {
@@ -106,13 +122,13 @@ export class App implements OnInit, OnDestroy {
         this.selectPhoto(this.photos.length - 1);
         break;
       case 'select':
-        this.moveCurrentPhoto('selected');
+        if (this.currentFolder === 'source') this.moveCurrentPhoto('selected');
         break;
       case 'dust':
-        this.moveCurrentPhoto('dust');
+        if (this.currentFolder === 'source') this.moveCurrentPhoto('dust');
         break;
       case 'undo':
-        this.undoLast();
+        if (this.currentFolder === 'source') this.undoLast();
         break;
     }
   }

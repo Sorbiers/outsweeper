@@ -3,6 +3,7 @@
     <pp-image-strip
       [photos]="photos"
       [currentIndex]="currentIndex"
+      [folder]="currentFolder"
       (photoSelected)="selectPhoto($event)">
     </pp-image-strip>
   </div>
@@ -11,7 +12,7 @@
 
   <div class="bottom-area" [style.height.%]="100 - stripHeight">
     <div class="preview-area" [style.width.%]="previewWidth">
-      <pp-preview-panel [info]="currentInfo"></pp-preview-panel>
+      <pp-preview-panel [info]="currentInfo" [folder]="currentFolder"></pp-preview-panel>
     </div>
     <div class="divider-v" (mousedown)="onVDividerDown($event)"></div>
     <div class="info-area" [style.width.%]="100 - previewWidth">
@@ -19,3 +20,24 @@
     </div>
   </div>
 </div>
+
+@if (loading) {
+  <div class="loading-overlay">
+    <mat-spinner diameter="48"></mat-spinner>
+  </div>
+}
+
+<button mat-fab [matMenuTriggerFor]="folderMenu" class="folder-fab" [class.viewing-other]="currentFolder !== 'source'">
+  <mat-icon>folder</mat-icon>
+</button>
+<mat-menu #folderMenu="matMenu">
+  <button mat-menu-item (click)="switchFolder('source')" [class.active-folder]="currentFolder === 'source'">
+    <mat-icon>folder_open</mat-icon> Working Folder
+  </button>
+  <button mat-menu-item (click)="switchFolder('selected')" [class.active-folder]="currentFolder === 'selected'">
+    <mat-icon>check_circle</mat-icon> Selected
+  </button>
+  <button mat-menu-item (click)="switchFolder('dust')" [class.active-folder]="currentFolder === 'dust'">
+    <mat-icon>delete</mat-icon> Dust
+  </button>
+</mat-menu>

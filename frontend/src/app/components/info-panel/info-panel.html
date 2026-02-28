@@ -26,7 +26,14 @@
 
         @if (info.comfyui.found) {
           <mat-divider />
-          <h3>ComfyUI Workflow</h3>
+          <div class="section-header">
+            <h3>ComfyUI Workflow</h3>
+            @if (info.png_metadata?.['prompt']) {
+              <button mat-flat-button class="generate-btn" (click)="openGenerate()">
+                <mat-icon>play_arrow</mat-icon> Generate
+              </button>
+            }
+          </div>
           <div class="meta-grid">
             @if (info.comfyui.model) {
               <div class="meta-item wide">

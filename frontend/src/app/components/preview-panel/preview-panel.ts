@@ -15,6 +15,7 @@ const ZOOM_MAX = 20;
 })
 export class PreviewPanel implements OnChanges {
   @Input() info: PhotoInfo | null = null;
+  @Input() folder = 'source';
   @ViewChild('container') containerRef!: ElementRef<HTMLDivElement>;
   @ViewChild('img') imgRef!: ElementRef<HTMLImageElement>;
 
@@ -31,7 +32,7 @@ export class PreviewPanel implements OnChanges {
   }
 
   get imageUrl(): string | null {
-    return this.info ? this.photoService.getImageUrl(this.info.filename) : null;
+    return this.info ? this.photoService.getImageUrl(this.info.filename, this.folder) : null;
   }
 
   setFit() {

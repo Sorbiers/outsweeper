@@ -71,6 +71,17 @@
   }
 }
 
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.generate-btn {
+  flex-shrink: 0;
+}
+
 h3, h4 {
   margin: 16px 0 8px;
   font-weight: 500;

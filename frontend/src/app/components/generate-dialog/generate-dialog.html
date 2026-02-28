@@ -1,0 +1,69 @@
+<h2 mat-dialog-title>Generate with ComfyUI</h2>
+
+<mat-dialog-content>
+  <div class="params-grid">
+    <mat-form-field class="seed-field">
+      <mat-label>Seed</mat-label>
+      <input matInput type="number" [(ngModel)]="params.seed">
+      <button mat-icon-button matSuffix (click)="randomizeSeed()" title="Randomize">
+        <mat-icon>casino</mat-icon>
+      </button>
+    </mat-form-field>
+
+    <mat-form-field>
+      <mat-label>Steps</mat-label>
+      <input matInput type="number" [(ngModel)]="params.steps">
+    </mat-form-field>
+
+    <mat-form-field>
+      <mat-label>CFG</mat-label>
+      <input matInput type="number" [(ngModel)]="params.cfg">
+    </mat-form-field>
+
+    <mat-form-field>
+      <mat-label>Batch Size</mat-label>
+      <input matInput type="number" [(ngModel)]="params.batchSize">
+    </mat-form-field>
+  </div>
+
+  <mat-form-field class="full-width">
+    <mat-label>Positive Prompt</mat-label>
+    <textarea matInput [(ngModel)]="params.positivePrompt" rows="4"></textarea>
+  </mat-form-field>
+
+  <mat-form-field class="full-width">
+    <mat-label>Negative Prompt</mat-label>
+    <textarea matInput [(ngModel)]="params.negativePrompt" rows="3"></textarea>
+  </mat-form-field>
+
+  <div class="url-row">
+    <mat-form-field class="url-field">
+      <mat-label>ComfyUI URL</mat-label>
+      <input matInput [(ngModel)]="comfyUrl">
+    </mat-form-field>
+    @if (checkStatus === 'checking') {
+      <button mat-stroked-button disabled class="check-btn">Checking...</button>
+    } @else if (checkStatus === 'ok') {
+      <button mat-stroked-button (click)="checkConnection()" class="check-btn">
+        <mat-icon class="check-ok">check_circle</mat-icon> OK
+      </button>
+    } @else if (checkStatus === 'error') {
+      <button mat-stroked-button (click)="checkConnection()" class="check-btn">
+        <mat-icon class="check-err">error</mat-icon> Failed
+      </button>
+    } @else {
+      <button mat-stroked-button (click)="checkConnection()" class="check-btn">Check</button>
+    }
+  </div>
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button mat-button mat-dialog-close>Cancel</button>
+  <button mat-flat-button (click)="send()" [disabled]="sending">
+    @if (sending) {
+      Sending...
+    } @else {
+      Send
+    }
+  </button>
+</mat-dialog-actions>

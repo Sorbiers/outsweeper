@@ -1,0 +1,35 @@
+.params-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 16px;
+}
+
+.seed-field {
+  grid-column: 1 / -1;
+}
+
+.full-width {
+  width: 100%;
+}
+
+.url-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.url-field {
+  flex: 1;
+}
+
+.check-btn {
+  flex-shrink: 0;
+}
+
+.check-ok {
+  color: #4caf50;
+}
+
+.check-err {
+  color: #f44336;
+}

@@ -10,6 +10,7 @@ import { PhotoService } from '../../services/photo.service';
 export class ImageStrip implements OnChanges {
   @Input() photos: PhotoListItem[] = [];
   @Input() currentIndex = 0;
+  @Input() folder = 'source';
   @Output() photoSelected = new EventEmitter<number>();
 
   @ViewChild('stripContainer') stripContainer!: ElementRef<HTMLDivElement>;
@@ -23,7 +24,7 @@ export class ImageStrip implements OnChanges {
   }
 
   getThumbnailUrl(filename: string): string {
-    return this.photoService.getThumbnailUrl(filename);
+    return this.photoService.getThumbnailUrl(filename, this.folder);
   }
 
   onThumbnailClick(index: number): void {

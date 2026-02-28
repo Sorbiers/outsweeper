@@ -6,6 +6,7 @@ import webbrowser
 from datetime import datetime
 from pathlib import Path
 
+import requests as http_requests
 from flask import Flask, jsonify, request, send_from_directory, send_file
 from PIL import Image
 from PIL.ExifTags import TAGS
@@ -134,25 +135,35 @@ def create_app(source, selected_dir, dust_dir):
     static_dir = Path(__file__).parent / 'static'
     app = Flask(__name__, static_folder=None)
 
+    def resolve_folder():
+        folder = request.args.get('folder', 'source')
+        if folder == 'selected':
+            return selected_dir
+        elif folder == 'dust':
+            return dust_dir
+        return source
+
     # --- API routes ---
 
     @app.route('/api/photos')
     def list_photos():
+        target = resolve_folder()
         photos = []
-        for f in sorted(source.iterdir()):
-            if f.is_file() and f.suffix.lower() in EXTENSIONS:
-                stat = f.stat()
-                photos.append({
-                    'filename': f.name,
-                    'modified': datetime.fromtimestamp(stat.st_mtime).isoformat(),
-                    'size': stat.st_size,
-                    'size_human': human_size(stat.st_size),
-                })
-        return jsonify({'photos': photos, 'total': len(photos), 'source_folder': str(source)})
+        if target.is_dir():
+            for f in sorted(target.iterdir()):
+                if f.is_file() and f.suffix.lower() in EXTENSIONS:
+                    stat = f.stat()
+                    photos.append({
+                        'filename': f.name,
+                        'modified': datetime.fromtimestamp(stat.st_mtime).isoformat(),
+                        'size': stat.st_size,
+                        'size_human': human_size(stat.st_size),
+                    })
+        return jsonify({'photos': photos, 'total': len(photos), 'source_folder': str(target)})
 
     @app.route('/api/photos/<path:filename>/info')
     def photo_info(filename):
-        filepath = source / filename
+        filepath = resolve_folder() / filename
         if not filepath.is_file():
             return jsonify({'error': 'not found'}), 404
 
@@ -180,14 +191,14 @@ def create_app(source, selected_dir, dust_dir):
 
     @app.route('/api/photos/<path:filename>/image')
     def serve_image(filename):
-        filepath = source / filename
+        filepath = resolve_folder() / filename
         if not filepath.is_file():
             return jsonify({'error': 'not found'}), 404
         return send_file(filepath)
 
     @app.route('/api/photos/<path:filename>/thumbnail')
     def serve_thumbnail(filename):
-        filepath = source / filename
+        filepath = resolve_folder() / filename
         if not filepath.is_file():
             return jsonify({'error': 'not found'}), 404
         return send_file(filepath)
@@ -241,6 +252,29 @@ def create_app(source, selected_dir, dust_dir):
             })
         else:
             return jsonify({'ok': False, 'error': 'file not found in destination'}), 404
+
+    @app.route('/api/comfy/check', methods=['POST'])
+    def comfy_check():
+        data = request.get_json()
+        comfy_url = data.get('comfy_url', 'http://127.0.0.1:8188')
+        try:
+            resp = http_requests.get(f"{comfy_url}/system_stats", timeout=5)
+            return jsonify(resp.json()), resp.status_code
+        except Exception as e:
+            return jsonify({'error': str(e)}), 502
+
+    @app.route('/api/comfy/prompt', methods=['POST'])
+    def comfy_prompt():
+        data = request.get_json()
+        comfy_url = data.get('comfy_url', 'http://127.0.0.1:8188')
+        prompt = data.get('prompt')
+        if not prompt:
+            return jsonify({'error': 'no prompt data'}), 400
+        try:
+            resp = http_requests.post(f"{comfy_url}/prompt", json={"prompt": prompt}, timeout=10)
+            return jsonify(resp.json()), resp.status_code
+        except Exception as e:
+            return jsonify({'error': str(e)}), 502
 
     # --- Static / SPA routes ---
 
