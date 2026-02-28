@@ -1,0 +1,24 @@
+.field-row {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.field-select {
+  flex: 1;
+}
+
+.randomize-all {
+  margin: 4px 0 12px;
+}
+
+.preview {
+  background: #1a1a2e;
+  padding: 12px;
+  border-radius: 4px;
+  font-family: monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}

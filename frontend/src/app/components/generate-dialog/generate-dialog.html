@@ -61,10 +61,15 @@
     </mat-form-field>
   </div>
 
-  <mat-form-field class="full-width">
-    <mat-label>Positive Prompt</mat-label>
-    <textarea matInput [(ngModel)]="params.positivePrompt" rows="4"></textarea>
-  </mat-form-field>
+  <div class="prompt-row">
+    <mat-form-field class="prompt-field">
+      <mat-label>Positive Prompt</mat-label>
+      <textarea matInput [(ngModel)]="params.positivePrompt" rows="4"></textarea>
+    </mat-form-field>
+    <button mat-icon-button (click)="openPrompter()" title="Prompter" class="prompter-btn">
+      <mat-icon>auto_awesome</mat-icon>
+    </button>
+  </div>
 
   <mat-form-field class="full-width">
     <mat-label>Negative Prompt</mat-label>

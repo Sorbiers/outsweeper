@@ -1,0 +1,70 @@
+<h2 mat-dialog-title>Prompter</h2>
+
+<mat-dialog-content>
+  <div class="field-row">
+    <mat-form-field class="field-select">
+      <mat-label>Ambience / Place</mat-label>
+      <mat-select [(ngModel)]="ambience">
+        @for (item of ambienceList; track item) {
+          <mat-option [value]="item">{{ item }}</mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+    <button mat-icon-button (click)="randomize('ambience')" title="Randomize">
+      <mat-icon>casino</mat-icon>
+    </button>
+  </div>
+
+  <div class="field-row">
+    <mat-form-field class="field-select">
+      <mat-label>Character</mat-label>
+      <mat-select [(ngModel)]="character">
+        @for (item of characterList; track item) {
+          <mat-option [value]="item">{{ item }}</mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+    <button mat-icon-button (click)="randomize('character')" title="Randomize">
+      <mat-icon>casino</mat-icon>
+    </button>
+  </div>
+
+  <div class="field-row">
+    <mat-form-field class="field-select">
+      <mat-label>Action</mat-label>
+      <mat-select [(ngModel)]="action">
+        @for (item of actionList; track item) {
+          <mat-option [value]="item">{{ item }}</mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+    <button mat-icon-button (click)="randomize('action')" title="Randomize">
+      <mat-icon>casino</mat-icon>
+    </button>
+  </div>
+
+  <div class="field-row">
+    <mat-form-field class="field-select">
+      <mat-label>Style</mat-label>
+      <mat-select [(ngModel)]="style">
+        @for (item of styleList; track item) {
+          <mat-option [value]="item">{{ item }}</mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+    <button mat-icon-button (click)="randomize('style')" title="Randomize">
+      <mat-icon>casino</mat-icon>
+    </button>
+  </div>
+
+  <button mat-stroked-button (click)="randomizeAll()" class="randomize-all">
+    <mat-icon>casino</mat-icon> Randomize All
+  </button>
+
+  <div class="preview">{{ composedPrompt }}</div>
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button mat-button mat-dialog-close>Cancel</button>
+  <button mat-flat-button (click)="insert()">Insert</button>
+</mat-dialog-actions>

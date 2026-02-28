@@ -1,6 +1,6 @@
 import { Component, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
+import { MAT_DIALOG_DATA, MatDialog, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
@@ -9,6 +9,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { forkJoin } from 'rxjs';
 import { PhotoService } from '../../services/photo.service';
+import { PrompterDialog } from '../prompter-dialog/prompter-dialog';
 
 export interface GenerateDialogData {
   workflow: Record<string, any>;
@@ -38,6 +39,7 @@ interface LoraNode {
 export class GenerateDialog {
   private dialogRef = inject(MatDialogRef<GenerateDialog>);
   private data: GenerateDialogData = inject(MAT_DIALOG_DATA);
+  private dialog = inject(MatDialog);
   private photoService = inject(PhotoService);
   private snackBar = inject(MatSnackBar);
 
@@ -68,6 +70,14 @@ export class GenerateDialog {
 
   randomizeSeed(): void {
     this.params.seed = Math.floor(Math.random() * 2 ** 32);
+  }
+
+  openPrompter(): void {
+    this.dialog.open(PrompterDialog, { width: '600px' }).afterClosed().subscribe(result => {
+      if (result) {
+        this.params.positivePrompt = result;
+      }
+    });
   }
 
   send(): void {

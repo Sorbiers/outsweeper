@@ -33,3 +33,17 @@
 .full-width {
   width: 100%;
 }
+
+.prompt-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.prompt-field {
+  flex: 1;
+}
+
+.prompter-btn {
+  margin-top: 8px;
+}
