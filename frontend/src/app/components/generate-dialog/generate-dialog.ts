@@ -3,9 +3,11 @@ import { FormsModule } from '@angular/forms';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
+import { MatSelectModule } from '@angular/material/select';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatSnackBar } from '@angular/material/snack-bar';
+import { forkJoin } from 'rxjs';
 import { PhotoService } from '../../services/photo.service';
 
 export interface GenerateDialogData {
@@ -21,9 +23,15 @@ interface WorkflowParams {
   negativePrompt: string;
 }
 
+interface LoraNode {
+  nodeId: string;
+  originalName: string;
+  selected: string[];
+}
+
 @Component({
   selector: 'pp-generate-dialog',
-  imports: [FormsModule, MatDialogModule, MatFormFieldModule, MatInputModule, MatButtonModule, MatIconModule],
+  imports: [FormsModule, MatDialogModule, MatFormFieldModule, MatInputModule, MatSelectModule, MatButtonModule, MatIconModule],
   templateUrl: './generate-dialog.html',
   styleUrl: './generate-dialog.scss',
 })
@@ -38,15 +46,22 @@ export class GenerateDialog {
   sending = false;
   checkStatus: 'idle' | 'checking' | 'ok' | 'error' = 'idle';
 
+  availableLoras: string[] = [];
+  loraNodes: LoraNode[] = [];
+
   constructor() {
     this.params = this.extractParams(this.data.workflow);
+    this.loraNodes = this.extractLoraNodes(this.data.workflow);
   }
 
   checkConnection(): void {
     this.checkStatus = 'checking';
     localStorage.setItem('comfyUrl', this.comfyUrl);
     this.photoService.checkComfy(this.comfyUrl).subscribe({
-      next: () => this.checkStatus = 'ok',
+      next: () => {
+        this.checkStatus = 'ok';
+        this.fetchLoras();
+      },
       error: () => this.checkStatus = 'error',
     });
   }
@@ -57,19 +72,80 @@ export class GenerateDialog {
 
   send(): void {
     localStorage.setItem('comfyUrl', this.comfyUrl);
-    const workflow = this.applyParams(this.data.workflow, this.params);
     this.sending = true;
-    this.photoService.sendToComfy(this.comfyUrl, workflow).subscribe({
+
+    const loraNodesWithSelections = this.loraNodes.filter(n => n.selected.length > 0);
+
+    if (loraNodesWithSelections.length === 0) {
+      // No LoRA selections — single send
+      const workflow = this.applyParams(this.data.workflow, this.params);
+      this.photoService.sendToComfy(this.comfyUrl, workflow).subscribe({
+        next: () => {
+          this.snackBar.open('Prompt queued', '', { duration: 3000 });
+          this.dialogRef.close(true);
+        },
+        error: (err) => {
+          this.sending = false;
+          const msg = err.error?.error || err.message || 'Failed to send';
+          this.snackBar.open(`Error: ${msg}`, '', { duration: 5000 });
+        },
+      });
+      return;
+    }
+
+    // Build cartesian product of all LoRA node selections
+    const combinations = this.cartesian(loraNodesWithSelections.map(n => n.selected));
+    const requests = combinations.map(combo => {
+      const workflow = this.applyParams(this.data.workflow, this.params);
+      // Apply each LoRA in the combination to its corresponding node
+      combo.forEach((loraName, i) => {
+        const nodeId = loraNodesWithSelections[i].nodeId;
+        if (workflow[nodeId]?.inputs) {
+          workflow[nodeId].inputs.lora_name = loraName;
+        }
+      });
+      return this.photoService.sendToComfy(this.comfyUrl, workflow);
+    });
+
+    forkJoin(requests).subscribe({
       next: () => {
-        this.snackBar.open('Prompt queued successfully', '', { duration: 3000 });
+        this.snackBar.open(`Queued ${requests.length} prompts`, '', { duration: 3000 });
         this.dialogRef.close(true);
       },
       error: (err) => {
         this.sending = false;
-        const msg = err.error?.error || err.message || 'Failed to send prompt';
+        const msg = err.error?.error || err.message || 'Failed to send';
         this.snackBar.open(`Error: ${msg}`, '', { duration: 5000 });
       },
     });
+  }
+
+  get totalPrompts(): number {
+    const nodesWithSelections = this.loraNodes.filter(n => n.selected.length > 0);
+    if (nodesWithSelections.length === 0) return 1;
+    return nodesWithSelections.reduce((acc, n) => acc * n.selected.length, 1);
+  }
+
+  private fetchLoras(): void {
+    this.photoService.getComfyLoras(this.comfyUrl).subscribe({
+      next: (res) => this.availableLoras = res.loras || [],
+      error: () => this.availableLoras = [],
+    });
+  }
+
+  private extractLoraNodes(workflow: Record<string, any>): LoraNode[] {
+    const nodes: LoraNode[] = [];
+    for (const [nodeId, node] of Object.entries(workflow)) {
+      const inputs = node.inputs || {};
+      if ('lora_name' in inputs) {
+        nodes.push({
+          nodeId,
+          originalName: inputs.lora_name,
+          selected: [inputs.lora_name],
+        });
+      }
+    }
+    return nodes;
   }
 
   private extractParams(workflow: Record<string, any>): WorkflowParams {
@@ -139,5 +215,12 @@ export class GenerateDialog {
     }
 
     return copy;
+  }
+
+  private cartesian(arrays: string[][]): string[][] {
+    return arrays.reduce<string[][]>(
+      (acc, arr) => acc.flatMap(combo => arr.map(item => [...combo, item])),
+      [[]]
+    );
   }
 }

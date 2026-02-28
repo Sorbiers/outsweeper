@@ -1,8 +1,43 @@
 <h2 mat-dialog-title>Generate with ComfyUI</h2>
 
 <mat-dialog-content>
+  <div class="url-row">
+    <mat-form-field class="url-field">
+      <mat-label>ComfyUI URL</mat-label>
+      <input matInput [(ngModel)]="comfyUrl">
+    </mat-form-field>
+    @if (checkStatus === 'checking') {
+      <button mat-stroked-button disabled class="check-btn">Checking...</button>
+    } @else if (checkStatus === 'ok') {
+      <button mat-stroked-button (click)="checkConnection()" class="check-btn">
+        <mat-icon class="check-ok">check_circle</mat-icon> OK
+      </button>
+    } @else if (checkStatus === 'error') {
+      <button mat-stroked-button (click)="checkConnection()" class="check-btn">
+        <mat-icon class="check-err">error</mat-icon> Failed
+      </button>
+    } @else {
+      <button mat-stroked-button (click)="checkConnection()" class="check-btn">Check</button>
+    }
+  </div>
+
+  @if (loraNodes.length && availableLoras.length) {
+    <div class="lora-section">
+      @for (node of loraNodes; track node.nodeId; let i = $index) {
+        <mat-form-field class="full-width">
+          <mat-label>LoRA {{ loraNodes.length > 1 ? (i + 1) : '' }} (was: {{ node.originalName }})</mat-label>
+          <mat-select multiple [(ngModel)]="node.selected">
+            @for (lora of availableLoras; track lora) {
+              <mat-option [value]="lora">{{ lora }}</mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
+      }
+    </div>
+  }
+
   <div class="params-grid">
-    <mat-form-field class="seed-field">
+    <mat-form-field>
       <mat-label>Seed</mat-label>
       <input matInput type="number" [(ngModel)]="params.seed">
       <button mat-icon-button matSuffix (click)="randomizeSeed()" title="Randomize">
@@ -35,26 +70,6 @@
     <mat-label>Negative Prompt</mat-label>
     <textarea matInput [(ngModel)]="params.negativePrompt" rows="3"></textarea>
   </mat-form-field>
-
-  <div class="url-row">
-    <mat-form-field class="url-field">
-      <mat-label>ComfyUI URL</mat-label>
-      <input matInput [(ngModel)]="comfyUrl">
-    </mat-form-field>
-    @if (checkStatus === 'checking') {
-      <button mat-stroked-button disabled class="check-btn">Checking...</button>
-    } @else if (checkStatus === 'ok') {
-      <button mat-stroked-button (click)="checkConnection()" class="check-btn">
-        <mat-icon class="check-ok">check_circle</mat-icon> OK
-      </button>
-    } @else if (checkStatus === 'error') {
-      <button mat-stroked-button (click)="checkConnection()" class="check-btn">
-        <mat-icon class="check-err">error</mat-icon> Failed
-      </button>
-    } @else {
-      <button mat-stroked-button (click)="checkConnection()" class="check-btn">Check</button>
-    }
-  </div>
 </mat-dialog-content>
 
 <mat-dialog-actions align="end">
@@ -62,6 +77,8 @@
   <button mat-flat-button (click)="send()" [disabled]="sending">
     @if (sending) {
       Sending...
+    } @else if (totalPrompts > 1) {
+      Send {{ totalPrompts }} prompts
     } @else {
       Send
     }
