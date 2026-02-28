@@ -3,6 +3,8 @@ import json
 import shutil
 import threading
 import webbrowser
+import base64
+import mimetypes
 from datetime import datetime
 from pathlib import Path
 
@@ -10,6 +12,7 @@ import requests as http_requests
 from flask import Flask, jsonify, request, send_from_directory, send_file
 from PIL import Image
 from PIL.ExifTags import TAGS
+from PIL.PngImagePlugin import PngInfo
 
 EXTENSIONS = {'.png', '.jpg', '.jpeg', '.webp'}
 undo_stack = []
@@ -287,6 +290,107 @@ def create_app(source, selected_dir, dust_dir):
             return jsonify(resp.json()), resp.status_code
         except Exception as e:
             return jsonify({'error': str(e)}), 502
+
+    @app.route('/api/lmstudio/check', methods=['POST'])
+    def lmstudio_check():
+        data = request.get_json()
+        lmstudio_url = data.get('lmstudio_url', 'http://localhost:1234/v1')
+        try:
+            resp = http_requests.get(f"{lmstudio_url}/models", timeout=5)
+            return jsonify(resp.json()), resp.status_code
+        except Exception as e:
+            return jsonify({'error': str(e)}), 502
+
+    @app.route('/api/photos/<path:filename>/describe', methods=['POST'])
+    def describe_photo(filename):
+        data = request.get_json()
+        folder = data.get('folder', 'source')
+        if folder == 'selected':
+            target = selected_dir
+        elif folder == 'dust':
+            target = dust_dir
+        else:
+            target = source
+
+        filepath = target / filename
+        if not filepath.is_file():
+            return jsonify({'error': 'not found'}), 404
+
+        lmstudio_url = data.get('lmstudio_url', 'http://localhost:1234/v1')
+        prompt = data.get('prompt', 'Describe this image in detail.')
+        model = data.get('model', 'model-identifier')
+
+        mt, _ = mimetypes.guess_type(str(filepath))
+        mt = mt or 'image/png'
+        with open(filepath, 'rb') as f:
+            b64 = base64.b64encode(f.read()).decode('ascii')
+        data_url = f"data:{mt};base64,{b64}"
+
+        try:
+            resp = http_requests.post(
+                f"{lmstudio_url}/chat/completions",
+                json={
+                    'model': model,
+                    'messages': [{
+                        'role': 'user',
+                        'content': [
+                            {'type': 'text', 'text': prompt},
+                            {'type': 'image_url', 'image_url': {'url': data_url}},
+                        ],
+                    }],
+                    'temperature': 0.2,
+                },
+                timeout=120,
+            )
+            result = resp.json()
+            description = result['choices'][0]['message']['content']
+            return jsonify({'description': description})
+        except Exception as e:
+            return jsonify({'error': str(e)}), 502
+
+    @app.route('/api/photos/<path:filename>/write-meta', methods=['POST'])
+    def write_meta(filename):
+        data = request.get_json()
+        folder = data.get('folder', 'source')
+        description = data.get('description', '')
+        key = data.get('key', 'Description')
+
+        if folder == 'selected':
+            target = selected_dir
+        elif folder == 'dust':
+            target = dust_dir
+        else:
+            target = source
+
+        filepath = target / filename
+        if not filepath.is_file():
+            return jsonify({'error': 'not found'}), 404
+
+        try:
+            img = Image.open(filepath)
+            ext = filepath.suffix.lower()
+
+            if ext == '.png':
+                info = PngInfo()
+                for k, v in img.info.items():
+                    if isinstance(v, str):
+                        info.add_text(k, v)
+                info.add_text(key, description)
+                img.save(filepath, pnginfo=info)
+            elif ext in ('.jpg', '.jpeg'):
+                exif = img.getexif()
+                exif[0x010E] = description  # ImageDescription
+                img.save(filepath, quality=98, exif=exif.tobytes())
+            elif ext == '.webp':
+                exif = img.getexif()
+                exif[0x010E] = description
+                img.save(filepath, quality=98, exif=exif.tobytes())
+            else:
+                return jsonify({'error': f'Unsupported format: {ext}'}), 400
+
+            return jsonify({'ok': True})
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
 
     # --- Static / SPA routes ---
 

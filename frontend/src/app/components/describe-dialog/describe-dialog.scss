@@ -1,0 +1,60 @@
+.url-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.url-field {
+  flex: 1;
+}
+
+.check-btn {
+  flex-shrink: 0;
+}
+
+.check-ok {
+  color: #4caf50;
+}
+
+.check-err {
+  color: #f44336;
+}
+
+.full-width {
+  width: 100%;
+}
+
+.loading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 12px 0;
+}
+
+.result-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 8px;
+  font-weight: 500;
+}
+
+textarea.preview {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  background: #1a1a2e;
+  color: inherit;
+  padding: 12px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  font-family: monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  resize: vertical;
+  outline: none;
+
+  &:focus {
+    border-color: #555;
+  }
+}

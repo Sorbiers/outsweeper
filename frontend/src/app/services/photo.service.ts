@@ -52,4 +52,22 @@ export class PhotoService {
   sendToComfy(comfyUrl: string, prompt: object): Observable<any> {
     return this.http.post('/api/comfy/prompt', { comfy_url: comfyUrl, prompt });
   }
+
+  checkLmStudio(lmstudioUrl: string): Observable<any> {
+    return this.http.post('/api/lmstudio/check', { lmstudio_url: lmstudioUrl });
+  }
+
+  describePhoto(filename: string, folder: string, lmstudioUrl: string, prompt: string, model: string): Observable<{ description: string }> {
+    return this.http.post<{ description: string }>(
+      `/api/photos/${encodeURIComponent(filename)}/describe`,
+      { lmstudio_url: lmstudioUrl, prompt, model, folder }
+    );
+  }
+
+  writeMeta(filename: string, folder: string, description: string): Observable<{ ok: boolean }> {
+    return this.http.post<{ ok: boolean }>(
+      `/api/photos/${encodeURIComponent(filename)}/write-meta`,
+      { folder, description }
+    );
+  }
 }

@@ -78,6 +78,16 @@
   gap: 8px;
 }
 
+mat-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.describe-btn {
+  flex-shrink: 0;
+}
+
 .generate-btn {
   flex-shrink: 0;
 }

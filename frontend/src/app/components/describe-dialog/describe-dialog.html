@@ -1,0 +1,72 @@
+<h2 mat-dialog-title>Describe Image</h2>
+
+<mat-dialog-content>
+  <div class="url-row">
+    <mat-form-field class="url-field">
+      <mat-label>LM Studio URL</mat-label>
+      <input matInput [(ngModel)]="lmstudioUrl">
+    </mat-form-field>
+    @if (checkStatus === 'checking') {
+      <button mat-stroked-button disabled class="check-btn">Checking...</button>
+    } @else if (checkStatus === 'ok') {
+      <button mat-stroked-button (click)="checkConnection()" class="check-btn">
+        <mat-icon class="check-ok">check_circle</mat-icon> OK
+      </button>
+    } @else if (checkStatus === 'error') {
+      <button mat-stroked-button (click)="checkConnection()" class="check-btn">
+        <mat-icon class="check-err">error</mat-icon> Failed
+      </button>
+    } @else {
+      <button mat-stroked-button (click)="checkConnection()" class="check-btn">Check</button>
+    }
+  </div>
+
+  @if (availableModels.length) {
+    <mat-form-field class="full-width">
+      <mat-label>Model</mat-label>
+      <mat-select [(ngModel)]="model">
+        @for (m of availableModels; track m) {
+          <mat-option [value]="m">{{ m }}</mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+  }
+
+  <mat-form-field class="full-width">
+    <mat-label>Prompt</mat-label>
+    <textarea matInput [(ngModel)]="prompt" rows="2"></textarea>
+  </mat-form-field>
+
+  @if (describing) {
+    <div class="loading">
+      <mat-spinner diameter="32"></mat-spinner>
+      <span>Describing...</span>
+    </div>
+  }
+
+  @if (description) {
+    <div class="result-header">
+      <span>Result</span>
+      <div>
+        <button mat-icon-button (click)="saveToFile()" [disabled]="saving" title="Save to file">
+          <mat-icon>save</mat-icon>
+        </button>
+        <button mat-icon-button (click)="copyDescription()" title="Copy">
+          <mat-icon>content_copy</mat-icon>
+        </button>
+      </div>
+    </div>
+    <textarea class="preview" [(ngModel)]="description" rows="6"></textarea>
+  }
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button mat-button mat-dialog-close>Close</button>
+  <button mat-flat-button (click)="describe()" [disabled]="describing">
+    @if (describing) {
+      Describing...
+    } @else {
+      Describe
+    }
+  </button>
+</mat-dialog-actions>

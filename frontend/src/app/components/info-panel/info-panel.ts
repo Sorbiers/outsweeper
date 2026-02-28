@@ -8,6 +8,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatDialog } from '@angular/material/dialog';
 import { PhotoInfo } from '../../models/photo.model';
 import { GenerateDialog } from '../generate-dialog/generate-dialog';
+import { DescribeDialog } from '../describe-dialog/describe-dialog';
 
 /** PNG text chunk keys that are handled by the ComfyUI section */
 const COMFYUI_KEYS = new Set(['prompt', 'workflow']);
@@ -20,8 +21,18 @@ const COMFYUI_KEYS = new Set(['prompt', 'workflow']);
 })
 export class InfoPanel {
   @Input() info: PhotoInfo | null = null;
+  @Input() folder = 'source';
 
   private dialog = inject(MatDialog);
+
+  openDescribe(): void {
+    if (!this.info) return;
+    this.dialog.open(DescribeDialog, {
+      data: { filename: this.info.filename, folder: this.folder },
+      width: '90vw',
+      maxWidth: '700px',
+    });
+  }
 
   openGenerate(): void {
     if (!this.info?.png_metadata?.['prompt']) return;
