@@ -21,6 +21,21 @@
     }
   </div>
 
+  @if (checkpointNodes.length && availableCheckpoints.length) {
+    <div class="lora-section">
+      @for (node of checkpointNodes; track node.nodeId) {
+        <mat-form-field class="full-width">
+          <mat-label>Checkpoint (was: {{ node.originalName }})</mat-label>
+          <mat-select multiple [(ngModel)]="node.selected">
+            @for (ckpt of availableCheckpoints; track ckpt) {
+              <mat-option [value]="ckpt">{{ ckpt }}</mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
+      }
+    </div>
+  }
+
   @if (loraNodes.length && availableLoras.length) {
     <div class="lora-section">
       @for (node of loraNodes; track node.nodeId; let i = $index) {

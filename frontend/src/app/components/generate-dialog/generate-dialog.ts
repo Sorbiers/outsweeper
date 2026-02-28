@@ -24,10 +24,11 @@ interface WorkflowParams {
   negativePrompt: string;
 }
 
-interface LoraNode {
+interface VariableNode {
   nodeId: string;
   originalName: string;
   selected: string[];
+  inputKey: string;
 }
 
 @Component({
@@ -49,11 +50,14 @@ export class GenerateDialog {
   checkStatus: 'idle' | 'checking' | 'ok' | 'error' = 'idle';
 
   availableLoras: string[] = [];
-  loraNodes: LoraNode[] = [];
+  loraNodes: VariableNode[] = [];
+  availableCheckpoints: string[] = [];
+  checkpointNodes: VariableNode[] = [];
 
   constructor() {
     this.params = this.extractParams(this.data.workflow);
-    this.loraNodes = this.extractLoraNodes(this.data.workflow);
+    this.loraNodes = this.extractVariableNodes(this.data.workflow, 'lora_name');
+    this.checkpointNodes = this.extractVariableNodes(this.data.workflow, 'ckpt_name');
   }
 
   checkConnection(): void {
@@ -63,6 +67,7 @@ export class GenerateDialog {
       next: () => {
         this.checkStatus = 'ok';
         this.fetchLoras();
+        this.fetchCheckpoints();
       },
       error: () => this.checkStatus = 'error',
     });
@@ -84,10 +89,12 @@ export class GenerateDialog {
     localStorage.setItem('comfyUrl', this.comfyUrl);
     this.sending = true;
 
-    const loraNodesWithSelections = this.loraNodes.filter(n => n.selected.length > 0);
+    const variableNodes = [
+      ...this.checkpointNodes.filter(n => n.selected.length > 0),
+      ...this.loraNodes.filter(n => n.selected.length > 0),
+    ];
 
-    if (loraNodesWithSelections.length === 0) {
-      // No LoRA selections — single send
+    if (variableNodes.length === 0) {
       const workflow = this.applyParams(this.data.workflow, this.params);
       this.photoService.sendToComfy(this.comfyUrl, workflow).subscribe({
         next: () => {
@@ -103,15 +110,13 @@ export class GenerateDialog {
       return;
     }
 
-    // Build cartesian product of all LoRA node selections
-    const combinations = this.cartesian(loraNodesWithSelections.map(n => n.selected));
+    const combinations = this.cartesian(variableNodes.map(n => n.selected));
     const requests = combinations.map(combo => {
       const workflow = this.applyParams(this.data.workflow, this.params);
-      // Apply each LoRA in the combination to its corresponding node
-      combo.forEach((loraName, i) => {
-        const nodeId = loraNodesWithSelections[i].nodeId;
-        if (workflow[nodeId]?.inputs) {
-          workflow[nodeId].inputs.lora_name = loraName;
+      combo.forEach((value, i) => {
+        const node = variableNodes[i];
+        if (workflow[node.nodeId]?.inputs) {
+          workflow[node.nodeId].inputs[node.inputKey] = value;
         }
       });
       return this.photoService.sendToComfy(this.comfyUrl, workflow);
@@ -131,9 +136,12 @@ export class GenerateDialog {
   }
 
   get totalPrompts(): number {
-    const nodesWithSelections = this.loraNodes.filter(n => n.selected.length > 0);
-    if (nodesWithSelections.length === 0) return 1;
-    return nodesWithSelections.reduce((acc, n) => acc * n.selected.length, 1);
+    const variableNodes = [
+      ...this.checkpointNodes.filter(n => n.selected.length > 0),
+      ...this.loraNodes.filter(n => n.selected.length > 0),
+    ];
+    if (variableNodes.length === 0) return 1;
+    return variableNodes.reduce((acc, n) => acc * n.selected.length, 1);
   }
 
   private fetchLoras(): void {
@@ -143,15 +151,23 @@ export class GenerateDialog {
     });
   }
 
-  private extractLoraNodes(workflow: Record<string, any>): LoraNode[] {
-    const nodes: LoraNode[] = [];
+  private fetchCheckpoints(): void {
+    this.photoService.getComfyCheckpoints(this.comfyUrl).subscribe({
+      next: (res) => this.availableCheckpoints = res.checkpoints || [],
+      error: () => this.availableCheckpoints = [],
+    });
+  }
+
+  private extractVariableNodes(workflow: Record<string, any>, inputKey: string): VariableNode[] {
+    const nodes: VariableNode[] = [];
     for (const [nodeId, node] of Object.entries(workflow)) {
       const inputs = node.inputs || {};
-      if ('lora_name' in inputs) {
+      if (inputKey in inputs) {
         nodes.push({
           nodeId,
-          originalName: inputs.lora_name,
-          selected: [inputs.lora_name],
+          originalName: inputs[inputKey],
+          selected: [inputs[inputKey]],
+          inputKey,
         });
       }
     }

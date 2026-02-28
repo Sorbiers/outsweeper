@@ -278,6 +278,18 @@ def create_app(source, selected_dir, dust_dir):
         except Exception as e:
             return jsonify({'error': str(e)}), 502
 
+    @app.route('/api/comfy/checkpoints', methods=['POST'])
+    def comfy_checkpoints():
+        data = request.get_json()
+        comfy_url = data.get('comfy_url', 'http://127.0.0.1:8188')
+        try:
+            resp = http_requests.get(f"{comfy_url}/object_info", timeout=10)
+            info = resp.json()
+            checkpoints = info.get('CheckpointLoaderSimple', {}).get('input', {}).get('required', {}).get('ckpt_name', [[]])[0]
+            return jsonify({'checkpoints': checkpoints})
+        except Exception as e:
+            return jsonify({'error': str(e)}), 502
+
     @app.route('/api/comfy/prompt', methods=['POST'])
     def comfy_prompt():
         data = request.get_json()

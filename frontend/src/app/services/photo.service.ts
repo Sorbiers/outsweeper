@@ -49,6 +49,10 @@ export class PhotoService {
     return this.http.post<{ loras: string[] }>('/api/comfy/loras', { comfy_url: comfyUrl });
   }
 
+  getComfyCheckpoints(comfyUrl: string): Observable<{ checkpoints: string[] }> {
+    return this.http.post<{ checkpoints: string[] }>('/api/comfy/checkpoints', { comfy_url: comfyUrl });
+  }
+
   sendToComfy(comfyUrl: string, prompt: object): Observable<any> {
     return this.http.post('/api/comfy/prompt', { comfy_url: comfyUrl, prompt });
   }
