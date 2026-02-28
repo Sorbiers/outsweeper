@@ -11,6 +11,12 @@ export class KeyboardService {
   init(): void {
     this.zone.runOutsideAngular(() => {
       document.addEventListener('keydown', (event: KeyboardEvent) => {
+        // Skip when a dialog or overlay input is focused
+        const target = event.target as HTMLElement;
+        if (target.closest('.cdk-overlay-container') || target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
+          return;
+        }
+
         let action: PhotoAction | null = null;
 
         if (event.key === 'ArrowRight') action = 'next';

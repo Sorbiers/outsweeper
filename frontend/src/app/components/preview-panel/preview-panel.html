@@ -1,4 +1,4 @@
-<div class="preview-container" #container [class.zoom-fit]="zoomMode === 'fit'" (wheel)="onWheel($event)">
+<div class="preview-container" #container [class.zoom-fit]="zoomMode === 'fit'" [class.pannable]="zoomMode === 'free'" (wheel)="onWheel($event)" (mousedown)="onPanStart($event)">
   @if (imageUrl) {
     <div class="toolbar">
       <button mat-flat-button [class.active]="zoomMode === 'fit'" (click)="setFit()">Fit</button>

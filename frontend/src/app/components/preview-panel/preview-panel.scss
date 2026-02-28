@@ -15,6 +15,14 @@
     align-items: center;
     justify-content: center;
   }
+
+  &.pannable {
+    cursor: grab;
+
+    &:active {
+      cursor: grabbing;
+    }
+  }
 }
 
 .toolbar {

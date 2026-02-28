@@ -23,6 +23,13 @@ export class PreviewPanel implements OnChanges {
   zoomLevel = 1;
 
   private photoService = inject(PhotoService);
+  private panning = false;
+  private panStartX = 0;
+  private panStartY = 0;
+  private scrollStartX = 0;
+  private scrollStartY = 0;
+  private boundPanMove = (e: MouseEvent) => this.onPanMove(e);
+  private boundPanEnd = () => this.onPanEnd();
 
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['info']) {
@@ -95,5 +102,35 @@ export class PreviewPanel implements OnChanges {
       container.scrollLeft = (scrollX + cursorX) * ratio - cursorX;
       container.scrollTop = (scrollY + cursorY) * ratio - cursorY;
     });
+  }
+
+  onPanStart(event: MouseEvent) {
+    if (this.zoomMode === 'fit') return;
+    const container = this.containerRef?.nativeElement;
+    if (!container) return;
+    // Only pan if content overflows
+    if (container.scrollWidth <= container.clientWidth && container.scrollHeight <= container.clientHeight) return;
+    event.preventDefault();
+    this.panning = true;
+    this.panStartX = event.clientX;
+    this.panStartY = event.clientY;
+    this.scrollStartX = container.scrollLeft;
+    this.scrollStartY = container.scrollTop;
+    document.addEventListener('mousemove', this.boundPanMove);
+    document.addEventListener('mouseup', this.boundPanEnd);
+  }
+
+  private onPanMove(event: MouseEvent) {
+    if (!this.panning) return;
+    const container = this.containerRef?.nativeElement;
+    if (!container) return;
+    container.scrollLeft = this.scrollStartX - (event.clientX - this.panStartX);
+    container.scrollTop = this.scrollStartY - (event.clientY - this.panStartY);
+  }
+
+  private onPanEnd() {
+    this.panning = false;
+    document.removeEventListener('mousemove', this.boundPanMove);
+    document.removeEventListener('mouseup', this.boundPanEnd);
   }
 }

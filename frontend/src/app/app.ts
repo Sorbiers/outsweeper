@@ -6,6 +6,7 @@ import { MatFabButton } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatDividerModule } from '@angular/material/divider';
 import { PhotoService } from './services/photo.service';
 import { KeyboardService, PhotoAction } from './services/keyboard.service';
 import { PhotoListItem, PhotoInfo } from './models/photo.model';
@@ -15,7 +16,7 @@ import { PreviewPanel } from './components/preview-panel/preview-panel';
 
 @Component({
   selector: 'pp-root',
-  imports: [MatSnackBarModule, MatFabButton, MatIconModule, MatMenuModule, MatProgressSpinnerModule, ImageStrip, InfoPanel, PreviewPanel],
+  imports: [MatSnackBarModule, MatFabButton, MatIconModule, MatMenuModule, MatProgressSpinnerModule, MatDividerModule, ImageStrip, InfoPanel, PreviewPanel],
   templateUrl: './app.html',
   styleUrl: './app.scss',
 })
@@ -28,6 +29,8 @@ export class App implements OnInit, OnDestroy {
   currentIndex = 0;
   currentInfo: PhotoInfo | null = null;
   currentFolder: 'source' | 'selected' | 'dust' = 'source';
+  sortBy: 'name' | 'modified' = 'name';
+  sortAsc = true;
   loading = false;
   private sub!: Subscription;
 
@@ -54,12 +57,33 @@ export class App implements OnInit, OnDestroy {
       .pipe(finalize(() => this.loading = false))
       .subscribe(res => {
         this.photos = res.photos;
+        this.applySorting();
         if (this.photos.length > 0) {
           this.selectPhoto(0);
         } else {
           this.currentInfo = null;
         }
       });
+  }
+
+  setSort(by: 'name' | 'modified', asc: boolean): void {
+    this.sortBy = by;
+    this.sortAsc = asc;
+    const currentFilename = this.photos[this.currentIndex]?.filename;
+    this.applySorting();
+    if (currentFilename) {
+      const newIndex = this.photos.findIndex(p => p.filename === currentFilename);
+      if (newIndex >= 0) this.currentIndex = newIndex;
+    }
+  }
+
+  private applySorting(): void {
+    const dir = this.sortAsc ? 1 : -1;
+    if (this.sortBy === 'name') {
+      this.photos.sort((a, b) => a.filename.localeCompare(b.filename) * dir);
+    } else {
+      this.photos.sort((a, b) => (a.modified < b.modified ? -1 : a.modified > b.modified ? 1 : 0) * dir);
+    }
   }
 
   selectPhoto(index: number): void {
