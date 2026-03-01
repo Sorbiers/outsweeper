@@ -4,7 +4,7 @@
       class="thumbnail"
       [class.active]="i === currentIndex"
       (click)="onThumbnailClick(i)">
-      <img [src]="getThumbnailUrl(photo.filename)" [alt]="photo.filename" loading="lazy" />
+      <img [attr.data-src]="getThumbnailUrl(photo.filename)" [alt]="photo.filename" />
     </div>
   }
   @empty {

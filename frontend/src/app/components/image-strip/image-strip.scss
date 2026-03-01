@@ -22,10 +22,12 @@
 .thumbnail {
   flex-shrink: 0;
   height: calc(25vh - 16px);
+  min-width: 80px;
   cursor: pointer;
   border: 2px solid transparent;
   border-radius: 4px;
   transition: border-color 0.15s;
+  background: #1a1a1a;
 
   &.active {
     border-color: #4fc3f7;
@@ -40,6 +42,12 @@
     width: auto;
     object-fit: contain;
     display: block;
+    opacity: 0;
+    transition: opacity 0.2s;
+
+    &[src] {
+      opacity: 1;
+    }
   }
 }
 

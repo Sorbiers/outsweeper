@@ -204,7 +204,21 @@ def create_app(source, selected_dir, dust_dir):
         filepath = resolve_folder() / filename
         if not filepath.is_file():
             return jsonify({'error': 'not found'}), 404
-        return send_file(filepath)
+
+        thumb_dir = source / '__thumbnails'
+        thumb_dir.mkdir(exist_ok=True)
+        thumb_path = thumb_dir / (filename + '.jpg')
+
+        if not thumb_path.is_file() or thumb_path.stat().st_mtime < filepath.stat().st_mtime:
+            try:
+                img = Image.open(filepath)
+                img.thumbnail((300, 300))
+                img = img.convert('RGB')
+                img.save(thumb_path, 'JPEG', quality=80)
+            except Exception:
+                return send_file(filepath)
+
+        return send_file(thumb_path, mimetype='image/jpeg')
 
     @app.route('/api/photos/<path:filename>/move', methods=['POST'])
     def move_photo(filename):
