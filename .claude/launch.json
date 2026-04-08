@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "Flask Backend",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["app.py", "F:/_temp"],
+      "port": 1976
+    },
+    {
+      "name": "Angular Dev Server",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["ng", "serve"],
+      "port": 4200
+    }
+  ]
+}

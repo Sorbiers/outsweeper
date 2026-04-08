@@ -1,10 +1,13 @@
-<div class="preview-container" #container [class.zoom-fit]="zoomMode === 'fit'" [class.pannable]="zoomMode === 'free'" (wheel)="onWheel($event)" (mousedown)="onPanStart($event)">
+<div class="preview-container" #container [class.zoom-fit]="zoomMode === 'fit'" [class.pannable]="zoomMode === 'free'" [class.sphere-mode]="zoomMode === 'sphere'" (wheel)="onWheel($event)" (mousedown)="onPanStart($event)">
   @if (imageUrl) {
     <div class="toolbar">
       <button mat-flat-button [class.active]="zoomMode === 'fit'" (click)="setFit()">Fit</button>
       <button mat-flat-button [class.active]="isFull" (click)="setFull()">100%</button>
+      <button mat-flat-button [class.active]="zoomMode === 'sphere'" (click)="setSphere()">360°</button>
     </div>
-    @if (zoomMode === 'fit') {
+    @if (zoomMode === 'sphere') {
+      <canvas #sphereCanvas class="sphere-canvas"></canvas>
+    } @else if (zoomMode === 'fit') {
       <img #img [src]="imageUrl" [alt]="info?.filename ?? ''" class="full-image zoom-fit" />
     } @else {
       <img #img [src]="imageUrl" [alt]="info?.filename ?? ''" class="full-image" [style.width.px]="scaledWidth" [style.height.px]="scaledHeight" />
