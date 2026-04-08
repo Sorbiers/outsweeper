@@ -95,7 +95,7 @@ export class GenerateDialog {
     ];
 
     if (variableNodes.length === 0) {
-      const workflow = this.applyParams(this.data.workflow, this.params);
+      const workflow = this.removeEmptyLoraNodes(this.applyParams(this.data.workflow, this.params));
       this.photoService.sendToComfy(this.comfyUrl, workflow).subscribe({
         next: () => {
           this.snackBar.open('Prompt queued', '', { duration: 3000 });
@@ -119,7 +119,7 @@ export class GenerateDialog {
           workflow[node.nodeId].inputs[node.inputKey] = value;
         }
       });
-      return this.photoService.sendToComfy(this.comfyUrl, workflow);
+      return this.photoService.sendToComfy(this.comfyUrl, this.removeEmptyLoraNodes(workflow));
     });
 
     forkJoin(requests).subscribe({
@@ -166,7 +166,7 @@ export class GenerateDialog {
         nodes.push({
           nodeId,
           originalName: inputs[inputKey],
-          selected: [inputs[inputKey]],
+          selected: inputs[inputKey] ? [inputs[inputKey]] : [],
           inputKey,
         });
       }
@@ -241,6 +241,26 @@ export class GenerateDialog {
     }
 
     return copy;
+  }
+
+  private removeEmptyLoraNodes(workflow: Record<string, any>): Record<string, any> {
+    const emptyLoraIds = Object.entries(workflow)
+      .filter(([, n]) => n.class_type === 'LoraLoader' && !n.inputs?.lora_name)
+      .map(([id]) => id);
+
+    for (const nodeId of emptyLoraIds) {
+      const modelInput = workflow[nodeId].inputs.model;
+      const clipInput = workflow[nodeId].inputs.clip;
+      for (const node of Object.values(workflow)) {
+        for (const [key, val] of Object.entries(node.inputs ?? {})) {
+          if (Array.isArray(val) && val[0] === nodeId) {
+            node.inputs[key] = val[1] === 0 ? modelInput : clipInput;
+          }
+        }
+      }
+      delete workflow[nodeId];
+    }
+    return workflow;
   }
 
   private cartesian(arrays: string[][]): string[][] {

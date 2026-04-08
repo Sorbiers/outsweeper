@@ -1,0 +1,30 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dir:*)",
+      "Bash(pip:*)",
+      "Bash(node --version:*)",
+      "Bash(npm:*)",
+      "Bash(npx ng version:*)",
+      "Bash(npx ng new:*)",
+      "Bash(npx @angular/cli@20 version:*)",
+      "Bash(npx @angular/cli@20 new:*)",
+      "Bash(npx ng add:*)",
+      "Bash(npx ng build)",
+      "Bash(python -c:*)",
+      "Bash(python app.py:*)",
+      "Bash(timeout:*)",
+      "Bash(curl:*)",
+      "mcp__playwright__browser_navigate",
+      "mcp__playwright__browser_console_messages",
+      "mcp__playwright__browser_network_requests",
+      "mcp__playwright__browser_snapshot",
+      "mcp__playwright__browser_take_screenshot",
+      "mcp__playwright__browser_press_key",
+      "mcp__playwright__browser_close",
+      "Bash(python3:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
+    ]
+  }
+}

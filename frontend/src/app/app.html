@@ -53,4 +53,8 @@
   <button mat-menu-item (click)="setSort('modified', true)" [class.active-folder]="sortBy === 'modified' && sortAsc">
     <mat-icon>schedule</mat-icon> Oldest first
   </button>
+  <mat-divider></mat-divider>
+  <button mat-menu-item (click)="openGenerator()">
+    <mat-icon>bolt</mat-icon> Generator
+  </button>
 </mat-menu>
