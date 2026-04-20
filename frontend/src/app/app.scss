@@ -13,6 +13,45 @@
 .strip-area {
   flex: none;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
+
+  pp-image-strip {
+    flex: 1;
+    min-height: 0;
+  }
+}
+
+.strip-toolbar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 8px;
+  background: #1a1a1a;
+  border-bottom: 1px solid #333;
+}
+
+.filter-input {
+  background: #222;
+  border: 1px solid #444;
+  color: #eee;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 13px;
+  width: 200px;
+  outline: none;
+
+  &:focus {
+    border-color: #4fc3f7;
+  }
+}
+
+.photo-counter {
+  color: #888;
+  font-size: 13px;
+  white-space: nowrap;
+  margin-left: auto;
 }
 
 .divider-h {

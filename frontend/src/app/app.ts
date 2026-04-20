@@ -1,6 +1,6 @@
 import { Component, OnInit, OnDestroy, inject } from '@angular/core';
-import { Subscription } from 'rxjs';
-import { finalize } from 'rxjs/operators';
+import { Subject, Subscription } from 'rxjs';
+import { debounceTime, distinctUntilChanged, finalize } from 'rxjs/operators';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatFabButton } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
@@ -79,6 +79,16 @@ export class App implements OnInit, OnDestroy {
   sortAsc = true;
   loading = false;
   private sub!: Subscription;
+  private filterSub!: Subscription;
+
+  // Pagination
+  totalPhotos = 0;
+  pageOffset = 0;
+  pageSize = 50; // default; updated by ImageStrip's pageSizeChange after layout
+
+  // Filter
+  filterText = '';
+  private filterSubject = new Subject<string>();
 
   // Resizable layout percentages
   stripHeight = 25;
@@ -88,57 +98,113 @@ export class App implements OnInit, OnDestroy {
   private boundDragEnd = () => this.onDragEnd();
 
   ngOnInit(): void {
+    // Restore sort from localStorage
+    const savedSort = localStorage.getItem('pp_sortBy');
+    if (savedSort === 'name' || savedSort === 'modified') this.sortBy = savedSort;
+    const savedAsc = localStorage.getItem('pp_sortAsc');
+    if (savedAsc !== null) this.sortAsc = savedAsc === 'true';
+
     this.keyboard.init();
-    this.loadPhotos();
     this.sub = this.keyboard.action$.subscribe(action => this.handleAction(action));
+    this.loadPhotos();
+
+    this.filterSub = this.filterSubject
+      .pipe(debounceTime(300), distinctUntilChanged())
+      .subscribe(text => {
+        this.filterText = text;
+        this.pageOffset = 0;
+        this.currentIndex = 0;
+        this.loadPhotos();
+      });
   }
 
   ngOnDestroy(): void {
     this.sub?.unsubscribe();
+    this.filterSub?.unsubscribe();
   }
 
   loadPhotos(): void {
+    if (this.pageSize <= 0) return;
     this.loading = true;
-    this.photoService.listPhotos(this.currentFolder)
-      .pipe(finalize(() => this.loading = false))
+    this.photoService
+      .listPhotos(this.currentFolder, {
+        offset: this.pageOffset,
+        limit: this.pageSize,
+        sortBy: this.sortBy,
+        sortAsc: this.sortAsc,
+        filter: this.filterText,
+      })
+      .pipe(finalize(() => (this.loading = false)))
       .subscribe(res => {
         this.photos = res.photos;
-        this.applySorting();
-        if (this.photos.length > 0) {
-          this.selectPhoto(0);
+        this.totalPhotos = res.total;
+        this.pageOffset = res.offset;
+
+        if (this.totalPhotos > 0 && this.photos.length > 0) {
+          const relIdx = this.currentIndex - this.pageOffset;
+          if (relIdx >= 0 && relIdx < this.photos.length) {
+            this.fetchInfo(relIdx);
+          } else {
+            this.currentIndex = this.pageOffset;
+            this.fetchInfo(0);
+          }
         } else {
           this.currentInfo = null;
         }
       });
   }
 
+  private fetchInfo(relativeIndex: number): void {
+    const photo = this.photos[relativeIndex];
+    if (photo) {
+      this.photoService.getInfo(photo.filename, this.currentFolder).subscribe(info => {
+        this.currentInfo = info;
+      });
+    }
+  }
+
+  selectPhoto(absoluteIndex: number): void {
+    if (absoluteIndex < 0 || absoluteIndex >= this.totalPhotos) return;
+
+    const neededPage = Math.floor(absoluteIndex / this.pageSize) * this.pageSize;
+
+    if (neededPage !== this.pageOffset) {
+      this.currentIndex = absoluteIndex;
+      this.pageOffset = neededPage;
+      this.loadPhotos();
+      return;
+    }
+
+    this.currentIndex = absoluteIndex;
+    this.fetchInfo(absoluteIndex - this.pageOffset);
+  }
+
+  onPageChange(newOffset: number): void {
+    this.pageOffset = newOffset;
+    this.currentIndex = newOffset; // select first on new page
+    this.loadPhotos();
+  }
+
+  onPageSizeChange(newSize: number): void {
+    if (newSize === this.pageSize) return;
+    this.pageSize = newSize;
+    // Recalculate pageOffset to align with new page size
+    this.pageOffset = Math.floor(this.currentIndex / this.pageSize) * this.pageSize;
+    this.loadPhotos();
+  }
+
   setSort(by: 'name' | 'modified', asc: boolean): void {
     this.sortBy = by;
     this.sortAsc = asc;
-    const currentFilename = this.photos[this.currentIndex]?.filename;
-    this.applySorting();
-    if (currentFilename) {
-      const newIndex = this.photos.findIndex(p => p.filename === currentFilename);
-      if (newIndex >= 0) this.currentIndex = newIndex;
-    }
+    localStorage.setItem('pp_sortBy', by);
+    localStorage.setItem('pp_sortAsc', String(asc));
+    this.pageOffset = 0;
+    this.currentIndex = 0;
+    this.loadPhotos();
   }
 
-  private applySorting(): void {
-    const dir = this.sortAsc ? 1 : -1;
-    if (this.sortBy === 'name') {
-      this.photos.sort((a, b) => a.filename.localeCompare(b.filename) * dir);
-    } else {
-      this.photos.sort((a, b) => (a.modified < b.modified ? -1 : a.modified > b.modified ? 1 : 0) * dir);
-    }
-  }
-
-  selectPhoto(index: number): void {
-    if (index < 0 || index >= this.photos.length) return;
-    this.currentIndex = index;
-    const photo = this.photos[index];
-    this.photoService.getInfo(photo.filename, this.currentFolder).subscribe(info => {
-      this.currentInfo = info;
-    });
+  onFilterInput(value: string): void {
+    this.filterSubject.next(value);
   }
 
   openGenerator(): void {
@@ -152,6 +218,9 @@ export class App implements OnInit, OnDestroy {
   switchFolder(folder: 'source' | 'selected' | 'dust'): void {
     if (folder === this.currentFolder) return;
     this.currentFolder = folder;
+    this.pageOffset = 0;
+    this.currentIndex = 0;
+    this.filterText = '';
     this.loadPhotos();
   }
 
@@ -188,17 +257,35 @@ export class App implements OnInit, OnDestroy {
   private handleAction(action: PhotoAction): void {
     switch (action) {
       case 'next':
-        this.selectPhoto(this.currentIndex + 1);
+        if (this.currentIndex + 1 < this.totalPhotos) {
+          this.selectPhoto(this.currentIndex + 1);
+        }
         break;
       case 'prev':
-        this.selectPhoto(this.currentIndex - 1);
+        if (this.currentIndex > 0) {
+          this.selectPhoto(this.currentIndex - 1);
+        }
         break;
       case 'first':
         this.selectPhoto(0);
         break;
       case 'last':
-        this.selectPhoto(this.photos.length - 1);
+        this.selectPhoto(this.totalPhotos - 1);
         break;
+      case 'pageForward': {
+        const nextPageStart = this.pageOffset + this.pageSize;
+        if (nextPageStart < this.totalPhotos) {
+          this.onPageChange(nextPageStart);
+        }
+        break;
+      }
+      case 'pageBackward': {
+        const prevPageStart = this.pageOffset - this.pageSize;
+        if (prevPageStart >= 0) {
+          this.onPageChange(prevPageStart);
+        }
+        break;
+      }
       case 'select':
         if (this.currentFolder === 'source') this.moveCurrentPhoto('selected');
         break;
@@ -213,26 +300,29 @@ export class App implements OnInit, OnDestroy {
 
   private moveCurrentPhoto(destination: 'selected' | 'dust'): void {
     if (!this.photos.length) return;
-    const filename = this.photos[this.currentIndex].filename;
-    const move$ = destination === 'selected'
-      ? this.photoService.moveToSelected(filename)
-      : this.photoService.moveToDust(filename);
+    const relIdx = this.currentIndex - this.pageOffset;
+    const filename = this.photos[relIdx].filename;
+    const move$ =
+      destination === 'selected'
+        ? this.photoService.moveToSelected(filename)
+        : this.photoService.moveToDust(filename);
 
     move$.subscribe(res => {
       if (res.ok) {
-        this.photos.splice(this.currentIndex, 1);
         const label = destination === 'selected' ? 'Selected' : 'Dusted';
-        this.snackBar.open(`${label}: ${filename}`, 'Undo', { duration: 3000 })
-          .onAction().subscribe(() => this.undoLast());
+        this.snackBar
+          .open(`${label}: ${filename}`, 'Undo', { duration: 3000 })
+          .onAction()
+          .subscribe(() => this.undoLast());
 
-        if (this.currentIndex >= this.photos.length) {
-          this.currentIndex = Math.max(0, this.photos.length - 1);
+        this.totalPhotos--;
+        if (this.currentIndex >= this.totalPhotos) {
+          this.currentIndex = Math.max(0, this.totalPhotos - 1);
         }
-        if (this.photos.length > 0) {
-          this.selectPhoto(this.currentIndex);
-        } else {
-          this.currentInfo = null;
+        if (this.pageOffset >= this.totalPhotos && this.totalPhotos > 0) {
+          this.pageOffset = Math.floor((this.totalPhotos - 1) / this.pageSize) * this.pageSize;
         }
+        this.loadPhotos();
       }
     });
   }

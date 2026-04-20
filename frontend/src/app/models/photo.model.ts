@@ -3,6 +3,7 @@ export interface PhotoListItem {
   modified: string;
   size: number;
   size_human: string;
+  loaded?: boolean; // For tracking thumbnail load state in the UI
 }
 
 export interface PhotoInfo extends PhotoListItem {

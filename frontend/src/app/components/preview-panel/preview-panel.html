@@ -8,9 +8,14 @@
     @if (zoomMode === 'sphere') {
       <canvas #sphereCanvas class="sphere-canvas"></canvas>
     } @else if (zoomMode === 'fit') {
-      <img #img [src]="imageUrl" [alt]="info?.filename ?? ''" class="full-image zoom-fit" />
+      <img #img [src]="imageUrl" [alt]="info?.filename ?? ''" class="full-image zoom-fit" (load)="onImageLoad(info)"/>
     } @else {
-      <img #img [src]="imageUrl" [alt]="info?.filename ?? ''" class="full-image" [style.width.px]="scaledWidth" [style.height.px]="scaledHeight" />
+      <img #img [src]="imageUrl" [alt]="info?.filename ?? ''" class="full-image" [style.width.px]="scaledWidth" [style.height.px]="scaledHeight" (load)="onImageLoad(info)"/>
+    }
+    @if (!info?.loaded) {
+      <div class="loading-overlay">
+        <mat-spinner diameter="48"></mat-spinner>
+      </div>
     }
   } @else {
     <div class="no-image">No image selected</div>
