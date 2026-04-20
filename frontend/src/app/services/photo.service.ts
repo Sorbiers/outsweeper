@@ -7,8 +7,20 @@ import { PhotoListItem, PhotoInfo, MoveResponse, UndoResponse } from '../models/
 export class PhotoService {
   private http = inject(HttpClient);
 
-  listPhotos(folder = 'source'): Observable<{ photos: PhotoListItem[]; total: number; source_folder: string }> {
-    return this.http.get<{ photos: PhotoListItem[]; total: number; source_folder: string }>('/api/photos', { params: { folder } });
+  listPhotos(
+    folder = 'source',
+    options: { offset?: number; limit?: number; sortBy?: string; sortAsc?: boolean; filter?: string } = {},
+  ): Observable<{ photos: PhotoListItem[]; total: number; offset: number; source_folder: string }> {
+    const params: Record<string, string> = { folder };
+    if (options.offset != null) params['offset'] = String(options.offset);
+    if (options.limit != null) params['limit'] = String(options.limit);
+    if (options.sortBy) params['sort_by'] = options.sortBy;
+    if (options.sortAsc != null) params['sort_asc'] = String(options.sortAsc);
+    if (options.filter) params['filter'] = options.filter;
+    return this.http.get<{ photos: PhotoListItem[]; total: number; offset: number; source_folder: string }>(
+      '/api/photos',
+      { params },
+    );
   }
 
   getInfo(filename: string, folder = 'source'): Observable<PhotoInfo> {

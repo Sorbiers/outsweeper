@@ -1,13 +1,37 @@
-<div class="strip-container" #stripContainer>
+<div class="thumbs-container">
   @for (photo of photos; track photo.filename; let i = $index) {
     <div
-      class="thumbnail"
-      [class.active]="i === currentIndex"
-      (click)="onThumbnailClick(i)">
-      <img [attr.data-src]="getThumbnailUrl(photo.filename)" [alt]="photo.filename" />
+      class="thumb"
+      [class.active]="(pageOffset + i) === currentIndex"
+      [style.width.px]="thumbSize"
+      [style.height.px]="thumbSize"
+      (click)="onThumbClick(i)">
+      @if (!photo.loaded) {
+        <mat-spinner diameter="24"></mat-spinner>
+      }
+      <img
+        [src]="getThumbnailUrl(photo.filename)"
+        [alt]="photo.filename"
+        [class.visible]="photo.loaded"
+        (load)="onImageLoad(photo)" />
     </div>
   }
   @empty {
     <div class="empty">No images found</div>
   }
+</div>
+<div class="paginator">
+  <button mat-icon-button (click)="goToPage(0)" [disabled]="currentPage <= 1" title="First page">
+    <mat-icon>first_page</mat-icon>
+  </button>
+  <button mat-icon-button (click)="goToPage(currentPage - 2)" [disabled]="currentPage <= 1" title="Previous page">
+    <mat-icon>chevron_left</mat-icon>
+  </button>
+  <span class="page-label">{{ currentPage }} / {{ totalPages }}</span>
+  <button mat-icon-button (click)="goToPage(currentPage)" [disabled]="currentPage >= totalPages" title="Next page">
+    <mat-icon>chevron_right</mat-icon>
+  </button>
+  <button mat-icon-button (click)="goToPage(totalPages - 1)" [disabled]="currentPage >= totalPages" title="Last page">
+    <mat-icon>last_page</mat-icon>
+  </button>
 </div>

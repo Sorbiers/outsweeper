@@ -151,10 +151,18 @@ def create_app(source, selected_dir, dust_dir):
     @app.route('/api/photos')
     def list_photos():
         target = resolve_folder()
+        sort_by = request.args.get('sort_by', 'name')
+        sort_asc = request.args.get('sort_asc', 'true') == 'true'
+        offset = int(request.args.get('offset', 0))
+        limit = int(request.args.get('limit', 50))
+        filter_text = request.args.get('filter', '').strip().lower()
+
         photos = []
         if target.is_dir():
-            for f in sorted(target.iterdir()):
+            for f in target.iterdir():
                 if f.is_file() and f.suffix.lower() in EXTENSIONS:
+                    if filter_text and filter_text not in f.name.lower():
+                        continue
                     stat = f.stat()
                     photos.append({
                         'filename': f.name,
@@ -162,7 +170,16 @@ def create_app(source, selected_dir, dust_dir):
                         'size': stat.st_size,
                         'size_human': human_size(stat.st_size),
                     })
-        return jsonify({'photos': photos, 'total': len(photos), 'source_folder': str(target)})
+
+        if sort_by == 'modified':
+            photos.sort(key=lambda p: p['modified'], reverse=not sort_asc)
+        else:
+            photos.sort(key=lambda p: p['filename'].lower(), reverse=not sort_asc)
+
+        total = len(photos)
+        page = photos[offset:offset + limit]
+
+        return jsonify({'photos': page, 'total': total, 'offset': offset, 'source_folder': str(target)})
 
     @app.route('/api/photos/<path:filename>/info')
     def photo_info(filename):

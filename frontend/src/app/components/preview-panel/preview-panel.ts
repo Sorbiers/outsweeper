@@ -1,18 +1,19 @@
 import {
+  ChangeDetectorRef,
   Component,
-  Input,
   ElementRef,
-  ViewChild,
+  inject,
+  Input,
   OnChanges,
   OnDestroy,
   SimpleChanges,
-  ChangeDetectorRef,
-  inject,
+  ViewChild,
 } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import * as THREE from 'three';
 import { PhotoInfo } from '../../models/photo.model';
 import { PhotoService } from '../../services/photo.service';
-import * as THREE from 'three';
 
 const ZOOM_STEP = 1.15;
 const ZOOM_MIN = 0.05;
@@ -26,7 +27,7 @@ const SPHERE_FOV_DEFAULT = 75;
   selector: 'pp-preview-panel',
   templateUrl: './preview-panel.html',
   styleUrl: './preview-panel.scss',
-  imports: [MatButtonModule],
+  imports: [MatButtonModule, MatProgressSpinnerModule],
 })
 export class PreviewPanel implements OnChanges, OnDestroy {
   @Input() info: PhotoInfo | null = null;
@@ -329,5 +330,11 @@ export class PreviewPanel implements OnChanges, OnDestroy {
     }
     this.scene = null;
     this.camera = null;
+  }
+
+  onImageLoad(info: PhotoInfo | null): void {
+    if (info) {
+      info.loaded = true;
+    }
   }
 }
