@@ -24,6 +24,30 @@
   margin: 4px 0;
 }
 
+.lora-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.lora-name-field {
+  flex: 1;
+}
+
+.lora-strength-field {
+  width: 90px;
+  flex-shrink: 0;
+}
+
+.lora-remove-btn {
+  flex-shrink: 0;
+  margin-bottom: 16px;
+}
+
+.add-lora-row {
+  margin: 0 0 12px;
+}
+
 .params-grid {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr 1fr;

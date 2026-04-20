@@ -9,6 +9,7 @@ html {
     typography: Roboto,
     density: 0,
   ));
+  --mdc-outlined-text-field-container-shape: 28px;
 }
 
 body {
@@ -23,4 +24,13 @@ html, body {
   height: 100%;
   overflow: hidden;
   font-family: Roboto, "Helvetica Neue", sans-serif;
+}
+
+.mat-mdc-dialog-container .mat-mdc-dialog-title+.mat-mdc-dialog-content {
+  padding-top: 20px !important;
+}
+
+.mdc-dialog--open .mat-mdc-dialog-surface, .mdc-dialog--closing .mat-mdc-dialog-surface {
+    border: 2px solid #2b2929;
+    box-shadow: 8px 8px 16px #000000;
 }

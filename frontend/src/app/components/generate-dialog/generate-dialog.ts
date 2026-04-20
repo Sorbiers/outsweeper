@@ -20,6 +20,8 @@ interface WorkflowParams {
   steps: number | null;
   cfg: number | null;
   batchSize: number | null;
+  width: number | null;
+  height: number | null;
   positivePrompt: string;
   negativePrompt: string;
 }
@@ -29,7 +31,16 @@ interface VariableNode {
   originalName: string;
   selected: string[];
   inputKey: string;
+  removed?: boolean;
 }
+
+interface ManualLora {
+  name: string;
+  strengthModel: number;
+  strengthClip: number;
+}
+
+const DEFAULT_NEGATIVE_PROMPT = 'worst quality, low quality, bad anatomy, bad hands, text, watermark, blurry, deformed';
 
 @Component({
   selector: 'pp-generate-dialog',
@@ -53,6 +64,7 @@ export class GenerateDialog {
   loraNodes: VariableNode[] = [];
   availableCheckpoints: string[] = [];
   checkpointNodes: VariableNode[] = [];
+  manualLoras: ManualLora[] = [];
 
   constructor() {
     this.params = this.extractParams(this.data.workflow);
@@ -85,17 +97,28 @@ export class GenerateDialog {
     });
   }
 
+  addLora(): void {
+    this.manualLoras.push({ name: '', strengthModel: 0.7, strengthClip: 0.7 });
+  }
+
+  removeLora(index: number): void {
+    this.manualLoras.splice(index, 1);
+  }
+
   send(): void {
     localStorage.setItem('comfyUrl', this.comfyUrl);
     this.sending = true;
 
     const variableNodes = [
       ...this.checkpointNodes.filter(n => n.selected.length > 0),
-      ...this.loraNodes.filter(n => n.selected.length > 0),
+      ...this.loraNodes.filter(n => n.selected.length > 0 && !n.removed),
     ];
 
     if (variableNodes.length === 0) {
-      const workflow = this.removeEmptyLoraNodes(this.applyParams(this.data.workflow, this.params));
+      const workflow = this.injectManualLoras(
+        this.removeEmptyLoraNodes(this.applyParams(this.data.workflow, this.params)),
+        this.manualLoras.filter(l => l.name)
+      );
       this.photoService.sendToComfy(this.comfyUrl, workflow).subscribe({
         next: () => {
           this.snackBar.open('Prompt queued', '', { duration: 3000 });
@@ -119,7 +142,13 @@ export class GenerateDialog {
           workflow[node.nodeId].inputs[node.inputKey] = value;
         }
       });
-      return this.photoService.sendToComfy(this.comfyUrl, this.removeEmptyLoraNodes(workflow));
+      return this.photoService.sendToComfy(
+        this.comfyUrl,
+        this.injectManualLoras(
+          this.removeEmptyLoraNodes(workflow),
+          this.manualLoras.filter(l => l.name)
+        )
+      );
     });
 
     forkJoin(requests).subscribe({
@@ -138,7 +167,7 @@ export class GenerateDialog {
   get totalPrompts(): number {
     const variableNodes = [
       ...this.checkpointNodes.filter(n => n.selected.length > 0),
-      ...this.loraNodes.filter(n => n.selected.length > 0),
+      ...this.loraNodes.filter(n => n.selected.length > 0 && !n.removed),
     ];
     if (variableNodes.length === 0) return 1;
     return variableNodes.reduce((acc, n) => acc * n.selected.length, 1);
@@ -180,6 +209,8 @@ export class GenerateDialog {
       steps: null,
       cfg: null,
       batchSize: null,
+      width: null,
+      height: null,
       positivePrompt: '',
       negativePrompt: '',
     };
@@ -198,6 +229,11 @@ export class GenerateDialog {
         params.batchSize = inputs.batch_size;
       }
 
+      if (classType === 'EmptyLatentImage' || classType === 'EmptySD3LatentImage') {
+        if ('width' in inputs) params.width = inputs.width;
+        if ('height' in inputs) params.height = inputs.height;
+      }
+
       if (classType === 'CLIPTextEncode' && 'text' in inputs) {
         if (!params.positivePrompt) {
           params.positivePrompt = inputs.text;
@@ -205,6 +241,10 @@ export class GenerateDialog {
           params.negativePrompt = inputs.text;
         }
       }
+    }
+
+    if (!params.negativePrompt) {
+      params.negativePrompt = DEFAULT_NEGATIVE_PROMPT;
     }
 
     return params;
@@ -215,7 +255,7 @@ export class GenerateDialog {
     let positiveSet = false;
     let negativeSet = false;
 
-    for (const node of Object.values(copy)) {
+    for (const [nodeId, node] of Object.entries(copy)) {
       const inputs = node.inputs || {};
       const classType = node.class_type || '';
 
@@ -229,6 +269,11 @@ export class GenerateDialog {
         inputs.batch_size = params.batchSize;
       }
 
+      if (classType === 'EmptyLatentImage' || classType === 'EmptySD3LatentImage') {
+        if (params.width != null) inputs.width = params.width;
+        if (params.height != null) inputs.height = params.height;
+      }
+
       if (classType === 'CLIPTextEncode' && 'text' in inputs) {
         if (!positiveSet) {
           inputs.text = params.positivePrompt;
@@ -238,9 +283,85 @@ export class GenerateDialog {
           negativeSet = true;
         }
       }
+
+      const loraNode = this.loraNodes.find(n => n.nodeId === nodeId);
+      if (loraNode?.removed && inputs) {
+        inputs['lora_name'] = '';
+      }
     }
 
     return copy;
+  }
+
+  private injectManualLoras(workflow: Record<string, any>, loras: ManualLora[]): Record<string, any> {
+    if (loras.length === 0) return workflow;
+
+    const loraIds = new Set(
+      Object.entries(workflow)
+        .filter(([, n]) => n.class_type === 'LoraLoader')
+        .map(([id]) => id)
+    );
+
+    let insertAfterModel: [string, number];
+    let insertAfterClip: [string, number];
+
+    if (loraIds.size > 0) {
+      // Find the tail: a LoraLoader whose outputs aren't consumed by another LoraLoader
+      const tailId = [...loraIds].find(id =>
+        ![...loraIds].some(otherId =>
+          otherId !== id && (
+            (workflow[otherId].inputs?.model as any[])?.[0] === id ||
+            (workflow[otherId].inputs?.clip as any[])?.[0] === id
+          )
+        )
+      ) ?? [...loraIds][loraIds.size - 1];
+      insertAfterModel = [tailId, 0];
+      insertAfterClip = [tailId, 1];
+    } else {
+      const ckptEntry = Object.entries(workflow).find(([, n]) => n.class_type === 'CheckpointLoaderSimple');
+      if (!ckptEntry) return workflow;
+      insertAfterModel = [ckptEntry[0], 0];
+      insertAfterClip = [ckptEntry[0], 1];
+    }
+
+    const originalNodeIds = new Set(Object.keys(workflow));
+    let maxId = Math.max(...Object.keys(workflow).map(Number).filter(n => !isNaN(n)), 100);
+
+    let prevModel: [string, number] = insertAfterModel;
+    let prevClip: [string, number] = insertAfterClip;
+
+    for (const lora of loras) {
+      maxId++;
+      const newId = String(maxId);
+      workflow[newId] = {
+        class_type: 'LoraLoader',
+        inputs: {
+          lora_name: lora.name,
+          strength_model: lora.strengthModel,
+          strength_clip: lora.strengthClip,
+          model: [...prevModel],
+          clip: [...prevClip],
+        },
+      };
+      prevModel = [newId, 0];
+      prevClip = [newId, 1];
+    }
+
+    // Rewire original nodes that consumed the old chain tail to use the new tail
+    for (const nodeId of originalNodeIds) {
+      const node = workflow[nodeId];
+      for (const [key, val] of Object.entries(node.inputs ?? {})) {
+        if (Array.isArray(val)) {
+          if (val[0] === insertAfterModel[0] && val[1] === insertAfterModel[1]) {
+            node.inputs[key] = [...prevModel];
+          } else if (val[0] === insertAfterClip[0] && val[1] === insertAfterClip[1]) {
+            node.inputs[key] = [...prevClip];
+          }
+        }
+      }
+    }
+
+    return workflow;
   }
 
   private removeEmptyLoraNodes(workflow: Record<string, any>): Record<string, any> {

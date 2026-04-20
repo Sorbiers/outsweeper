@@ -36,20 +36,63 @@
     </div>
   }
 
-  @if (loraNodes.length && availableLoras.length) {
+  <!-- Existing LoRA nodes from workflow -->
+  @if (loraNodes.length) {
     <div class="lora-section">
       @for (node of loraNodes; track node.nodeId; let i = $index) {
-        <mat-form-field class="full-width">
-          <mat-label>LoRA {{ loraNodes.length > 1 ? (i + 1) : '' }} (was: {{ node.originalName }})</mat-label>
-          <mat-select multiple [(ngModel)]="node.selected">
-            @for (lora of availableLoras; track lora) {
-              <mat-option [value]="lora">{{ lora }}</mat-option>
-            }
-          </mat-select>
-        </mat-form-field>
+        @if (!node.removed) {
+          <div class="lora-row">
+            <mat-form-field class="lora-name-field">
+              <mat-label>LoRA {{ loraNodes.length > 1 ? (i + 1) : '' }} (was: {{ node.originalName }})</mat-label>
+              <mat-select multiple [(ngModel)]="node.selected" [disabled]="!availableLoras.length">
+                @for (lora of availableLoras; track lora) {
+                  <mat-option [value]="lora">{{ lora }}</mat-option>
+                }
+              </mat-select>
+            </mat-form-field>
+            <button mat-icon-button (click)="node.removed = true" title="Remove LoRA" class="lora-remove-btn">
+              <mat-icon>remove_circle_outline</mat-icon>
+            </button>
+          </div>
+        }
       }
     </div>
   }
+
+  <!-- Manually added LoRAs -->
+  @if (manualLoras.length) {
+    <div class="lora-section">
+      @for (lora of manualLoras; track $index; let i = $index) {
+        <div class="lora-row">
+          <mat-form-field class="lora-name-field">
+            <mat-label>New LoRA {{ i + 1 }}</mat-label>
+            <mat-select [(ngModel)]="lora.name">
+              @for (l of availableLoras; track l) {
+                <mat-option [value]="l">{{ l }}</mat-option>
+              }
+            </mat-select>
+          </mat-form-field>
+          <mat-form-field class="lora-strength-field">
+            <mat-label>Str Model</mat-label>
+            <input matInput type="number" [(ngModel)]="lora.strengthModel" step="0.1" min="0" max="2">
+          </mat-form-field>
+          <mat-form-field class="lora-strength-field">
+            <mat-label>Str Clip</mat-label>
+            <input matInput type="number" [(ngModel)]="lora.strengthClip" step="0.1" min="0" max="2">
+          </mat-form-field>
+          <button mat-icon-button (click)="removeLora(i)" title="Remove" class="lora-remove-btn">
+            <mat-icon>remove_circle_outline</mat-icon>
+          </button>
+        </div>
+      }
+    </div>
+  }
+
+  <div class="add-lora-row">
+    <button mat-stroked-button (click)="addLora()" [disabled]="!availableLoras.length">
+      <mat-icon>add</mat-icon> Add LoRA
+    </button>
+  </div>
 
   <div class="params-grid">
     <mat-form-field>
@@ -73,6 +116,16 @@
     <mat-form-field>
       <mat-label>Batch Size</mat-label>
       <input matInput type="number" [(ngModel)]="params.batchSize">
+    </mat-form-field>
+
+    <mat-form-field>
+      <mat-label>Width</mat-label>
+      <input matInput type="number" [(ngModel)]="params.width" step="64">
+    </mat-form-field>
+
+    <mat-form-field>
+      <mat-label>Height</mat-label>
+      <input matInput type="number" [(ngModel)]="params.height" step="64">
     </mat-form-field>
   </div>
 
