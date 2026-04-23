@@ -127,6 +127,24 @@
       <mat-label>Height</mat-label>
       <input matInput type="number" [(ngModel)]="params.height" step="64">
     </mat-form-field>
+
+    <mat-form-field>
+      <mat-label>Sampler</mat-label>
+      <mat-select [(ngModel)]="params.samplerName">
+        @for (s of availableSamplers; track s) {
+          <mat-option [value]="s">{{ s }}</mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+
+    <mat-form-field>
+      <mat-label>Scheduler</mat-label>
+      <mat-select [(ngModel)]="params.scheduler">
+        @for (s of availableSchedulers; track s) {
+          <mat-option [value]="s">{{ s }}</mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
   </div>
 
   <div class="prompt-row">
@@ -143,6 +161,15 @@
     <mat-label>Negative Prompt</mat-label>
     <textarea matInput [(ngModel)]="params.negativePrompt" rows="3"></textarea>
   </mat-form-field>
+
+  <div class="extract-row">
+    <button mat-stroked-button (click)="extractWorkflow()">
+      <mat-icon>download</mat-icon> Extract Workflow
+    </button>
+    <button mat-stroked-button (click)="extractApi()">
+      <mat-icon>code</mat-icon> Extract API
+    </button>
+  </div>
 </mat-dialog-content>
 
 <mat-dialog-actions align="end">

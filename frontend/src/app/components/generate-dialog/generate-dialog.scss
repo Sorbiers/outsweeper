@@ -48,6 +48,12 @@
   margin: 0 0 12px;
 }
 
+.extract-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
 .params-grid {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr 1fr;

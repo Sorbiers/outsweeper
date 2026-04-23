@@ -321,6 +321,19 @@ def create_app(source, selected_dir, dust_dir):
         except Exception as e:
             return jsonify({'error': str(e)}), 502
 
+    @app.route('/api/comfy/samplers', methods=['POST'])
+    def comfy_samplers():
+        data = request.get_json()
+        comfy_url = data.get('comfy_url', 'http://127.0.0.1:8188')
+        try:
+            resp = http_requests.get(f"{comfy_url}/object_info/KSampler", timeout=10)
+            info = resp.json().get('KSampler', {}).get('input', {}).get('required', {})
+            samplers = info.get('sampler_name', [[]])[0]
+            schedulers = info.get('scheduler', [[]])[0]
+            return jsonify({'samplers': samplers, 'schedulers': schedulers})
+        except Exception as e:
+            return jsonify({'error': str(e)}), 502
+
     @app.route('/api/comfy/prompt', methods=['POST'])
     def comfy_prompt():
         data = request.get_json()

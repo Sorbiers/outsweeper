@@ -22,6 +22,8 @@ interface WorkflowParams {
   batchSize: number | null;
   width: number | null;
   height: number | null;
+  samplerName: string | null;
+  scheduler: string | null;
   positivePrompt: string;
   negativePrompt: string;
 }
@@ -65,6 +67,8 @@ export class GenerateDialog {
   availableCheckpoints: string[] = [];
   checkpointNodes: VariableNode[] = [];
   manualLoras: ManualLora[] = [];
+  availableSamplers: string[] = [];
+  availableSchedulers: string[] = [];
 
   constructor() {
     this.params = this.extractParams(this.data.workflow);
@@ -80,6 +84,7 @@ export class GenerateDialog {
         this.checkStatus = 'ok';
         this.fetchLoras();
         this.fetchCheckpoints();
+        this.fetchSamplers();
       },
       error: () => this.checkStatus = 'error',
     });
@@ -95,6 +100,28 @@ export class GenerateDialog {
         this.params.positivePrompt = result;
       }
     });
+  }
+
+  extractWorkflow(): void {
+    this.downloadJson(this.data.workflow, 'workflow.json');
+  }
+
+  extractApi(): void {
+    const workflow = this.injectManualLoras(
+      this.removeEmptyLoraNodes(this.applyParams(this.data.workflow, this.params)),
+      this.manualLoras.filter(l => l.name)
+    );
+    this.downloadJson(workflow, 'workflow_api.json');
+  }
+
+  private downloadJson(data: object, filename: string): void {
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
   }
 
   addLora(): void {
@@ -187,6 +214,19 @@ export class GenerateDialog {
     });
   }
 
+  private fetchSamplers(): void {
+    this.photoService.getComfySamplers(this.comfyUrl).subscribe({
+      next: (res) => {
+        this.availableSamplers = res.samplers || [];
+        this.availableSchedulers = res.schedulers || [];
+      },
+      error: () => {
+        this.availableSamplers = [];
+        this.availableSchedulers = [];
+      },
+    });
+  }
+
   private extractVariableNodes(workflow: Record<string, any>, inputKey: string): VariableNode[] {
     const nodes: VariableNode[] = [];
     for (const [nodeId, node] of Object.entries(workflow)) {
@@ -211,6 +251,8 @@ export class GenerateDialog {
       batchSize: null,
       width: null,
       height: null,
+      samplerName: null,
+      scheduler: null,
       positivePrompt: '',
       negativePrompt: '',
     };
@@ -223,6 +265,8 @@ export class GenerateDialog {
         params.steps = inputs.steps;
         params.cfg = inputs.cfg;
         if ('seed' in inputs) params.seed = inputs.seed;
+        if ('sampler_name' in inputs) params.samplerName = inputs.sampler_name;
+        if ('scheduler' in inputs) params.scheduler = inputs.scheduler;
       }
 
       if ('batch_size' in inputs) {
@@ -263,6 +307,8 @@ export class GenerateDialog {
         if (params.steps != null) inputs.steps = params.steps;
         if (params.cfg != null) inputs.cfg = params.cfg;
         if ('seed' in inputs && params.seed != null) inputs.seed = params.seed;
+        if (params.samplerName) inputs.sampler_name = params.samplerName;
+        if (params.scheduler) inputs.scheduler = params.scheduler;
       }
 
       if ('batch_size' in inputs && params.batchSize != null) {

@@ -65,6 +65,10 @@ export class PhotoService {
     return this.http.post<{ checkpoints: string[] }>('/api/comfy/checkpoints', { comfy_url: comfyUrl });
   }
 
+  getComfySamplers(comfyUrl: string): Observable<{ samplers: string[]; schedulers: string[] }> {
+    return this.http.post<{ samplers: string[]; schedulers: string[] }>('/api/comfy/samplers', { comfy_url: comfyUrl });
+  }
+
   sendToComfy(comfyUrl: string, prompt: object): Observable<any> {
     return this.http.post('/api/comfy/prompt', { comfy_url: comfyUrl, prompt });
   }
