@@ -22,15 +22,28 @@
   } @else if (notAllowed) {
     <p class="not-allowed">Folder changing is disabled in server config.</p>
   } @else {
+    @if (comfyOutputPath) {
+      <div class="folder-item comfy-output-item"
+           [class.is-selected]="selectedComfyOutput"
+           [class.is-current]="comfyOutputActive"
+           (click)="selectComfyOutput()">
+        <mat-icon>output</mat-icon>
+        <span class="folder-label">ComfyUI Output — {{ comfyOutputName }}</span>
+        @if (comfyOutputActive) {
+          <mat-icon class="current-mark">radio_button_checked</mat-icon>
+        }
+      </div>
+      <mat-divider />
+    }
     <div class="folder-list">
       @for (folder of folders; track folder) {
         <div class="folder-item"
-             [class.is-selected]="folder === selected"
-             [class.is-current]="folder === current"
-             (click)="selected = folder">
+             [class.is-selected]="!selectedComfyOutput && folder === selected"
+             [class.is-current]="current !== null && folder === current"
+             (click)="selectFolder(folder)">
           <mat-icon>{{ folder === '' ? 'folder_special' : 'folder' }}</mat-icon>
           <span class="folder-label">{{ displayName(folder) }}</span>
-          @if (folder === current) {
+          @if (current !== null && folder === current) {
             <mat-icon class="current-mark">radio_button_checked</mat-icon>
           }
         </div>
@@ -41,7 +54,7 @@
 
 <mat-dialog-actions align="end">
   <button mat-button mat-dialog-close>Cancel</button>
-  <button mat-flat-button (click)="confirm()" [disabled]="loading || notAllowed || selected === current">
+  <button mat-flat-button (click)="confirm()" [disabled]="confirmDisabled">
     Change Working Folder
   </button>
 </mat-dialog-actions>

@@ -194,6 +194,19 @@ export class App implements OnInit, OnDestroy {
       if (!result) return;
       if (result.kind === 'view') {
         this.switchFolder(result.folder);
+      } else if (result.kind === 'change-comfy-output') {
+        this.photoService.changeToComfyOutput().subscribe({
+          next: res => {
+            if (!res.ok) return;
+            this.sourceFolderName = res.source_name;
+            this.currentFolder = 'source';
+            this.pageOffset = 0;
+            this.currentIndex = 0;
+            this.filterText = '';
+            this.loadPhotos();
+          },
+          error: () => this.snackBar.open('Folder change not allowed', '', { duration: 3000 }),
+        });
       } else {
         this.photoService.changeFolder(result.path).subscribe({
           next: res => {

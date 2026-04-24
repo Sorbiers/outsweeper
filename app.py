@@ -222,7 +222,8 @@ def extract_png_metadata(filepath):
 
 def create_app(root_dir, source, config, selected_name, dust_name,
                index_filename='__photoparser_index.json', watch_enabled=False,
-               comfy_url='http://127.0.0.1:8188', lmstudio_url='http://localhost:1234/v1'):
+               comfy_url='http://127.0.0.1:8188', lmstudio_url='http://localhost:1234/v1',
+               comfy_output=''):
     static_dir = Path(__file__).parent / 'static'
     app = Flask(__name__, static_folder=None)
     allow_dir_change = config.get('permissions', {}).get('allow_dir_change', False)
@@ -243,6 +244,7 @@ def create_app(root_dir, source, config, selected_name, dust_name,
         'index_cache':    index_cache,
         'index_filename': index_filename,
         'observer':       None,
+        'comfy_output':   str(Path(comfy_output).resolve()) if comfy_output else '',
     }
 
     def _start_observer(src: Path) -> None:
@@ -683,22 +685,42 @@ def create_app(root_dir, source, config, selected_name, dust_name,
             if current == '.':
                 current = ''
         except ValueError:
-            current = ''
-        return jsonify({'folders': folders, 'root_name': root_dir.name, 'current': current})
+            current = None  # source is outside root_dir (e.g. comfy_output)
+
+        co = st['comfy_output']
+        co_active = bool(co and str(st['source'].resolve()) == str(Path(co).resolve()))
+        return jsonify({
+            'folders': folders,
+            'root_name': root_dir.name,
+            'current': current,
+            'comfy_output': co or None,
+            'comfy_output_name': Path(co).name if co else None,
+            'comfy_output_active': co_active,
+        })
 
     @app.route('/api/change-folder', methods=['POST'])
     def change_folder():
         if not allow_dir_change:
             return jsonify({'error': 'not allowed'}), 403
         data = request.get_json()
-        rel = data.get('folder', '')
-        new_source = (root_dir / rel).resolve() if rel else root_dir
-        try:
-            new_source.relative_to(root_dir)
-        except ValueError:
-            return jsonify({'error': 'invalid path'}), 400
-        if not new_source.is_dir():
-            return jsonify({'error': 'not a directory'}), 400
+
+        if data.get('use_comfy_output'):
+            co = st['comfy_output']
+            if not co:
+                return jsonify({'error': 'comfy_output not configured'}), 400
+            new_source = Path(co)
+            if not new_source.is_dir():
+                return jsonify({'error': 'comfy_output directory not found'}), 400
+        else:
+            rel = data.get('folder', '')
+            new_source = (root_dir / rel).resolve() if rel else root_dir
+            try:
+                new_source.relative_to(root_dir)
+            except ValueError:
+                return jsonify({'error': 'invalid path'}), 400
+            if not new_source.is_dir():
+                return jsonify({'error': 'not a directory'}), 400
+
         st['source']       = new_source
         st['selected_dir'] = new_source / selected_name
         st['dust_dir']     = new_source / dust_name
@@ -716,7 +738,8 @@ def create_app(root_dir, source, config, selected_name, dust_name,
 
     @app.route('/api/config')
     def api_config():
-        return jsonify({'comfy_url': comfy_url, 'lmstudio_url': lmstudio_url})
+        return jsonify({'comfy_url': comfy_url, 'lmstudio_url': lmstudio_url,
+                        'comfy_output': st['comfy_output']})
 
     @app.route('/api/events')
     def sse_events():
@@ -768,26 +791,34 @@ def create_app(root_dir, source, config, selected_name, dust_name,
 
 
 def main():
-    if len(sys.argv) < 2:
-        print("Usage: python app.py <source_folder>")
-        sys.exit(1)
-
-    source = Path(sys.argv[1]).resolve()
-    if not source.is_dir():
-        print(f"Error: '{source}' is not a valid directory")
-        sys.exit(1)
-
     config = load_config()
     defaults = config.get('defaults', {})
+
+    if len(sys.argv) >= 2:
+        source = Path(sys.argv[1]).resolve()
+        if not source.is_dir():
+            print(f"Error: '{source}' is not a valid directory")
+            sys.exit(1)
+    else:
+        co = defaults.get('comfy_output', '')
+        if not co:
+            print("Usage: python app.py <source_folder>")
+            sys.exit(1)
+        source = Path(co).resolve()
+        if not source.is_dir():
+            print(f"Error: comfy_output '{source}' is not a valid directory")
+            sys.exit(1)
+
     selected_name  = defaults.get('selected_dir_name', '__selected')
     dust_name      = defaults.get('dust_dir_name',     '__dust')
     index_filename = defaults.get('index_filename',    '__photoparser_index.json')
     port           = defaults.get('port', 1976)
-    watch_enabled    = defaults.get('live_updates', True)
-    comfy_url        = defaults.get('comfy_url', 'http://127.0.0.1:8188')
-    lmstudio_url     = defaults.get('lmstudio_url', 'http://localhost:1234/v1')
+    watch_enabled  = defaults.get('live_updates', True)
+    comfy_url      = defaults.get('comfy_url', 'http://127.0.0.1:8188')
+    lmstudio_url   = defaults.get('lmstudio_url', 'http://localhost:1234/v1')
+    comfy_output   = defaults.get('comfy_output', '')
     app = create_app(source, source, config, selected_name, dust_name,
-                     index_filename, watch_enabled, comfy_url, lmstudio_url)
+                     index_filename, watch_enabled, comfy_url, lmstudio_url, comfy_output)
 
     threading.Timer(1.0, webbrowser.open, args=[f'http://localhost:{port}']).start()
     app.run(host='127.0.0.1', port=port, debug=False, threaded=True)

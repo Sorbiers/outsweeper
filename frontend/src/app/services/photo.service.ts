@@ -106,12 +106,16 @@ export class PhotoService {
     return this.http.get<{ types: string[] }>('/api/file-types');
   }
 
-  listFolders(): Observable<{ folders: string[]; root_name: string; current: string }> {
-    return this.http.get<{ folders: string[]; root_name: string; current: string }>('/api/folders');
+  listFolders(): Observable<{ folders: string[]; root_name: string; current: string | null; comfy_output: string | null; comfy_output_name: string | null; comfy_output_active: boolean }> {
+    return this.http.get<{ folders: string[]; root_name: string; current: string | null; comfy_output: string | null; comfy_output_name: string | null; comfy_output_active: boolean }>('/api/folders');
   }
 
   changeFolder(folder: string): Observable<{ ok: boolean; source_name: string }> {
     return this.http.post<{ ok: boolean; source_name: string }>('/api/change-folder', { folder });
+  }
+
+  changeToComfyOutput(): Observable<{ ok: boolean; source_name: string }> {
+    return this.http.post<{ ok: boolean; source_name: string }>('/api/change-folder', { use_comfy_output: true });
   }
 
   sendToComfy(comfyUrl: string, prompt: object): Observable<any> {

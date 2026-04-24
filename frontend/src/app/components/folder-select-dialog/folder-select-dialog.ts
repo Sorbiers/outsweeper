@@ -8,7 +8,8 @@ import { PhotoService } from '../../services/photo.service';
 
 export type FolderSelectResult =
   | { kind: 'view'; folder: 'source' | 'selected' | 'dust' }
-  | { kind: 'change'; path: string };
+  | { kind: 'change'; path: string }
+  | { kind: 'change-comfy-output' };
 
 export interface FolderSelectData {
   currentView: 'source' | 'selected' | 'dust';
@@ -29,8 +30,12 @@ export class FolderSelectDialog implements OnInit {
 
   folders: string[] = [];
   rootName = '';
-  current = '';
+  current: string | null = '';
   selected = '';
+  selectedComfyOutput = false;
+  comfyOutputPath: string | null = null;
+  comfyOutputName: string | null = null;
+  comfyOutputActive = false;
   loading = true;
   notAllowed = false;
 
@@ -46,7 +51,11 @@ export class FolderSelectDialog implements OnInit {
         this.rootName = res.root_name;
         this.folders = ['', ...res.folders];
         this.current = res.current;
-        this.selected = res.current;
+        this.selected = res.current ?? '';
+        this.comfyOutputPath = res.comfy_output;
+        this.comfyOutputName = res.comfy_output_name;
+        this.comfyOutputActive = res.comfy_output_active;
+        this.selectedComfyOutput = res.comfy_output_active;
         this.loading = false;
       },
       error: (err) => {
@@ -64,7 +73,27 @@ export class FolderSelectDialog implements OnInit {
     return this.rootName + (folder ? '/' + folder : '/');
   }
 
+  selectFolder(folder: string): void {
+    this.selected = folder;
+    this.selectedComfyOutput = false;
+  }
+
+  selectComfyOutput(): void {
+    this.selectedComfyOutput = true;
+    this.selected = '';
+  }
+
+  get confirmDisabled(): boolean {
+    if (this.loading || this.notAllowed) return true;
+    if (this.selectedComfyOutput) return this.comfyOutputActive;
+    return this.selected === this.current;
+  }
+
   confirm(): void {
-    this.dialogRef.close({ kind: 'change', path: this.selected } satisfies FolderSelectResult);
+    if (this.selectedComfyOutput) {
+      this.dialogRef.close({ kind: 'change-comfy-output' } satisfies FolderSelectResult);
+    } else {
+      this.dialogRef.close({ kind: 'change', path: this.selected } satisfies FolderSelectResult);
+    }
   }
 }
