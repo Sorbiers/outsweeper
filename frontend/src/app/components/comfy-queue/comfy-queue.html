@@ -1,0 +1,20 @@
+<div class="header" (mousedown)="onHeaderMouseDown($event)">
+  <span class="title">COMFY</span>
+  <button class="close-btn" (mousedown)="$event.stopPropagation()" (click)="closed.emit()">×</button>
+</div>
+@if (svc.status(); as s) {
+  <div class="row"><span class="lbl">Running</span><span [class.active]="s.running > 0">{{ s.running }}</span></div>
+  <div class="row"><span class="lbl">Waiting</span><span>{{ s.pending }}</span></div>
+  <div class="row"><span class="lbl">Done</span><span>{{ s.done }}</span></div>
+  @if (s.progress && s.progress.max > 0) {
+    <div class="row progress-pct">
+      <span class="lbl">Step</span>
+      <span class="active">{{ (s.progress.value / s.progress.max * 100) | number:'1.0-0' }}%</span>
+    </div>
+    <div class="progress-row">
+      <div class="progress-bar" [style.width.%]="s.progress.value / s.progress.max * 100"></div>
+    </div>
+  }
+} @else {
+  <div class="row offline"><span>offline</span></div>
+}

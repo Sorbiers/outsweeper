@@ -5,3 +5,10 @@ export interface SystemMetrics {
   temp: number | null;
   vram: number | null;
 }
+
+export interface ComfyQueueStatus {
+  running: number;
+  pending: number;
+  done: number;
+  progress: { value: number; max: number } | null;
+}

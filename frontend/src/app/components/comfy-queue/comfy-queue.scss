@@ -10,6 +10,7 @@
   color: #aaa;
   line-height: 1.6;
   user-select: none;
+  min-width: 110px;
 }
 
 .header {
@@ -42,10 +43,28 @@
   display: flex;
   gap: 6px;
   justify-content: space-between;
-  min-width: 80px;
   padding: 0 10px;
 }
 
-.lbl  { color: #555; }
-.warm { color: #ffb74d; }
-.hot  { color: #ef5350; }
+.lbl    { color: #555; }
+.active { color: #66bb6a; }
+.offline { color: #555; font-style: italic; justify-content: center; }
+
+.progress-pct { margin-top: 1px; }
+
+.progress-row {
+  position: relative;
+  margin: 2px 10px 2px;
+  height: 3px;
+  background: #222;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.progress-bar {
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  background: #42a5f5;
+  border-radius: 2px;
+  transition: width 0.3s;
+}

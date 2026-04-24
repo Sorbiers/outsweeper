@@ -86,8 +86,16 @@ export class PhotoService {
     return this.http.post<{ samplers: string[]; schedulers: string[] }>('/api/comfy/samplers', { comfy_url: comfyUrl });
   }
 
-  getConfig(): Observable<{ comfy_url: string; lmstudio_url: string }> {
-    return this.http.get<{ comfy_url: string; lmstudio_url: string }>('/api/config');
+  getConfig(): Observable<{ comfy_url: string; lmstudio_url: string; widgets: { gpu_monitor: boolean; comfy_queue: boolean } }> {
+    return this.http.get<{ comfy_url: string; lmstudio_url: string; widgets: { gpu_monitor: boolean; comfy_queue: boolean } }>('/api/config');
+  }
+
+  setMetricsPaused(paused: boolean, clientId: string): Observable<{ ok: boolean }> {
+    return this.http.post<{ ok: boolean }>('/api/metrics/pause', { paused, client_id: clientId });
+  }
+
+  setComfyQueuePaused(paused: boolean, clientId: string): Observable<{ ok: boolean }> {
+    return this.http.post<{ ok: boolean }>('/api/comfy-queue/pause', { paused, client_id: clientId });
   }
 
   refresh(): Observable<{ ok: boolean }> {

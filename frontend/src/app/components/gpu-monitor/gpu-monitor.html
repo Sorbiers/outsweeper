@@ -1,3 +1,7 @@
+<div class="header" (mousedown)="onHeaderMouseDown($event)">
+  <span class="title">SYS</span>
+  <button class="close-btn" (mousedown)="$event.stopPropagation()" (click)="closed.emit()">×</button>
+</div>
 <div class="row"><span class="lbl">CPU</span><span [ngClass]="cls(metrics.cpu)">{{ metrics.cpu | number:'1.0-0' }}%</span></div>
 <div class="row"><span class="lbl">RAM</span><span [ngClass]="cls(metrics.ram)">{{ metrics.ram | number:'1.0-0' }}%</span></div>
 @if (metrics.gpu != null) {

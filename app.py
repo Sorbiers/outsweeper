@@ -28,14 +28,17 @@ EXTENSIONS = {'.png', '.jpg', '.jpeg', '.webp'}
 undo_stack = []
 
 # SSE client registry
-_sse_clients: list = []
+_sse_clients: dict = {}   # client_id -> {'queue': Queue, 'metrics': bool, 'comfy_queue': bool}
 _sse_lock = threading.Lock()
 
-def _sse_broadcast(msg: str) -> None:
+
+def _sse_broadcast(msg: str, *, flag: str | None = None) -> None:
     with _sse_lock:
-        for q in list(_sse_clients):
+        for client in list(_sse_clients.values()):
+            if flag and not client.get(flag, True):
+                continue
             try:
-                q.put_nowait(msg)
+                client['queue'].put_nowait(msg)
             except queue.Full:
                 pass
 
@@ -50,7 +53,7 @@ def _metrics_loop(interval: float = 2.0) -> None:
         pass
     while True:
         time.sleep(interval)
-        if not _sse_clients:
+        if not any(c['metrics'] for c in _sse_clients.values()):
             continue
         try:
             cpu = psutil.cpu_percent(interval=None)
@@ -67,7 +70,61 @@ def _metrics_loop(interval: float = 2.0) -> None:
                     pass
             _sse_broadcast('metrics:' + json.dumps(
                 {'cpu': cpu, 'ram': ram, 'gpu': gpu, 'temp': temp, 'vram': vram}
-            ))
+            ), flag='metrics')
+        except Exception:
+            pass
+
+
+_comfy_progress: dict = {}
+
+
+def _comfy_ws_loop(comfy_url: str) -> None:
+    try:
+        import websocket
+    except ImportError:
+        return
+    ws_url = comfy_url.replace('http://', 'ws://').replace('https://', 'wss://') + '/ws'
+    while True:
+        try:
+            def on_message(ws, message):
+                global _comfy_progress
+                try:
+                    msg = json.loads(message)
+                    if msg['type'] == 'progress':
+                        _comfy_progress = {'value': msg['data']['value'], 'max': msg['data']['max']}
+                    elif msg['type'] == 'execution_complete':
+                        _comfy_progress = {}
+                    elif msg['type'] == 'executing' and msg.get('data', {}).get('node') is None:
+                        _comfy_progress = {}
+                except Exception:
+                    pass
+            websocket.WebSocketApp(ws_url, on_message=on_message).run_forever()
+        except Exception:
+            pass
+        time.sleep(5)
+
+
+def _comfy_queue_loop(comfy_url: str, interval: float = 2.0) -> None:
+    prev_running_ids: set = set()
+    done_count = 0
+    while True:
+        time.sleep(interval)
+        if not any(c.get('comfy_queue', True) for c in _sse_clients.values()):
+            continue
+        try:
+            resp = http_requests.get(f'{comfy_url}/queue', timeout=3)
+            data = resp.json()
+            running_items = data.get('queue_running', [])
+            pending_items = data.get('queue_pending', [])
+            current_running_ids = {str(item[1]) for item in running_items if isinstance(item, (list, tuple)) and len(item) > 1}
+            done_count += len(prev_running_ids - current_running_ids)
+            prev_running_ids = current_running_ids
+            _sse_broadcast('comfy_queue:' + json.dumps({
+                'running': len(running_items),
+                'pending': len(pending_items),
+                'done': done_count,
+                'progress': _comfy_progress if running_items else None,
+            }), flag='comfy_queue')
         except Exception:
             pass
 
@@ -257,7 +314,7 @@ def extract_png_metadata(filepath):
 def create_app(root_dir, source, config, selected_name, dust_name,
                index_filename='__photoparser_index.json', watch_enabled=False,
                comfy_url='http://127.0.0.1:8188', lmstudio_url='http://localhost:1234/v1',
-               comfy_output='', monitor_enabled=False):
+               comfy_output='', monitor_enabled=False, comfy_queue_enabled=False):
     static_dir = Path(__file__).parent / 'static'
     app = Flask(__name__, static_folder=None)
     allow_dir_change = config.get('permissions', {}).get('allow_dir_change', False)
@@ -298,6 +355,9 @@ def create_app(root_dir, source, config, selected_name, dust_name,
     _start_observer(source)
     if monitor_enabled:
         threading.Thread(target=_metrics_loop, daemon=True).start()
+    if comfy_queue_enabled:
+        threading.Thread(target=_comfy_queue_loop, args=(comfy_url,), daemon=True).start()
+        threading.Thread(target=_comfy_ws_loop, args=(comfy_url,), daemon=True).start()
 
     def resolve_folder():
         folder = request.args.get('folder', 'source')
@@ -766,6 +826,24 @@ def create_app(root_dir, source, config, selected_name, dust_name,
         _start_observer(new_source)
         return jsonify({'ok': True, 'source_name': new_source.name})
 
+    @app.route('/api/metrics/pause', methods=['POST'])
+    def metrics_pause():
+        client_id = request.json.get('client_id', '')
+        paused = request.json.get('paused', True)
+        with _sse_lock:
+            if client_id in _sse_clients:
+                _sse_clients[client_id]['metrics'] = not paused
+        return jsonify({'ok': True})
+
+    @app.route('/api/comfy-queue/pause', methods=['POST'])
+    def comfy_queue_pause():
+        client_id = request.json.get('client_id', '')
+        paused = request.json.get('paused', True)
+        with _sse_lock:
+            if client_id in _sse_clients:
+                _sse_clients[client_id]['comfy_queue'] = not paused
+        return jsonify({'ok': True})
+
     @app.route('/api/refresh', methods=['POST'])
     def refresh():
         st['index_cache'] = {}
@@ -775,13 +853,20 @@ def create_app(root_dir, source, config, selected_name, dust_name,
     @app.route('/api/config')
     def api_config():
         return jsonify({'comfy_url': comfy_url, 'lmstudio_url': lmstudio_url,
-                        'comfy_output': st['comfy_output']})
+                        'comfy_output': st['comfy_output'],
+                        'widgets': {'gpu_monitor': monitor_enabled, 'comfy_queue': comfy_queue_enabled}})
 
     @app.route('/api/events')
     def sse_events():
+        import uuid as _uuid
         from flask import Response, stream_with_context
-        def generate(q):
+        client_id = str(_uuid.uuid4())
+        q = queue.Queue(maxsize=8)
+        with _sse_lock:
+            _sse_clients[client_id] = {'queue': q, 'metrics': True, 'comfy_queue': True}
+        def generate():
             try:
+                yield f'data: client_id:{client_id}\n\n'
                 while True:
                     try:
                         msg = q.get(timeout=25)
@@ -790,13 +875,9 @@ def create_app(root_dir, source, config, selected_name, dust_name,
                         yield ': heartbeat\n\n'
             finally:
                 with _sse_lock:
-                    if q in _sse_clients:
-                        _sse_clients.remove(q)
-        q = queue.Queue(maxsize=8)
-        with _sse_lock:
-            _sse_clients.append(q)
+                    _sse_clients.pop(client_id, None)
         return Response(
-            stream_with_context(generate(q)),
+            stream_with_context(generate()),
             mimetype='text/event-stream',
             headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'},
         )
@@ -854,10 +935,17 @@ def main():
     lmstudio_url   = defaults.get('lmstudio_url', 'http://localhost:1234/v1')
     comfy_output    = defaults.get('comfy_output', '')
     widgets         = config.get('widgets', {})
-    monitor_enabled = widgets.get('gpu_monitor', False)
+    monitor_enabled     = widgets.get('gpu_monitor', False)
+    comfy_queue_enabled = widgets.get('comfy_queue', False)
     app = create_app(source, source, config, selected_name, dust_name,
                      index_filename, watch_enabled, comfy_url, lmstudio_url,
-                     comfy_output, monitor_enabled)
+                     comfy_output, monitor_enabled, comfy_queue_enabled)
+
+    import socket
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        if s.connect_ex(('127.0.0.1', port)) == 0:
+            print(f"Error: port {port} is already in use")
+            sys.exit(1)
 
     threading.Timer(1.0, webbrowser.open, args=[f'http://localhost:{port}']).start()
     app.run(host='127.0.0.1', port=port, debug=False, threaded=True)

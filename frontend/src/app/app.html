@@ -81,5 +81,11 @@
 </mat-menu>
 
 @if (metrics(); as m) {
-  <pp-gpu-monitor [metrics]="m"></pp-gpu-monitor>
+  @if (widgetVisible()) {
+    <pp-gpu-monitor [metrics]="m" (closed)="closeGpuWidget()"></pp-gpu-monitor>
+  }
+}
+
+@if (comfyQueueEnabled() && comfyQueueVisible()) {
+  <pp-comfy-queue (closed)="closeComfyQueueWidget()"></pp-comfy-queue>
 }

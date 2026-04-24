@@ -88,9 +88,9 @@ export class GenerateDialog {
   availableSchedulers: string[] = [];
 
   constructor() {
-    this.comfyUrl = localStorage.getItem('comfyUrl') || '';
+    this.comfyUrl = this.connState.comfy.url || '';
 
-    if (this.comfyUrl && this.connState.comfy.url === this.comfyUrl && this.connState.comfy.status === 'ok') {
+    if (this.comfyUrl && this.connState.comfy.status === 'ok') {
       this.checkStatus = 'ok';
       this.availableLoras = [...this.connState.comfy.loras];
       this.availableCheckpoints = [...this.connState.comfy.checkpoints];
@@ -105,11 +105,6 @@ export class GenerateDialog {
     this.loraNodes = this.extractVariableNodes(this.data.workflow, 'lora_name');
     this.checkpointNodes = this.extractVariableNodes(this.data.workflow, 'ckpt_name');
 
-    if (!this.comfyUrl) {
-      this.photoService.getConfig().subscribe(cfg => {
-        if (!this.comfyUrl) this.comfyUrl = cfg.comfy_url;
-      });
-    }
   }
 
   onUrlChange(): void {
@@ -120,7 +115,6 @@ export class GenerateDialog {
 
   checkConnection(): void {
     this.checkStatus = 'checking';
-    localStorage.setItem('comfyUrl', this.comfyUrl);
     this.connState.comfy.url = this.comfyUrl;
     this.connState.comfy.status = 'checking';
     this.photoService.checkComfy(this.comfyUrl).subscribe({
@@ -181,10 +175,10 @@ export class GenerateDialog {
   }
 
   send(): void {
-    localStorage.setItem('comfyUrl', this.comfyUrl);
+    this.connState.comfy.url = this.comfyUrl;
     this.saveParams();
     this.sending = true;
-    const lmstudioUrl = localStorage.getItem('lmstudioUrl');
+    const lmstudioUrl = this.connState.lmstudio.url;
     const unload$ = lmstudioUrl
       ? this.photoService.unloadLmStudio(lmstudioUrl).pipe(catchError(() => of(null)))
       : of(null);

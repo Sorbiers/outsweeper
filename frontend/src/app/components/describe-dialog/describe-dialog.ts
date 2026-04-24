@@ -43,10 +43,10 @@ export class DescribeDialog {
   saving = false;
 
   constructor() {
-    this.lmstudioUrl = localStorage.getItem('lmstudioUrl') || '';
+    this.lmstudioUrl = this.connState.lmstudio.url || '';
     this.prompt = this.connState.lastDescribePrompt;
 
-    if (this.lmstudioUrl && this.connState.lmstudio.url === this.lmstudioUrl && this.connState.lmstudio.status === 'ok') {
+    if (this.lmstudioUrl && this.connState.lmstudio.status === 'ok') {
       this.checkStatus = 'ok';
       this.availableModels = [...this.connState.lmstudio.models];
       if (this.availableModels.length && !this.model) {
@@ -54,11 +54,6 @@ export class DescribeDialog {
       }
     }
 
-    if (!this.lmstudioUrl) {
-      this.photoService.getConfig().subscribe(cfg => {
-        if (!this.lmstudioUrl) this.lmstudioUrl = cfg.lmstudio_url;
-      });
-    }
   }
 
   onUrlChange(): void {
@@ -69,7 +64,6 @@ export class DescribeDialog {
 
   checkConnection(): void {
     this.checkStatus = 'checking';
-    localStorage.setItem('lmstudioUrl', this.lmstudioUrl);
     this.connState.lmstudio.url = this.lmstudioUrl;
     this.connState.lmstudio.status = 'checking';
     this.photoService.checkLmStudio(this.lmstudioUrl).subscribe({
@@ -90,12 +84,12 @@ export class DescribeDialog {
   }
 
   describe(): void {
-    localStorage.setItem('lmstudioUrl', this.lmstudioUrl);
+    this.connState.lmstudio.url = this.lmstudioUrl;
     if (this.model) localStorage.setItem('lmstudioModel', this.model);
     this.connState.lastDescribePrompt = this.prompt;
     this.describing = true;
     this.description = '';
-    const comfyUrl = localStorage.getItem('comfyUrl');
+    const comfyUrl = this.connState.comfy.url;
     const free$ = comfyUrl
       ? this.photoService.freeComfy(comfyUrl).pipe(catchError(() => of(null)))
       : of(null);

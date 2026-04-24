@@ -1,22 +1,23 @@
-import { Component, HostBinding, Input, Output, EventEmitter, OnInit, OnDestroy } from '@angular/core';
-import { DecimalPipe, NgClass } from '@angular/common';
-import { SystemMetrics } from '../../models/metrics.model';
+import { Component, HostBinding, Output, EventEmitter, OnInit, OnDestroy, inject } from '@angular/core';
+import { DecimalPipe } from '@angular/common';
+import { ComfyQueueService } from '../../services/comfy-queue.service';
 
 @Component({
-  selector: 'pp-gpu-monitor',
-  imports: [DecimalPipe, NgClass],
-  templateUrl: './gpu-monitor.html',
-  styleUrl: './gpu-monitor.scss',
+  selector: 'pp-comfy-queue',
+  imports: [DecimalPipe],
+  templateUrl: './comfy-queue.html',
+  styleUrl: './comfy-queue.scss',
 })
-export class GpuMonitorWidget implements OnInit, OnDestroy {
-  @Input() metrics!: SystemMetrics;
+export class ComfyQueueWidget implements OnInit, OnDestroy {
   @Output() closed = new EventEmitter<void>();
 
   @HostBinding('style.left') get styleLeft() { return this.x + 'px'; }
   @HostBinding('style.top')  get styleTop()  { return this.y + 'px'; }
 
+  readonly svc = inject(ComfyQueueService);
+
   private x = 0;
-  private y = 8;
+  private y = 0;
   private dragStartX = 0;
   private dragStartY = 0;
   private dragOriginX = 0;
@@ -26,16 +27,12 @@ export class GpuMonitorWidget implements OnInit, OnDestroy {
   private boundUp   = ()              => this.onMouseUp();
 
   ngOnInit(): void {
-    const saved = localStorage.getItem('pp_widget_pos');
+    const saved = localStorage.getItem('pp_comfy_pos');
     if (saved) {
-      try {
-        const p = JSON.parse(saved);
-        this.x = p.x;
-        this.y = p.y;
-      } catch { /* ignore */ }
+      try { const p = JSON.parse(saved); this.x = p.x; this.y = p.y; } catch { /* ignore */ }
     } else {
-      this.x = window.innerWidth - 120;
-      this.y = 8;
+      this.x = window.innerWidth - 130;
+      this.y = 160;
     }
   }
 
@@ -55,18 +52,13 @@ export class GpuMonitorWidget implements OnInit, OnDestroy {
   }
 
   private onMouseMove(e: MouseEvent): void {
-    this.x = Math.max(0, Math.min(window.innerWidth  - 90, this.dragOriginX + e.clientX - this.dragStartX));
-    this.y = Math.max(0, Math.min(window.innerHeight - 40, this.dragOriginY + e.clientY - this.dragStartY));
+    this.x = Math.max(0, Math.min(window.innerWidth  - 100, this.dragOriginX + e.clientX - this.dragStartX));
+    this.y = Math.max(0, Math.min(window.innerHeight -  40, this.dragOriginY + e.clientY - this.dragStartY));
   }
 
   private onMouseUp(): void {
     document.removeEventListener('mousemove', this.boundMove);
     document.removeEventListener('mouseup', this.boundUp);
-    localStorage.setItem('pp_widget_pos', JSON.stringify({ x: this.x, y: this.y }));
-  }
-
-  cls(pct: number | null): string {
-    if (pct == null) return '';
-    return pct >= 90 ? 'hot' : pct >= 70 ? 'warm' : '';
+    localStorage.setItem('pp_comfy_pos', JSON.stringify({ x: this.x, y: this.y }));
   }
 }

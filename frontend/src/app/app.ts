@@ -19,12 +19,15 @@ import { GenerateDialog, DEFAULT_FLUX_WORKFLOW } from './components/generate-dia
 import { FolderSelectDialog, FolderSelectResult } from './components/folder-select-dialog/folder-select-dialog';
 import { FilterDialog, ActiveFilters, emptyFilters, hasActiveFilters } from './components/filter-dialog/filter-dialog';
 import { GpuMonitorWidget } from './components/gpu-monitor/gpu-monitor';
+import { ComfyQueueWidget } from './components/comfy-queue/comfy-queue';
 import { SystemMetrics } from './models/metrics.model';
+import { ConnectionStateService } from './services/connection-state.service';
+import { ComfyQueueService } from './services/comfy-queue.service';
 
 
 @Component({
   selector: 'pp-root',
-  imports: [MatSnackBarModule, MatFabButton, MatIconButton, MatIconModule, MatMenuModule, MatProgressSpinnerModule, MatDividerModule, MatTooltipModule, ImageStrip, InfoPanel, PreviewPanel, GpuMonitorWidget],
+  imports: [MatSnackBarModule, MatFabButton, MatIconButton, MatIconModule, MatMenuModule, MatProgressSpinnerModule, MatDividerModule, MatTooltipModule, ImageStrip, InfoPanel, PreviewPanel, GpuMonitorWidget, ComfyQueueWidget],
   templateUrl: './app.html',
   styleUrl: './app.scss',
 })
@@ -33,6 +36,8 @@ export class App implements OnInit, OnDestroy {
   private keyboard = inject(KeyboardService);
   private snackBar = inject(MatSnackBar);
   private dialog = inject(MatDialog);
+  private connState = inject(ConnectionStateService);
+  private comfyQueue = inject(ComfyQueueService);
 
   photos: PhotoListItem[] = [];
   currentIndex = 0;
@@ -45,9 +50,13 @@ export class App implements OnInit, OnDestroy {
   private sub!: Subscription;
   private filterSub!: Subscription;
   private eventSource: EventSource | null = null;
+  private sseClientId = '';
 
   pendingRefresh = false;
   metrics = signal<SystemMetrics | null>(null);
+  widgetVisible = signal(true);
+  comfyQueueEnabled = signal(false);
+  comfyQueueVisible = signal(true);
 
   // Pagination
   totalPhotos = 0;
@@ -79,9 +88,16 @@ export class App implements OnInit, OnDestroy {
     this.eventSource = new EventSource('/api/events');
     this.eventSource.onmessage = (e) => {
       if (e.data === 'files_changed') this.pendingRefresh = true;
+      else if (e.data.startsWith('client_id:')) this.sseClientId = e.data.slice(10);
       else if (e.data.startsWith('metrics:')) this.metrics.set(JSON.parse(e.data.slice(8)));
+      else if (e.data.startsWith('comfy_queue:')) this.comfyQueue.status.set(JSON.parse(e.data.slice(12)));
     };
     this.loadPhotos();
+    this.photoService.getConfig().subscribe(cfg => {
+      if (!this.connState.comfy.url)     this.connState.comfy.url     = cfg.comfy_url;
+      if (!this.connState.lmstudio.url)  this.connState.lmstudio.url  = cfg.lmstudio_url;
+      if (cfg.widgets?.comfy_queue) this.comfyQueueEnabled.set(true);
+    });
 
     this.filterSub = this.filterSubject
       .pipe(debounceTime(300), distinctUntilChanged())
@@ -376,6 +392,16 @@ export class App implements OnInit, OnDestroy {
         this.loadPhotos();
       }
     });
+  }
+
+  closeGpuWidget(): void {
+    this.widgetVisible.set(false);
+    this.photoService.setMetricsPaused(true, this.sseClientId).subscribe();
+  }
+
+  closeComfyQueueWidget(): void {
+    this.comfyQueueVisible.set(false);
+    this.photoService.setComfyQueuePaused(true, this.sseClientId).subscribe();
   }
 
   private undoLast(): void {
