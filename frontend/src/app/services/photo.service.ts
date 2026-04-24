@@ -90,6 +90,14 @@ export class PhotoService {
     return this.http.post<{ ok: boolean }>('/api/refresh', {});
   }
 
+  unloadLmStudio(lmstudioUrl: string): Observable<{ ok: boolean }> {
+    return this.http.post<{ ok: boolean }>('/api/lmstudio/unload', { lmstudio_url: lmstudioUrl });
+  }
+
+  freeComfy(comfyUrl: string): Observable<{ ok: boolean }> {
+    return this.http.post<{ ok: boolean }>('/api/comfy/free', { comfy_url: comfyUrl });
+  }
+
   getFileTypes(): Observable<{ types: string[] }> {
     return this.http.get<{ types: string[] }>('/api/file-types');
   }

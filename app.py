@@ -8,6 +8,7 @@ import mimetypes
 import fnmatch
 from datetime import datetime
 from pathlib import Path
+from urllib.parse import urlparse
 
 try:
     import tomllib
@@ -431,6 +432,17 @@ def create_app(root_dir, source, config, selected_name, dust_name, index_filenam
         else:
             return jsonify({'ok': False, 'error': 'file not found in destination'}), 404
 
+    @app.route('/api/comfy/free', methods=['POST'])
+    def comfy_free():
+        data = request.get_json()
+        comfy_url = data.get('comfy_url', 'http://127.0.0.1:8188')
+        try:
+            http_requests.post(f"{comfy_url}/free",
+                               json={"unload_models": True, "free_memory": True}, timeout=5)
+        except Exception:
+            pass
+        return jsonify({'ok': True})
+
     @app.route('/api/comfy/check', methods=['POST'])
     def comfy_check():
         data = request.get_json()
@@ -490,6 +502,27 @@ def create_app(root_dir, source, config, selected_name, dust_name, index_filenam
             return jsonify(resp.json()), resp.status_code
         except Exception as e:
             return jsonify({'error': str(e)}), 502
+
+    @app.route('/api/lmstudio/unload', methods=['POST'])
+    def lmstudio_unload():
+        data = request.get_json()
+        lmstudio_url = data.get('lmstudio_url', 'http://localhost:1234/v1')
+        parsed = urlparse(lmstudio_url)
+        base = f"{parsed.scheme}://{parsed.netloc}"
+        try:
+            resp = http_requests.get(f"{base}/api/v1/models", timeout=5)
+            models = resp.json().get('models', [])
+            for model in models:
+                instance_id = model.get('key')
+                if instance_id:
+                    http_requests.post(
+                        f"{base}/api/v1/models/unload",
+                        json={"instance_id": instance_id},
+                        timeout=5,
+                    )
+        except Exception:
+            pass
+        return jsonify({'ok': True})
 
     @app.route('/api/lmstudio/check', methods=['POST'])
     def lmstudio_check():

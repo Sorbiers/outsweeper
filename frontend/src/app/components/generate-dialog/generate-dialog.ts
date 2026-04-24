@@ -7,7 +7,8 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { forkJoin } from 'rxjs';
+import { forkJoin, of } from 'rxjs';
+import { catchError } from 'rxjs/operators';
 import { PhotoService } from '../../services/photo.service';
 import { PrompterDialog } from '../prompter-dialog/prompter-dialog';
 
@@ -135,7 +136,14 @@ export class GenerateDialog {
   send(): void {
     localStorage.setItem('comfyUrl', this.comfyUrl);
     this.sending = true;
+    const lmstudioUrl = localStorage.getItem('lmstudioUrl');
+    const unload$ = lmstudioUrl
+      ? this.photoService.unloadLmStudio(lmstudioUrl).pipe(catchError(() => of(null)))
+      : of(null);
+    unload$.subscribe(() => this._doSend());
+  }
 
+  private _doSend(): void {
     const variableNodes = [
       ...this.checkpointNodes.filter(n => n.selected.length > 0),
       ...this.loraNodes.filter(n => n.selected.length > 0 && !n.removed),

@@ -1,5 +1,7 @@
 import { Component, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { of } from 'rxjs';
+import { catchError } from 'rxjs/operators';
 import { MAT_DIALOG_DATA, MatDialogModule } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
@@ -57,6 +59,14 @@ export class DescribeDialog {
     if (this.model) localStorage.setItem('lmstudioModel', this.model);
     this.describing = true;
     this.description = '';
+    const comfyUrl = localStorage.getItem('comfyUrl');
+    const free$ = comfyUrl
+      ? this.photoService.freeComfy(comfyUrl).pipe(catchError(() => of(null)))
+      : of(null);
+    free$.subscribe(() => this._doDescribe());
+  }
+
+  private _doDescribe(): void {
     this.photoService.describePhoto(
       this.data.filename, this.data.folder,
       this.lmstudioUrl, this.prompt, this.model
