@@ -249,6 +249,7 @@ def create_app(source, selected_dir, dust_dir):
             return jsonify({'error': 'file not found'}), 404
 
         dest_dir = selected_dir if dest == 'selected' else dust_dir
+        dest_dir.mkdir(exist_ok=True)
         dest_path = dest_dir / filename
 
         shutil.move(str(src_path), str(dest_path))
@@ -476,9 +477,6 @@ def main():
 
     selected_dir = source / '__selected'
     dust_dir = source / '__dust'
-    selected_dir.mkdir(exist_ok=True)
-    dust_dir.mkdir(exist_ok=True)
-
     app = create_app(source, selected_dir, dust_dir)
 
     threading.Timer(1.0, webbrowser.open, args=['http://localhost:1976']).start()
