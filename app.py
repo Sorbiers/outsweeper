@@ -221,7 +221,8 @@ def extract_png_metadata(filepath):
 
 
 def create_app(root_dir, source, config, selected_name, dust_name,
-               index_filename='__photoparser_index.json', watch_enabled=False):
+               index_filename='__photoparser_index.json', watch_enabled=False,
+               comfy_url='http://127.0.0.1:8188', lmstudio_url='http://localhost:1234/v1'):
     static_dir = Path(__file__).parent / 'static'
     app = Flask(__name__, static_folder=None)
     allow_dir_change = config.get('permissions', {}).get('allow_dir_change', False)
@@ -713,6 +714,10 @@ def create_app(root_dir, source, config, selected_name, dust_name,
         threading.Thread(target=build_index, args=(st['source'], st), daemon=True).start()
         return jsonify({'ok': True})
 
+    @app.route('/api/config')
+    def api_config():
+        return jsonify({'comfy_url': comfy_url, 'lmstudio_url': lmstudio_url})
+
     @app.route('/api/events')
     def sse_events():
         from flask import Response, stream_with_context
@@ -778,9 +783,11 @@ def main():
     dust_name      = defaults.get('dust_dir_name',     '__dust')
     index_filename = defaults.get('index_filename',    '__photoparser_index.json')
     port           = defaults.get('port', 1976)
-    watch_enabled  = defaults.get('live_updates', True)
+    watch_enabled    = defaults.get('live_updates', True)
+    comfy_url        = defaults.get('comfy_url', 'http://127.0.0.1:8188')
+    lmstudio_url     = defaults.get('lmstudio_url', 'http://localhost:1234/v1')
     app = create_app(source, source, config, selected_name, dust_name,
-                     index_filename, watch_enabled)
+                     index_filename, watch_enabled, comfy_url, lmstudio_url)
 
     threading.Timer(1.0, webbrowser.open, args=[f'http://localhost:{port}']).start()
     app.run(host='127.0.0.1', port=port, debug=False, threaded=True)

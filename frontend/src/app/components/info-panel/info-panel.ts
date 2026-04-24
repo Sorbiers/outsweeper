@@ -7,7 +7,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatDialog } from '@angular/material/dialog';
 import { PhotoInfo } from '../../models/photo.model';
-import { GenerateDialog } from '../generate-dialog/generate-dialog';
+import { GenerateDialog, DEFAULT_FLUX_WORKFLOW } from '../generate-dialog/generate-dialog';
 import { DescribeDialog } from '../describe-dialog/describe-dialog';
 
 /** PNG text chunk keys that are handled by the ComfyUI section */
@@ -32,6 +32,17 @@ export class InfoPanel {
       data: { filename: this.info.filename, folder: this.folder },
       width: '90vw',
       maxWidth: '700px',
+    }).afterClosed().subscribe(result => {
+      if (result?.action === 'generate') {
+        const workflow = this.info?.png_metadata?.['prompt']
+          ? JSON.parse(this.info.png_metadata['prompt'])
+          : JSON.parse(JSON.stringify(DEFAULT_FLUX_WORKFLOW));
+        this.dialog.open(GenerateDialog, {
+          data: { workflow, positivePromptOverride: result.prompt },
+          width: '90vw',
+          maxWidth: '800px',
+        });
+      }
     });
   }
 

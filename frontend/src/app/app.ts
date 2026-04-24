@@ -15,52 +15,10 @@ import { PhotoListItem, PhotoInfo } from './models/photo.model';
 import { ImageStrip } from './components/image-strip/image-strip';
 import { InfoPanel } from './components/info-panel/info-panel';
 import { PreviewPanel } from './components/preview-panel/preview-panel';
-import { GenerateDialog } from './components/generate-dialog/generate-dialog';
+import { GenerateDialog, DEFAULT_FLUX_WORKFLOW } from './components/generate-dialog/generate-dialog';
 import { FolderSelectDialog, FolderSelectResult } from './components/folder-select-dialog/folder-select-dialog';
 import { FilterDialog, ActiveFilters, emptyFilters, hasActiveFilters } from './components/filter-dialog/filter-dialog';
 
-const DEFAULT_FLUX_WORKFLOW: Record<string, any> = {
-  "1": {
-    "class_type": "CheckpointLoaderSimple",
-    "inputs": { "ckpt_name": "flux1-dev.safetensors" }
-  },
-  "2": {
-    "class_type": "LoraLoader",
-    "inputs": { "lora_name": "", "strength_model": 1.0, "strength_clip": 1.0, "model": ["1", 0], "clip": ["1", 1] }
-  },
-  "3": {
-    "class_type": "LoraLoader",
-    "inputs": { "lora_name": "", "strength_model": 1.0, "strength_clip": 1.0, "model": ["2", 0], "clip": ["2", 1] }
-  },
-  "4": {
-    "class_type": "LoraLoader",
-    "inputs": { "lora_name": "", "strength_model": 1.0, "strength_clip": 1.0, "model": ["3", 0], "clip": ["3", 1] }
-  },
-  "5": {
-    "class_type": "CLIPTextEncode",
-    "inputs": { "text": "", "clip": ["4", 1] }
-  },
-  "6": {
-    "class_type": "CLIPTextEncode",
-    "inputs": { "text": "", "clip": ["4", 1] }
-  },
-  "7": {
-    "class_type": "EmptyLatentImage",
-    "inputs": { "width": 1024, "height": 1024, "batch_size": 1 }
-  },
-  "8": {
-    "class_type": "KSampler",
-    "inputs": { "seed": 0, "steps": 20, "cfg": 1.0, "sampler_name": "euler", "scheduler": "simple", "denoise": 1.0, "model": ["4", 0], "positive": ["5", 0], "negative": ["6", 0], "latent_image": ["7", 0] }
-  },
-  "9": {
-    "class_type": "VAEDecode",
-    "inputs": { "samples": ["8", 0], "vae": ["1", 2] }
-  },
-  "10": {
-    "class_type": "SaveImage",
-    "inputs": { "filename_prefix": "flux", "images": ["9", 0] }
-  }
-};
 
 @Component({
   selector: 'pp-root',

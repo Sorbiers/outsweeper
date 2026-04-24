@@ -7,3 +7,5 @@ dust_dir_name     = "__dust"
 index_filename    = "__photoparser_index.json"
 port              = 1976
 live_updates      = true
+comfy_url         = "http://127.0.0.1:8188"
+lmstudio_url      = "http://localhost:1234/v1"

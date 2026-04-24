@@ -4,7 +4,7 @@
   <div class="url-row">
     <mat-form-field class="url-field">
       <mat-label>LM Studio URL</mat-label>
-      <input matInput [(ngModel)]="lmstudioUrl">
+      <input matInput [(ngModel)]="lmstudioUrl" (ngModelChange)="onUrlChange()">
     </mat-form-field>
     @if (checkStatus === 'checking') {
       <button mat-stroked-button disabled class="check-btn">Checking...</button>
@@ -62,6 +62,11 @@
 
 <mat-dialog-actions align="end">
   <button mat-button mat-dialog-close>Close</button>
+  @if (description) {
+    <button mat-stroked-button (click)="openGenerate()">
+      <mat-icon>bolt</mat-icon> Generate
+    </button>
+  }
   <button mat-flat-button (click)="describe()" [disabled]="describing">
     @if (describing) {
       Describing...

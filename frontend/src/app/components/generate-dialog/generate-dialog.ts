@@ -10,11 +10,26 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { forkJoin, of } from 'rxjs';
 import { catchError } from 'rxjs/operators';
 import { PhotoService } from '../../services/photo.service';
+import { ConnectionStateService } from '../../services/connection-state.service';
 import { PrompterDialog } from '../prompter-dialog/prompter-dialog';
 
 export interface GenerateDialogData {
   workflow: Record<string, any>;
+  positivePromptOverride?: string;
 }
+
+export const DEFAULT_FLUX_WORKFLOW: Record<string, any> = {
+  "1": { "class_type": "CheckpointLoaderSimple", "inputs": { "ckpt_name": "flux1-dev.safetensors" } },
+  "2": { "class_type": "LoraLoader", "inputs": { "lora_name": "", "strength_model": 1.0, "strength_clip": 1.0, "model": ["1", 0], "clip": ["1", 1] } },
+  "3": { "class_type": "LoraLoader", "inputs": { "lora_name": "", "strength_model": 1.0, "strength_clip": 1.0, "model": ["2", 0], "clip": ["2", 1] } },
+  "4": { "class_type": "LoraLoader", "inputs": { "lora_name": "", "strength_model": 1.0, "strength_clip": 1.0, "model": ["3", 0], "clip": ["3", 1] } },
+  "5": { "class_type": "CLIPTextEncode", "inputs": { "text": "", "clip": ["4", 1] } },
+  "6": { "class_type": "CLIPTextEncode", "inputs": { "text": "", "clip": ["4", 1] } },
+  "7": { "class_type": "EmptyLatentImage", "inputs": { "width": 1024, "height": 1024, "batch_size": 1 } },
+  "8": { "class_type": "KSampler", "inputs": { "seed": 0, "steps": 20, "cfg": 1.0, "sampler_name": "euler", "scheduler": "simple", "denoise": 1.0, "model": ["4", 0], "positive": ["5", 0], "negative": ["6", 0], "latent_image": ["7", 0] } },
+  "9": { "class_type": "VAEDecode", "inputs": { "samples": ["8", 0], "vae": ["1", 2] } },
+  "10": { "class_type": "SaveImage", "inputs": { "filename_prefix": "flux", "images": ["9", 0] } }
+};
 
 interface WorkflowParams {
   seed: number | null;
@@ -57,8 +72,9 @@ export class GenerateDialog {
   private dialog = inject(MatDialog);
   private photoService = inject(PhotoService);
   private snackBar = inject(MatSnackBar);
+  private connState = inject(ConnectionStateService);
 
-  comfyUrl = localStorage.getItem('comfyUrl') || 'http://127.0.0.1:8188';
+  comfyUrl = '';
   params: WorkflowParams;
   sending = false;
   checkStatus: 'idle' | 'checking' | 'ok' | 'error' = 'idle';
@@ -72,22 +88,53 @@ export class GenerateDialog {
   availableSchedulers: string[] = [];
 
   constructor() {
+    this.comfyUrl = localStorage.getItem('comfyUrl') || '';
+
+    if (this.comfyUrl && this.connState.comfy.url === this.comfyUrl && this.connState.comfy.status === 'ok') {
+      this.checkStatus = 'ok';
+      this.availableLoras = [...this.connState.comfy.loras];
+      this.availableCheckpoints = [...this.connState.comfy.checkpoints];
+      this.availableSamplers = [...this.connState.comfy.samplers];
+      this.availableSchedulers = [...this.connState.comfy.schedulers];
+    }
+
     this.params = this.extractParams(this.data.workflow);
+    if (this.data.positivePromptOverride) {
+      this.params.positivePrompt = this.data.positivePromptOverride;
+    }
     this.loraNodes = this.extractVariableNodes(this.data.workflow, 'lora_name');
     this.checkpointNodes = this.extractVariableNodes(this.data.workflow, 'ckpt_name');
+
+    if (!this.comfyUrl) {
+      this.photoService.getConfig().subscribe(cfg => {
+        if (!this.comfyUrl) this.comfyUrl = cfg.comfy_url;
+      });
+    }
+  }
+
+  onUrlChange(): void {
+    if (this.comfyUrl !== this.connState.comfy.url) {
+      this.checkStatus = 'idle';
+    }
   }
 
   checkConnection(): void {
     this.checkStatus = 'checking';
     localStorage.setItem('comfyUrl', this.comfyUrl);
+    this.connState.comfy.url = this.comfyUrl;
+    this.connState.comfy.status = 'checking';
     this.photoService.checkComfy(this.comfyUrl).subscribe({
       next: () => {
         this.checkStatus = 'ok';
+        this.connState.comfy.status = 'ok';
         this.fetchLoras();
         this.fetchCheckpoints();
         this.fetchSamplers();
       },
-      error: () => this.checkStatus = 'error',
+      error: () => {
+        this.checkStatus = 'error';
+        this.connState.comfy.status = 'error';
+      },
     });
   }
 
@@ -135,6 +182,7 @@ export class GenerateDialog {
 
   send(): void {
     localStorage.setItem('comfyUrl', this.comfyUrl);
+    this.saveParams();
     this.sending = true;
     const lmstudioUrl = localStorage.getItem('lmstudioUrl');
     const unload$ = lmstudioUrl
@@ -210,14 +258,14 @@ export class GenerateDialog {
 
   private fetchLoras(): void {
     this.photoService.getComfyLoras(this.comfyUrl).subscribe({
-      next: (res) => this.availableLoras = res.loras || [],
+      next: (res) => { this.availableLoras = res.loras || []; this.connState.comfy.loras = [...this.availableLoras]; },
       error: () => this.availableLoras = [],
     });
   }
 
   private fetchCheckpoints(): void {
     this.photoService.getComfyCheckpoints(this.comfyUrl).subscribe({
-      next: (res) => this.availableCheckpoints = res.checkpoints || [],
+      next: (res) => { this.availableCheckpoints = res.checkpoints || []; this.connState.comfy.checkpoints = [...this.availableCheckpoints]; },
       error: () => this.availableCheckpoints = [],
     });
   }
@@ -227,12 +275,27 @@ export class GenerateDialog {
       next: (res) => {
         this.availableSamplers = res.samplers || [];
         this.availableSchedulers = res.schedulers || [];
+        this.connState.comfy.samplers = [...this.availableSamplers];
+        this.connState.comfy.schedulers = [...this.availableSchedulers];
       },
       error: () => {
         this.availableSamplers = [];
         this.availableSchedulers = [];
       },
     });
+  }
+
+  private saveParams(): void {
+    const p = this.params;
+    if (p.steps != null) localStorage.setItem('pp_gen_steps', String(p.steps));
+    if (p.cfg != null) localStorage.setItem('pp_gen_cfg', String(p.cfg));
+    if (p.batchSize != null) localStorage.setItem('pp_gen_batchSize', String(p.batchSize));
+    if (p.width != null) localStorage.setItem('pp_gen_width', String(p.width));
+    if (p.height != null) localStorage.setItem('pp_gen_height', String(p.height));
+    if (p.samplerName) localStorage.setItem('pp_gen_samplerName', p.samplerName);
+    if (p.scheduler) localStorage.setItem('pp_gen_scheduler', p.scheduler);
+    if (p.positivePrompt) localStorage.setItem('pp_gen_positivePrompt', p.positivePrompt);
+    if (p.negativePrompt) localStorage.setItem('pp_gen_negativePrompt', p.negativePrompt);
   }
 
   private extractVariableNodes(workflow: Record<string, any>, inputKey: string): VariableNode[] {
@@ -295,9 +358,17 @@ export class GenerateDialog {
       }
     }
 
-    if (!params.negativePrompt) {
-      params.negativePrompt = DEFAULT_NEGATIVE_PROMPT;
-    }
+    // Fill empty fields from last used values
+    const ls = (k: string) => localStorage.getItem(k);
+    if (params.steps == null)     { const v = ls('pp_gen_steps');        if (v) params.steps     = +v; }
+    if (params.cfg == null)       { const v = ls('pp_gen_cfg');          if (v) params.cfg       = +v; }
+    if (params.batchSize == null) { const v = ls('pp_gen_batchSize');    if (v) params.batchSize = +v; }
+    if (params.width == null)     { const v = ls('pp_gen_width');        if (v) params.width     = +v; }
+    if (params.height == null)    { const v = ls('pp_gen_height');       if (v) params.height    = +v; }
+    if (!params.samplerName)      { params.samplerName = ls('pp_gen_samplerName'); }
+    if (!params.scheduler)        { params.scheduler   = ls('pp_gen_scheduler'); }
+    if (!params.positivePrompt)   { params.positivePrompt = ls('pp_gen_positivePrompt') || ''; }
+    if (!params.negativePrompt)   { params.negativePrompt = ls('pp_gen_negativePrompt') || DEFAULT_NEGATIVE_PROMPT; }
 
     return params;
   }

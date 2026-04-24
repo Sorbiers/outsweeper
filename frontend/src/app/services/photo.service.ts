@@ -86,6 +86,10 @@ export class PhotoService {
     return this.http.post<{ samplers: string[]; schedulers: string[] }>('/api/comfy/samplers', { comfy_url: comfyUrl });
   }
 
+  getConfig(): Observable<{ comfy_url: string; lmstudio_url: string }> {
+    return this.http.get<{ comfy_url: string; lmstudio_url: string }>('/api/config');
+  }
+
   refresh(): Observable<{ ok: boolean }> {
     return this.http.post<{ ok: boolean }>('/api/refresh', {});
   }
