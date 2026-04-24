@@ -1,6 +1,20 @@
-<h2 mat-dialog-title>Change Folder</h2>
+<h2 mat-dialog-title>Folder</h2>
 
 <mat-dialog-content>
+  <div class="view-list">
+    @for (v of views; track v.key) {
+      <div class="folder-item" [class.is-current]="v.key === currentView" (click)="switchView(v.key)">
+        <mat-icon>{{ v.icon }}</mat-icon>
+        <span class="folder-label">{{ v.label }}</span>
+        @if (v.key === currentView) {
+          <mat-icon class="current-mark">radio_button_checked</mat-icon>
+        }
+      </div>
+    }
+  </div>
+
+  <mat-divider />
+
   @if (loading) {
     <div class="spinner-wrap">
       <mat-spinner diameter="36"></mat-spinner>
@@ -28,6 +42,6 @@
 <mat-dialog-actions align="end">
   <button mat-button mat-dialog-close>Cancel</button>
   <button mat-flat-button (click)="confirm()" [disabled]="loading || notAllowed || selected === current">
-    Change
+    Change Working Folder
   </button>
 </mat-dialog-actions>

@@ -4,4 +4,5 @@ allow_dir_change = true
 [defaults]
 selected_dir_name = "__selected"
 dust_dir_name     = "__dust"
+index_filename    = "__photoparser_index.json"
 port              = 1976

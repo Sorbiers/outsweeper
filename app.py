@@ -5,6 +5,7 @@ import threading
 import webbrowser
 import base64
 import mimetypes
+import fnmatch
 from datetime import datetime
 from pathlib import Path
 
@@ -58,7 +59,7 @@ def build_index(source, st):
                 }
             except Exception:
                 pass
-    index_path = source / '__photoparser_index.json'
+    index_path = source / st.get('index_filename', '__photoparser_index.json')
     try:
         with open(index_path, 'w', encoding='utf-8') as fh:
             json.dump(new_index, fh)
@@ -182,13 +183,13 @@ def extract_png_metadata(filepath):
     return result
 
 
-def create_app(root_dir, source, config, selected_name, dust_name):
+def create_app(root_dir, source, config, selected_name, dust_name, index_filename='__photoparser_index.json'):
     static_dir = Path(__file__).parent / 'static'
     app = Flask(__name__, static_folder=None)
     allow_dir_change = config.get('permissions', {}).get('allow_dir_change', False)
 
     index_cache = {}
-    index_path = source / '__photoparser_index.json'
+    index_path = source / index_filename
     if index_path.is_file():
         try:
             with open(index_path, encoding='utf-8') as fh:
@@ -197,10 +198,11 @@ def create_app(root_dir, source, config, selected_name, dust_name):
             pass
 
     st = {
-        'source':       source,
-        'selected_dir': source / selected_name,
-        'dust_dir':     source / dust_name,
-        'index_cache':  index_cache,
+        'source':         source,
+        'selected_dir':   source / selected_name,
+        'dust_dir':       source / dust_name,
+        'index_cache':    index_cache,
+        'index_filename': index_filename,
     }
 
     threading.Thread(target=build_index, args=(source, st), daemon=True).start()
@@ -246,8 +248,17 @@ def create_app(root_dir, source, config, selected_name, dust_name):
             for f in target.iterdir():
                 if not f.is_file() or f.suffix.lower() not in EXTENSIONS:
                     continue
-                if filter_text and filter_text not in f.name.lower():
-                    continue
+                if filter_text:
+                    name_lower = f.name.lower()
+                    invert = filter_text.startswith('!')
+                    pattern = filter_text[1:] if invert else filter_text
+                    if pattern:
+                        if any(c in pattern for c in ('*', '?', '.')):
+                            matched = fnmatch.fnmatch(name_lower, pattern)
+                        else:
+                            matched = pattern in name_lower
+                        if invert == matched:
+                            continue
                 if filter_types and f.suffix.lower() not in filter_types:
                     continue
 
@@ -357,19 +368,34 @@ def create_app(root_dir, source, config, selected_name, dust_name):
     def move_photo(filename):
         data = request.get_json()
         dest = data.get('destination')
-        if dest not in ('selected', 'dust'):
-            return jsonify({'error': 'destination must be "selected" or "dust"'}), 400
+        folder = data.get('folder', 'source')
+        if dest not in ('selected', 'dust', 'source'):
+            return jsonify({'error': 'invalid destination'}), 400
 
-        src_path = st['source'] / filename
+        if folder == 'selected':
+            src_dir = st['selected_dir']
+        elif folder == 'dust':
+            src_dir = st['dust_dir']
+        else:
+            src_dir = st['source']
+
+        src_path = src_dir / filename
         if not src_path.is_file():
             return jsonify({'error': 'file not found'}), 404
 
-        dest_dir = st['selected_dir'] if dest == 'selected' else st['dust_dir']
+        if dest == 'selected':
+            dest_dir = st['selected_dir']
+        elif dest == 'dust':
+            dest_dir = st['dust_dir']
+        else:
+            dest_dir = st['source']
+
         dest_dir.mkdir(exist_ok=True)
         dest_path = dest_dir / filename
 
         shutil.move(str(src_path), str(dest_path))
-        st['index_cache'].pop(filename, None)
+        if folder == 'source':
+            st['index_cache'].pop(filename, None)
 
         undo_stack.append({
             'filename': filename,
@@ -637,10 +663,11 @@ def main():
 
     config = load_config()
     defaults = config.get('defaults', {})
-    selected_name = defaults.get('selected_dir_name', '__selected')
-    dust_name     = defaults.get('dust_dir_name',     '__dust')
-    port          = defaults.get('port', 1976)
-    app = create_app(source, source, config, selected_name, dust_name)
+    selected_name  = defaults.get('selected_dir_name', '__selected')
+    dust_name      = defaults.get('dust_dir_name',     '__dust')
+    index_filename = defaults.get('index_filename',    '__photoparser_index.json')
+    port           = defaults.get('port', 1976)
+    app = create_app(source, source, config, selected_name, dust_name, index_filename)
 
     threading.Timer(1.0, webbrowser.open, args=[f'http://localhost:{port}']).start()
     app.run(host='127.0.0.1', port=port, debug=False)

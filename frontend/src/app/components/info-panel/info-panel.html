@@ -130,6 +130,30 @@
           </div>
         }
       </mat-card-content>
+      @if (folder === 'source') {
+        <mat-card-actions>
+          <button mat-stroked-button (click)="move.emit('selected')" title="Move to Selected (+/=)">
+            <mat-icon>check_circle</mat-icon> Move to Selected
+          </button>
+          <button mat-stroked-button color="warn" (click)="move.emit('dust')" title="Move to Dust (Delete)">
+            <mat-icon>delete</mat-icon> Move to Dust
+          </button>
+        </mat-card-actions>
+      }
+      @if (folder === 'selected') {
+        <mat-card-actions>
+          <button mat-stroked-button (click)="move.emit('source')" title="Move back to working folder">
+            <mat-icon>undo</mat-icon> Unselect
+          </button>
+        </mat-card-actions>
+      }
+      @if (folder === 'dust') {
+        <mat-card-actions>
+          <button mat-stroked-button (click)="move.emit('source')" title="Move back to working folder">
+            <mat-icon>restore</mat-icon> Restore
+          </button>
+        </mat-card-actions>
+      }
     </mat-card>
   </div>
 } @else {

@@ -59,6 +59,13 @@ export class PhotoService {
     );
   }
 
+  moveToSource(filename: string, fromFolder: string): Observable<MoveResponse> {
+    return this.http.post<MoveResponse>(
+      `/api/photos/${encodeURIComponent(filename)}/move`,
+      { destination: 'source', folder: fromFolder }
+    );
+  }
+
   undo(): Observable<UndoResponse> {
     return this.http.post<UndoResponse>('/api/undo', {});
   }

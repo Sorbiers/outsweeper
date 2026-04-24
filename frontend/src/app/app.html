@@ -6,11 +6,13 @@
         placeholder="Filter by filename..."
         class="filter-input"
         (input)="onFilterInput($any($event.target).value)"
+        matTooltip="Substring: cat&#10;Wildcard: *.jp*  img_???.png&#10;Invert: !cat  !*.png"
+        matTooltipShowDelay="600"
       />
       <button mat-icon-button (click)="openFilterDialog()" [class.filter-active]="hasActiveFilters" title="Advanced filter">
         <mat-icon>filter_list</mat-icon>
       </button>
-      <span class="folder-name" (click)="openFolderDialog()" title="Change folder">{{ sourceFolderName }}</span>
+      <span class="folder-name" (click)="openFolderDialog()" title="Change folder">{{ sourceFolderName }}{{ currentFolder !== 'source' ? ' (' + (currentFolder === 'selected' ? 'Selected' : 'Dust') + ')' : '' }}</span>
       <span class="photo-counter">{{ totalPhotos > 0 ? (currentIndex + 1) : 0 }} / {{ totalPhotos }}</span>
     </div>
     <pp-image-strip
@@ -33,7 +35,7 @@
     </div>
     <div class="divider-v" (mousedown)="onVDividerDown($event)"></div>
     <div class="info-area" [style.width.%]="100 - previewWidth">
-      <pp-info-panel [info]="currentInfo" [folder]="currentFolder"></pp-info-panel>
+      <pp-info-panel [info]="currentInfo" [folder]="currentFolder" (move)="moveCurrentPhoto($event)"></pp-info-panel>
     </div>
   </div>
 </div>
@@ -48,27 +50,17 @@
   <mat-icon>folder</mat-icon>
 </button>
 <mat-menu #folderMenu="matMenu">
-  <button mat-menu-item (click)="switchFolder('source')" [class.active-folder]="currentFolder === 'source'">
-    <mat-icon>folder_open</mat-icon> Working Folder
+  <button mat-menu-item (click)="setSort('name', true)">
+    <mat-icon>{{ sortBy === 'name' && sortAsc ? 'check' : 'sort_by_alpha' }}</mat-icon> Name A→Z
   </button>
-  <button mat-menu-item (click)="switchFolder('selected')" [class.active-folder]="currentFolder === 'selected'">
-    <mat-icon>check_circle</mat-icon> Selected
+  <button mat-menu-item (click)="setSort('name', false)">
+    <mat-icon>{{ sortBy === 'name' && !sortAsc ? 'check' : 'sort_by_alpha' }}</mat-icon> Name Z→A
   </button>
-  <button mat-menu-item (click)="switchFolder('dust')" [class.active-folder]="currentFolder === 'dust'">
-    <mat-icon>delete</mat-icon> Dust
+  <button mat-menu-item (click)="setSort('modified', false)">
+    <mat-icon>{{ sortBy === 'modified' && !sortAsc ? 'check' : 'schedule' }}</mat-icon> Newest first
   </button>
-  <mat-divider></mat-divider>
-  <button mat-menu-item (click)="setSort('name', true)" [class.active-folder]="sortBy === 'name' && sortAsc">
-    <mat-icon>sort_by_alpha</mat-icon> Name A→Z
-  </button>
-  <button mat-menu-item (click)="setSort('name', false)" [class.active-folder]="sortBy === 'name' && !sortAsc">
-    <mat-icon>sort_by_alpha</mat-icon> Name Z→A
-  </button>
-  <button mat-menu-item (click)="setSort('modified', false)" [class.active-folder]="sortBy === 'modified' && !sortAsc">
-    <mat-icon>schedule</mat-icon> Newest first
-  </button>
-  <button mat-menu-item (click)="setSort('modified', true)" [class.active-folder]="sortBy === 'modified' && sortAsc">
-    <mat-icon>schedule</mat-icon> Oldest first
+  <button mat-menu-item (click)="setSort('modified', true)">
+    <mat-icon>{{ sortBy === 'modified' && sortAsc ? 'check' : 'schedule' }}</mat-icon> Oldest first
   </button>
   <mat-divider></mat-divider>
   <button mat-menu-item (click)="openGenerator()">
@@ -79,6 +71,6 @@
     <mat-icon>refresh</mat-icon> Refresh
   </button>
   <button mat-menu-item (click)="openFolderDialog()">
-    <mat-icon>drive_folder_upload</mat-icon> Change Folder
+    <mat-icon>drive_folder_upload</mat-icon> Folder
   </button>
 </mat-menu>

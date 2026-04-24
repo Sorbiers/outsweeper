@@ -1,4 +1,4 @@
-import { Component, Input, inject } from '@angular/core';
+import { Component, EventEmitter, Input, Output, inject } from '@angular/core';
 import { DatePipe, KeyValuePipe } from '@angular/common';
 import { MatCardModule } from '@angular/material/card';
 import { MatDividerModule } from '@angular/material/divider';
@@ -22,6 +22,7 @@ const COMFYUI_KEYS = new Set(['prompt', 'workflow']);
 export class InfoPanel {
   @Input() info: PhotoInfo | null = null;
   @Input() folder = 'source';
+  @Output() move = new EventEmitter<'selected' | 'dust' | 'source'>();
 
   private dialog = inject(MatDialog);
 

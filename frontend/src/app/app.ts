@@ -7,6 +7,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatDividerModule } from '@angular/material/divider';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatDialog } from '@angular/material/dialog';
 import { PhotoService } from './services/photo.service';
 import { KeyboardService, PhotoAction } from './services/keyboard.service';
@@ -15,7 +16,7 @@ import { ImageStrip } from './components/image-strip/image-strip';
 import { InfoPanel } from './components/info-panel/info-panel';
 import { PreviewPanel } from './components/preview-panel/preview-panel';
 import { GenerateDialog } from './components/generate-dialog/generate-dialog';
-import { FolderSelectDialog } from './components/folder-select-dialog/folder-select-dialog';
+import { FolderSelectDialog, FolderSelectResult } from './components/folder-select-dialog/folder-select-dialog';
 import { FilterDialog, ActiveFilters, emptyFilters, hasActiveFilters } from './components/filter-dialog/filter-dialog';
 
 const DEFAULT_FLUX_WORKFLOW: Record<string, any> = {
@@ -63,7 +64,7 @@ const DEFAULT_FLUX_WORKFLOW: Record<string, any> = {
 
 @Component({
   selector: 'pp-root',
-  imports: [MatSnackBarModule, MatFabButton, MatIconButton, MatIconModule, MatMenuModule, MatProgressSpinnerModule, MatDividerModule, ImageStrip, InfoPanel, PreviewPanel],
+  imports: [MatSnackBarModule, MatFabButton, MatIconButton, MatIconModule, MatMenuModule, MatProgressSpinnerModule, MatDividerModule, MatTooltipModule, ImageStrip, InfoPanel, PreviewPanel],
   templateUrl: './app.html',
   styleUrl: './app.scss',
 })
@@ -220,10 +221,15 @@ export class App implements OnInit, OnDestroy {
   }
 
   openFolderDialog(): void {
-    this.dialog.open(FolderSelectDialog, { width: '420px', maxHeight: '80vh' })
-      .afterClosed().subscribe((folder: string | undefined) => {
-        if (folder == null) return;
-        this.photoService.changeFolder(folder).subscribe({
+    this.dialog.open(FolderSelectDialog, {
+      width: '420px', maxHeight: '80vh',
+      data: { currentView: this.currentFolder },
+    }).afterClosed().subscribe((result: FolderSelectResult | undefined) => {
+      if (!result) return;
+      if (result.kind === 'view') {
+        this.switchFolder(result.folder);
+      } else {
+        this.photoService.changeFolder(result.path).subscribe({
           next: res => {
             if (!res.ok) return;
             this.sourceFolderName = res.source_name;
@@ -235,7 +241,8 @@ export class App implements OnInit, OnDestroy {
           },
           error: () => this.snackBar.open('Folder change not allowed', '', { duration: 3000 }),
         });
-      });
+      }
+    });
   }
 
   refresh(): void {
@@ -328,16 +335,22 @@ export class App implements OnInit, OnDestroy {
         break;
       case 'pageForward': {
         const nextPageStart = this.pageOffset + this.pageSize;
-        if (nextPageStart < this.totalPhotos) {
-          this.onPageChange(nextPageStart);
-        }
+        if (nextPageStart < this.totalPhotos) this.onPageChange(nextPageStart);
         break;
       }
       case 'pageBackward': {
         const prevPageStart = this.pageOffset - this.pageSize;
-        if (prevPageStart >= 0) {
-          this.onPageChange(prevPageStart);
-        }
+        if (prevPageStart >= 0) this.onPageChange(prevPageStart);
+        break;
+      }
+      case 'pageForward10': {
+        const next10 = this.pageOffset + this.pageSize * 10;
+        this.onPageChange(Math.min(next10, Math.floor((this.totalPhotos - 1) / this.pageSize) * this.pageSize));
+        break;
+      }
+      case 'pageBackward10': {
+        const prev10 = this.pageOffset - this.pageSize * 10;
+        this.onPageChange(Math.max(0, prev10));
         break;
       }
       case 'select':
@@ -352,18 +365,18 @@ export class App implements OnInit, OnDestroy {
     }
   }
 
-  private moveCurrentPhoto(destination: 'selected' | 'dust'): void {
+  moveCurrentPhoto(destination: 'selected' | 'dust' | 'source'): void {
     if (!this.photos.length) return;
     const relIdx = this.currentIndex - this.pageOffset;
     const filename = this.photos[relIdx].filename;
     const move$ =
-      destination === 'selected'
-        ? this.photoService.moveToSelected(filename)
-        : this.photoService.moveToDust(filename);
+      destination === 'selected' ? this.photoService.moveToSelected(filename) :
+      destination === 'dust'     ? this.photoService.moveToDust(filename) :
+                                   this.photoService.moveToSource(filename, this.currentFolder);
 
     move$.subscribe(res => {
       if (res.ok) {
-        const label = destination === 'selected' ? 'Selected' : 'Dusted';
+        const label = destination === 'selected' ? 'Selected' : destination === 'dust' ? 'Dusted' : 'Restored';
         this.snackBar
           .open(`${label}: ${filename}`, 'Undo', { duration: 3000 })
           .onAction()
