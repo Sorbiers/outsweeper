@@ -1,0 +1,33 @@
+<h2 mat-dialog-title>Change Folder</h2>
+
+<mat-dialog-content>
+  @if (loading) {
+    <div class="spinner-wrap">
+      <mat-spinner diameter="36"></mat-spinner>
+    </div>
+  } @else if (notAllowed) {
+    <p class="not-allowed">Folder changing is disabled in server config.</p>
+  } @else {
+    <div class="folder-list">
+      @for (folder of folders; track folder) {
+        <div class="folder-item"
+             [class.is-selected]="folder === selected"
+             [class.is-current]="folder === current"
+             (click)="selected = folder">
+          <mat-icon>{{ folder === '' ? 'folder_special' : 'folder' }}</mat-icon>
+          <span class="folder-label">{{ displayName(folder) }}</span>
+          @if (folder === current) {
+            <mat-icon class="current-mark">radio_button_checked</mat-icon>
+          }
+        </div>
+      }
+    </div>
+  }
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button mat-button mat-dialog-close>Cancel</button>
+  <button mat-flat-button (click)="confirm()" [disabled]="loading || notAllowed || selected === current">
+    Change
+  </button>
+</mat-dialog-actions>

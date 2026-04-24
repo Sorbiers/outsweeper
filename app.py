@@ -8,6 +8,11 @@ import mimetypes
 from datetime import datetime
 from pathlib import Path
 
+try:
+    import tomllib
+except ImportError:
+    import tomli as tomllib
+
 import requests as http_requests
 from flask import Flask, jsonify, request, send_from_directory, send_file
 from PIL import Image
@@ -134,17 +139,29 @@ def extract_png_metadata(filepath):
     return result
 
 
-def create_app(source, selected_dir, dust_dir):
+def create_app(root_dir, source, config, selected_name, dust_name):
     static_dir = Path(__file__).parent / 'static'
     app = Flask(__name__, static_folder=None)
+    allow_dir_change = config.get('permissions', {}).get('allow_dir_change', False)
+
+    st = {
+        'source':       source,
+        'selected_dir': source / selected_name,
+        'dust_dir':     source / dust_name,
+    }
 
     def resolve_folder():
         folder = request.args.get('folder', 'source')
         if folder == 'selected':
-            return selected_dir
+            return st['selected_dir']
         elif folder == 'dust':
-            return dust_dir
-        return source
+            return st['dust_dir']
+        return st['source']
+
+    def resolve_folder_from_name(name):
+        if name == 'selected': return st['selected_dir']
+        if name == 'dust':     return st['dust_dir']
+        return st['source']
 
     # --- API routes ---
 
@@ -179,7 +196,7 @@ def create_app(source, selected_dir, dust_dir):
         total = len(photos)
         page = photos[offset:offset + limit]
 
-        return jsonify({'photos': page, 'total': total, 'offset': offset, 'source_folder': str(target)})
+        return jsonify({'photos': page, 'total': total, 'offset': offset, 'source_folder': str(target), 'source_name': st['source'].name})
 
     @app.route('/api/photos/<path:filename>/info')
     def photo_info(filename):
@@ -222,7 +239,7 @@ def create_app(source, selected_dir, dust_dir):
         if not filepath.is_file():
             return jsonify({'error': 'not found'}), 404
 
-        thumb_dir = source / '__thumbnails'
+        thumb_dir = st['source'] / '__thumbnails'
         thumb_dir.mkdir(exist_ok=True)
         thumb_path = thumb_dir / (filename + '.jpg')
 
@@ -244,11 +261,11 @@ def create_app(source, selected_dir, dust_dir):
         if dest not in ('selected', 'dust'):
             return jsonify({'error': 'destination must be "selected" or "dust"'}), 400
 
-        src_path = source / filename
+        src_path = st['source'] / filename
         if not src_path.is_file():
             return jsonify({'error': 'file not found'}), 404
 
-        dest_dir = selected_dir if dest == 'selected' else dust_dir
+        dest_dir = st['selected_dir'] if dest == 'selected' else st['dust_dir']
         dest_dir.mkdir(exist_ok=True)
         dest_path = dest_dir / filename
 
@@ -361,13 +378,7 @@ def create_app(source, selected_dir, dust_dir):
     @app.route('/api/photos/<path:filename>/describe', methods=['POST'])
     def describe_photo(filename):
         data = request.get_json()
-        folder = data.get('folder', 'source')
-        if folder == 'selected':
-            target = selected_dir
-        elif folder == 'dust':
-            target = dust_dir
-        else:
-            target = source
+        target = resolve_folder_from_name(data.get('folder', 'source'))
 
         filepath = target / filename
         if not filepath.is_file():
@@ -408,16 +419,9 @@ def create_app(source, selected_dir, dust_dir):
     @app.route('/api/photos/<path:filename>/write-meta', methods=['POST'])
     def write_meta(filename):
         data = request.get_json()
-        folder = data.get('folder', 'source')
         description = data.get('description', '')
         key = data.get('key', 'Description')
-
-        if folder == 'selected':
-            target = selected_dir
-        elif folder == 'dust':
-            target = dust_dir
-        else:
-            target = source
+        target = resolve_folder_from_name(data.get('folder', 'source'))
 
         filepath = target / filename
         if not filepath.is_file():
@@ -449,6 +453,45 @@ def create_app(source, selected_dir, dust_dir):
         except Exception as e:
             return jsonify({'error': str(e)}), 500
 
+    @app.route('/api/folders')
+    def list_folders():
+        if not allow_dir_change:
+            return jsonify({'error': 'not allowed'}), 403
+        folders = []
+        for f in sorted(root_dir.rglob('*')):
+            if not f.is_dir():
+                continue
+            rel = f.relative_to(root_dir)
+            if any(p.startswith('__') for p in rel.parts):
+                continue
+            folders.append(str(rel).replace('\\', '/'))
+        try:
+            current = str(st['source'].relative_to(root_dir)).replace('\\', '/')
+            if current == '.':
+                current = ''
+        except ValueError:
+            current = ''
+        return jsonify({'folders': folders, 'root_name': root_dir.name, 'current': current})
+
+    @app.route('/api/change-folder', methods=['POST'])
+    def change_folder():
+        if not allow_dir_change:
+            return jsonify({'error': 'not allowed'}), 403
+        data = request.get_json()
+        rel = data.get('folder', '')
+        new_source = (root_dir / rel).resolve() if rel else root_dir
+        try:
+            new_source.relative_to(root_dir)
+        except ValueError:
+            return jsonify({'error': 'invalid path'}), 400
+        if not new_source.is_dir():
+            return jsonify({'error': 'not a directory'}), 400
+        st['source']       = new_source
+        st['selected_dir'] = new_source / selected_name
+        st['dust_dir']     = new_source / dust_name
+        undo_stack.clear()
+        return jsonify({'ok': True, 'source_name': new_source.name})
+
     # --- Static / SPA routes ---
 
     @app.route('/')
@@ -475,12 +518,23 @@ def main():
         print(f"Error: '{source}' is not a valid directory")
         sys.exit(1)
 
-    selected_dir = source / '__selected'
-    dust_dir = source / '__dust'
-    app = create_app(source, selected_dir, dust_dir)
+    config = load_config()
+    defaults = config.get('defaults', {})
+    selected_name = defaults.get('selected_dir_name', '__selected')
+    dust_name     = defaults.get('dust_dir_name',     '__dust')
+    port          = defaults.get('port', 1976)
+    app = create_app(source, source, config, selected_name, dust_name)
 
-    threading.Timer(1.0, webbrowser.open, args=['http://localhost:1976']).start()
-    app.run(host='127.0.0.1', port=1976, debug=False)
+    threading.Timer(1.0, webbrowser.open, args=[f'http://localhost:{port}']).start()
+    app.run(host='127.0.0.1', port=port, debug=False)
+
+
+def load_config():
+    config_path = Path(__file__).parent / 'config.toml'
+    if config_path.is_file():
+        with open(config_path, 'rb') as f:
+            return tomllib.load(f)
+    return {}
 
 
 if __name__ == '__main__':

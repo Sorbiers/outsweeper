@@ -15,6 +15,7 @@ import { ImageStrip } from './components/image-strip/image-strip';
 import { InfoPanel } from './components/info-panel/info-panel';
 import { PreviewPanel } from './components/preview-panel/preview-panel';
 import { GenerateDialog } from './components/generate-dialog/generate-dialog';
+import { FolderSelectDialog } from './components/folder-select-dialog/folder-select-dialog';
 
 const DEFAULT_FLUX_WORKFLOW: Record<string, any> = {
   "1": {
@@ -75,6 +76,7 @@ export class App implements OnInit, OnDestroy {
   currentIndex = 0;
   currentInfo: PhotoInfo | null = null;
   currentFolder: 'source' | 'selected' | 'dust' = 'source';
+  sourceFolderName = '';
   sortBy: 'name' | 'modified' = 'name';
   sortAsc = true;
   loading = false;
@@ -139,6 +141,7 @@ export class App implements OnInit, OnDestroy {
         this.photos = res.photos;
         this.totalPhotos = res.total;
         this.pageOffset = res.offset;
+        if (res.source_name) this.sourceFolderName = res.source_name;
 
         if (this.totalPhotos > 0 && this.photos.length > 0) {
           const relIdx = this.currentIndex - this.pageOffset;
@@ -205,6 +208,25 @@ export class App implements OnInit, OnDestroy {
 
   onFilterInput(value: string): void {
     this.filterSubject.next(value);
+  }
+
+  openFolderDialog(): void {
+    this.dialog.open(FolderSelectDialog, { width: '420px', maxHeight: '80vh' })
+      .afterClosed().subscribe((folder: string | undefined) => {
+        if (folder == null) return;
+        this.photoService.changeFolder(folder).subscribe({
+          next: res => {
+            if (!res.ok) return;
+            this.sourceFolderName = res.source_name;
+            this.currentFolder = 'source';
+            this.pageOffset = 0;
+            this.currentIndex = 0;
+            this.filterText = '';
+            this.loadPhotos();
+          },
+          error: () => this.snackBar.open('Folder change not allowed', '', { duration: 3000 }),
+        });
+      });
   }
 
   openGenerator(): void {

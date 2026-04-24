@@ -10,14 +10,14 @@ export class PhotoService {
   listPhotos(
     folder = 'source',
     options: { offset?: number; limit?: number; sortBy?: string; sortAsc?: boolean; filter?: string } = {},
-  ): Observable<{ photos: PhotoListItem[]; total: number; offset: number; source_folder: string }> {
+  ): Observable<{ photos: PhotoListItem[]; total: number; offset: number; source_folder: string; source_name: string }> {
     const params: Record<string, string> = { folder };
     if (options.offset != null) params['offset'] = String(options.offset);
     if (options.limit != null) params['limit'] = String(options.limit);
     if (options.sortBy) params['sort_by'] = options.sortBy;
     if (options.sortAsc != null) params['sort_asc'] = String(options.sortAsc);
     if (options.filter) params['filter'] = options.filter;
-    return this.http.get<{ photos: PhotoListItem[]; total: number; offset: number; source_folder: string }>(
+    return this.http.get<{ photos: PhotoListItem[]; total: number; offset: number; source_folder: string; source_name: string }>(
       '/api/photos',
       { params },
     );
@@ -67,6 +67,14 @@ export class PhotoService {
 
   getComfySamplers(comfyUrl: string): Observable<{ samplers: string[]; schedulers: string[] }> {
     return this.http.post<{ samplers: string[]; schedulers: string[] }>('/api/comfy/samplers', { comfy_url: comfyUrl });
+  }
+
+  listFolders(): Observable<{ folders: string[]; root_name: string; current: string }> {
+    return this.http.get<{ folders: string[]; root_name: string; current: string }>('/api/folders');
+  }
+
+  changeFolder(folder: string): Observable<{ ok: boolean; source_name: string }> {
+    return this.http.post<{ ok: boolean; source_name: string }>('/api/change-folder', { folder });
   }
 
   sendToComfy(comfyUrl: string, prompt: object): Observable<any> {
