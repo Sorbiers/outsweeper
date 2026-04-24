@@ -2,6 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Workflow Rules
+
+- **NEVER commit without explicit user approval.** Always show what will be committed and wait for the user to say "commit" or otherwise explicitly approve before running `git commit`.
+
 ## Project Overview
 
 Photo Parser is a minimal, portable Python 3 tool for manual image triage. It provides a keyboard-driven browser UI for quickly sorting photos into `__selected` or `__dust` folders. Supported formats: `.png`, `.jpg`, `.jpeg`, `.webp`. Windows-first, local-only.

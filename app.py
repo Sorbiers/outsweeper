@@ -513,13 +513,14 @@ def create_app(root_dir, source, config, selected_name, dust_name, index_filenam
             resp = http_requests.get(f"{base}/api/v1/models", timeout=5)
             models = resp.json().get('models', [])
             for model in models:
-                instance_id = model.get('key')
-                if instance_id:
-                    http_requests.post(
-                        f"{base}/api/v1/models/unload",
-                        json={"instance_id": instance_id},
-                        timeout=5,
-                    )
+                for instance in model.get('loaded_instances', []):
+                    instance_id = instance.get('id')
+                    if instance_id:
+                        http_requests.post(
+                            f"{base}/api/v1/models/unload",
+                            json={"instance_id": instance_id},
+                            timeout=5,
+                        )
         except Exception:
             pass
         return jsonify({'ok': True})
