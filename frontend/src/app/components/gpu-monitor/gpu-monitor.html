@@ -1,0 +1,11 @@
+<div class="row"><span class="lbl">CPU</span><span [ngClass]="cls(metrics.cpu)">{{ metrics.cpu | number:'1.0-0' }}%</span></div>
+<div class="row"><span class="lbl">RAM</span><span [ngClass]="cls(metrics.ram)">{{ metrics.ram | number:'1.0-0' }}%</span></div>
+@if (metrics.gpu != null) {
+  <div class="row"><span class="lbl">GPU</span><span [ngClass]="cls(metrics.gpu)">{{ metrics.gpu }}%</span></div>
+}
+@if (metrics.temp != null) {
+  <div class="row"><span class="lbl">Temp</span><span [ngClass]="cls(metrics.temp - 30)">{{ metrics.temp }}°C</span></div>
+}
+@if (metrics.vram != null) {
+  <div class="row"><span class="lbl">VRAM</span><span [ngClass]="cls(metrics.vram)">{{ metrics.vram | number:'1.0-0' }}%</span></div>
+}

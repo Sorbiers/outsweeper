@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, inject } from '@angular/core';
+import { Component, OnInit, OnDestroy, signal, inject } from '@angular/core';
 import { Subject, Subscription } from 'rxjs';
 import { debounceTime, distinctUntilChanged, finalize } from 'rxjs/operators';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
@@ -18,11 +18,13 @@ import { PreviewPanel } from './components/preview-panel/preview-panel';
 import { GenerateDialog, DEFAULT_FLUX_WORKFLOW } from './components/generate-dialog/generate-dialog';
 import { FolderSelectDialog, FolderSelectResult } from './components/folder-select-dialog/folder-select-dialog';
 import { FilterDialog, ActiveFilters, emptyFilters, hasActiveFilters } from './components/filter-dialog/filter-dialog';
+import { GpuMonitorWidget } from './components/gpu-monitor/gpu-monitor';
+import { SystemMetrics } from './models/metrics.model';
 
 
 @Component({
   selector: 'pp-root',
-  imports: [MatSnackBarModule, MatFabButton, MatIconButton, MatIconModule, MatMenuModule, MatProgressSpinnerModule, MatDividerModule, MatTooltipModule, ImageStrip, InfoPanel, PreviewPanel],
+  imports: [MatSnackBarModule, MatFabButton, MatIconButton, MatIconModule, MatMenuModule, MatProgressSpinnerModule, MatDividerModule, MatTooltipModule, ImageStrip, InfoPanel, PreviewPanel, GpuMonitorWidget],
   templateUrl: './app.html',
   styleUrl: './app.scss',
 })
@@ -45,6 +47,7 @@ export class App implements OnInit, OnDestroy {
   private eventSource: EventSource | null = null;
 
   pendingRefresh = false;
+  metrics = signal<SystemMetrics | null>(null);
 
   // Pagination
   totalPhotos = 0;
@@ -76,6 +79,7 @@ export class App implements OnInit, OnDestroy {
     this.eventSource = new EventSource('/api/events');
     this.eventSource.onmessage = (e) => {
       if (e.data === 'files_changed') this.pendingRefresh = true;
+      else if (e.data.startsWith('metrics:')) this.metrics.set(JSON.parse(e.data.slice(8)));
     };
     this.loadPhotos();
 

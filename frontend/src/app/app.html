@@ -79,3 +79,7 @@
     <mat-icon>drive_folder_upload</mat-icon> Folder
   </button>
 </mat-menu>
+
+@if (metrics(); as m) {
+  <pp-gpu-monitor [metrics]="m"></pp-gpu-monitor>
+}

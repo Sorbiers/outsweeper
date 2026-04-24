@@ -10,3 +10,6 @@ live_updates      = true
 comfy_output      = "F:/ai/ComfyUI_windows_portable_nvidia_cu128/ComfyUI_windows_portable/ComfyUI/output"
 comfy_url         = "http://127.0.0.1:8188"
 lmstudio_url      = "http://localhost:1234/v1"
+
+[widgets]
+gpu_monitor = true

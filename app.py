@@ -2,8 +2,10 @@ import sys
 import json
 import queue
 import shutil
+import time
 import threading
 import webbrowser
+import psutil
 import base64
 import mimetypes
 import fnmatch
@@ -36,6 +38,38 @@ def _sse_broadcast(msg: str) -> None:
                 q.put_nowait(msg)
             except queue.Full:
                 pass
+
+
+def _metrics_loop(interval: float = 2.0) -> None:
+    nvml_ok = False
+    try:
+        import pynvml
+        pynvml.nvmlInit()
+        nvml_ok = True
+    except Exception:
+        pass
+    while True:
+        time.sleep(interval)
+        if not _sse_clients:
+            continue
+        try:
+            cpu = psutil.cpu_percent(interval=None)
+            ram = psutil.virtual_memory().percent
+            gpu = temp = vram = None
+            if nvml_ok:
+                try:
+                    h = pynvml.nvmlDeviceGetHandleByIndex(0)
+                    gpu  = pynvml.nvmlDeviceGetUtilizationRates(h).gpu
+                    temp = pynvml.nvmlDeviceGetTemperature(h, pynvml.NVML_TEMPERATURE_GPU)
+                    mi   = pynvml.nvmlDeviceGetMemoryInfo(h)
+                    vram = round(mi.used / mi.total * 100, 1)
+                except Exception:
+                    pass
+            _sse_broadcast('metrics:' + json.dumps(
+                {'cpu': cpu, 'ram': ram, 'gpu': gpu, 'temp': temp, 'vram': vram}
+            ))
+        except Exception:
+            pass
 
 
 class _SourceWatcher:
@@ -223,7 +257,7 @@ def extract_png_metadata(filepath):
 def create_app(root_dir, source, config, selected_name, dust_name,
                index_filename='__photoparser_index.json', watch_enabled=False,
                comfy_url='http://127.0.0.1:8188', lmstudio_url='http://localhost:1234/v1',
-               comfy_output=''):
+               comfy_output='', monitor_enabled=False):
     static_dir = Path(__file__).parent / 'static'
     app = Flask(__name__, static_folder=None)
     allow_dir_change = config.get('permissions', {}).get('allow_dir_change', False)
@@ -262,6 +296,8 @@ def create_app(root_dir, source, config, selected_name, dust_name,
 
     threading.Thread(target=build_index, args=(source, st), daemon=True).start()
     _start_observer(source)
+    if monitor_enabled:
+        threading.Thread(target=_metrics_loop, daemon=True).start()
 
     def resolve_folder():
         folder = request.args.get('folder', 'source')
@@ -816,9 +852,12 @@ def main():
     watch_enabled  = defaults.get('live_updates', True)
     comfy_url      = defaults.get('comfy_url', 'http://127.0.0.1:8188')
     lmstudio_url   = defaults.get('lmstudio_url', 'http://localhost:1234/v1')
-    comfy_output   = defaults.get('comfy_output', '')
+    comfy_output    = defaults.get('comfy_output', '')
+    widgets         = config.get('widgets', {})
+    monitor_enabled = widgets.get('gpu_monitor', False)
     app = create_app(source, source, config, selected_name, dust_name,
-                     index_filename, watch_enabled, comfy_url, lmstudio_url, comfy_output)
+                     index_filename, watch_enabled, comfy_url, lmstudio_url,
+                     comfy_output, monitor_enabled)
 
     threading.Timer(1.0, webbrowser.open, args=[f'http://localhost:{port}']).start()
     app.run(host='127.0.0.1', port=port, debug=False, threaded=True)
