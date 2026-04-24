@@ -2,3 +2,4 @@ Flask>=3.0
 Pillow>=10.0
 requests>=2.31
 tomli>=2.0; python_version < "3.11"
+watchdog>=3.0

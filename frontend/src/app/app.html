@@ -14,6 +14,11 @@
       </button>
       <span class="folder-name" (click)="openFolderDialog()" title="Change folder">{{ sourceFolderName }}{{ currentFolder !== 'source' ? ' (' + (currentFolder === 'selected' ? 'Selected' : 'Dust') + ')' : '' }}</span>
       <span class="photo-counter">{{ totalPhotos > 0 ? (currentIndex + 1) : 0 }} / {{ totalPhotos }}</span>
+      @if (pendingRefresh) {
+        <button mat-icon-button class="refresh-pending" (click)="refresh()" title="New files detected — click to refresh">
+          <mat-icon>refresh</mat-icon>
+        </button>
+      }
     </div>
     <pp-image-strip
       [photos]="photos"

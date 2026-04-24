@@ -1,5 +1,6 @@
 import sys
 import json
+import queue
 import shutil
 import threading
 import webbrowser
@@ -23,6 +24,41 @@ from PIL.PngImagePlugin import PngInfo
 
 EXTENSIONS = {'.png', '.jpg', '.jpeg', '.webp'}
 undo_stack = []
+
+# SSE client registry
+_sse_clients: list = []
+_sse_lock = threading.Lock()
+
+def _sse_broadcast(msg: str) -> None:
+    with _sse_lock:
+        for q in list(_sse_clients):
+            try:
+                q.put_nowait(msg)
+            except queue.Full:
+                pass
+
+
+class _SourceWatcher:
+    """Watchdog-based file-system watcher that broadcasts SSE events."""
+    def __init__(self, source: Path):
+        self.source = source
+
+    def _relevant(self, path: str) -> bool:
+        try:
+            rel = Path(path).relative_to(self.source)
+            if any(part.startswith('__') for part in rel.parts):
+                return False
+            return Path(path).suffix.lower() in EXTENSIONS
+        except ValueError:
+            return False
+
+    def dispatch(self, event) -> None:
+        if event.is_directory:
+            return
+        src = getattr(event, 'src_path', '')
+        dest = getattr(event, 'dest_path', '')
+        if self._relevant(src) or (dest and self._relevant(dest)):
+            _sse_broadcast('files_changed')
 
 
 def get_exif_date(filepath):
@@ -184,7 +220,8 @@ def extract_png_metadata(filepath):
     return result
 
 
-def create_app(root_dir, source, config, selected_name, dust_name, index_filename='__photoparser_index.json'):
+def create_app(root_dir, source, config, selected_name, dust_name,
+               index_filename='__photoparser_index.json', watch_enabled=False):
     static_dir = Path(__file__).parent / 'static'
     app = Flask(__name__, static_folder=None)
     allow_dir_change = config.get('permissions', {}).get('allow_dir_change', False)
@@ -204,9 +241,24 @@ def create_app(root_dir, source, config, selected_name, dust_name, index_filenam
         'dust_dir':       source / dust_name,
         'index_cache':    index_cache,
         'index_filename': index_filename,
+        'observer':       None,
     }
 
+    def _start_observer(src: Path) -> None:
+        obs = st['observer']
+        if obs is not None:
+            obs.stop()
+            obs.join()
+            st['observer'] = None
+        if watch_enabled:
+            from watchdog.observers import Observer
+            obs = Observer()
+            obs.schedule(_SourceWatcher(src), str(src), recursive=False)
+            obs.start()
+            st['observer'] = obs
+
     threading.Thread(target=build_index, args=(source, st), daemon=True).start()
+    _start_observer(source)
 
     def resolve_folder():
         folder = request.args.get('folder', 'source')
@@ -652,6 +704,7 @@ def create_app(root_dir, source, config, selected_name, dust_name, index_filenam
         st['index_cache']  = {}
         undo_stack.clear()
         threading.Thread(target=build_index, args=(new_source, st), daemon=True).start()
+        _start_observer(new_source)
         return jsonify({'ok': True, 'source_name': new_source.name})
 
     @app.route('/api/refresh', methods=['POST'])
@@ -659,6 +712,30 @@ def create_app(root_dir, source, config, selected_name, dust_name, index_filenam
         st['index_cache'] = {}
         threading.Thread(target=build_index, args=(st['source'], st), daemon=True).start()
         return jsonify({'ok': True})
+
+    @app.route('/api/events')
+    def sse_events():
+        from flask import Response, stream_with_context
+        def generate(q):
+            try:
+                while True:
+                    try:
+                        msg = q.get(timeout=25)
+                        yield f'data: {msg}\n\n'
+                    except queue.Empty:
+                        yield ': heartbeat\n\n'
+            finally:
+                with _sse_lock:
+                    if q in _sse_clients:
+                        _sse_clients.remove(q)
+        q = queue.Queue(maxsize=8)
+        with _sse_lock:
+            _sse_clients.append(q)
+        return Response(
+            stream_with_context(generate(q)),
+            mimetype='text/event-stream',
+            headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'},
+        )
 
     @app.route('/api/file-types')
     def file_types():
@@ -701,10 +778,12 @@ def main():
     dust_name      = defaults.get('dust_dir_name',     '__dust')
     index_filename = defaults.get('index_filename',    '__photoparser_index.json')
     port           = defaults.get('port', 1976)
-    app = create_app(source, source, config, selected_name, dust_name, index_filename)
+    watch_enabled  = defaults.get('live_updates', True)
+    app = create_app(source, source, config, selected_name, dust_name,
+                     index_filename, watch_enabled)
 
     threading.Timer(1.0, webbrowser.open, args=[f'http://localhost:{port}']).start()
-    app.run(host='127.0.0.1', port=port, debug=False)
+    app.run(host='127.0.0.1', port=port, debug=False, threaded=True)
 
 
 def load_config():

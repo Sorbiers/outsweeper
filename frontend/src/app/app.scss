@@ -126,3 +126,13 @@
 .filter-active {
   color: #4fc3f7;
 }
+
+@keyframes spin-slow {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+.refresh-pending {
+  color: #4fc3f7;
+  mat-icon { animation: spin-slow 2s linear infinite; }
+}

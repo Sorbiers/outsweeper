@@ -84,6 +84,9 @@ export class App implements OnInit, OnDestroy {
   loading = false;
   private sub!: Subscription;
   private filterSub!: Subscription;
+  private eventSource: EventSource | null = null;
+
+  pendingRefresh = false;
 
   // Pagination
   totalPhotos = 0;
@@ -112,6 +115,10 @@ export class App implements OnInit, OnDestroy {
 
     this.keyboard.init();
     this.sub = this.keyboard.action$.subscribe(action => this.handleAction(action));
+    this.eventSource = new EventSource('/api/events');
+    this.eventSource.onmessage = (e) => {
+      if (e.data === 'files_changed') this.pendingRefresh = true;
+    };
     this.loadPhotos();
 
     this.filterSub = this.filterSubject
@@ -127,6 +134,7 @@ export class App implements OnInit, OnDestroy {
   ngOnDestroy(): void {
     this.sub?.unsubscribe();
     this.filterSub?.unsubscribe();
+    this.eventSource?.close();
   }
 
   loadPhotos(): void {
@@ -246,6 +254,7 @@ export class App implements OnInit, OnDestroy {
   }
 
   refresh(): void {
+    this.pendingRefresh = false;
     this.photoService.refresh().subscribe(() => {
       this.pageOffset = 0;
       this.currentIndex = 0;
