@@ -1,0 +1,61 @@
+<h2 mat-dialog-title>Filter</h2>
+
+<mat-dialog-content>
+  <div class="filter-section">
+    <div class="section-label">Date field</div>
+    <mat-radio-group [(ngModel)]="filters.dateField" class="radio-row">
+      <mat-radio-button value="modified">Modified</mat-radio-button>
+      <mat-radio-button value="created">Created</mat-radio-button>
+      <mat-radio-button value="exif">EXIF</mat-radio-button>
+    </mat-radio-group>
+    <div class="date-row">
+      <mat-form-field>
+        <mat-label>From</mat-label>
+        <input matInput [matDatepicker]="fromPicker" [(ngModel)]="dateFromDate" />
+        <mat-datepicker-toggle matIconSuffix [for]="fromPicker"></mat-datepicker-toggle>
+        <mat-datepicker #fromPicker></mat-datepicker>
+      </mat-form-field>
+      <mat-form-field>
+        <mat-label>To</mat-label>
+        <input matInput [matDatepicker]="toPicker" [(ngModel)]="dateToDate" />
+        <mat-datepicker-toggle matIconSuffix [for]="toPicker"></mat-datepicker-toggle>
+        <mat-datepicker #toPicker></mat-datepicker>
+      </mat-form-field>
+    </div>
+  </div>
+
+  @if (availableTypes.length) {
+    <div class="filter-section">
+      <div class="section-label">File type</div>
+      <div class="type-list">
+        @for (type of availableTypes; track type) {
+          <mat-checkbox
+            [checked]="isTypeSelected(type)"
+            (change)="toggleType(type)">
+            {{ type }}
+          </mat-checkbox>
+        }
+      </div>
+    </div>
+  }
+
+  <div class="filter-section">
+    <div class="section-label">Size</div>
+    <div class="size-row">
+      <mat-form-field>
+        <mat-label>Min (KB)</mat-label>
+        <input matInput type="number" min="0" [(ngModel)]="sizeMinKb" placeholder="0" />
+      </mat-form-field>
+      <mat-form-field>
+        <mat-label>Max (KB)</mat-label>
+        <input matInput type="number" min="0" [(ngModel)]="sizeMaxKb" placeholder="any" />
+      </mat-form-field>
+    </div>
+  </div>
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button mat-button mat-dialog-close>Cancel</button>
+  <button mat-button (click)="reset()">Reset</button>
+  <button mat-raised-button color="primary" (click)="apply()">Apply</button>
+</mat-dialog-actions>

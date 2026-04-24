@@ -23,6 +23,50 @@ EXTENSIONS = {'.png', '.jpg', '.jpeg', '.webp'}
 undo_stack = []
 
 
+def get_exif_date(filepath):
+    """Return ISO datetime string from EXIF DateTimeOriginal/DateTime, or None."""
+    try:
+        img = Image.open(filepath)
+        exif_data = img.getexif()
+        for tag_id in (0x9003, 0x0132, 0x9004):
+            val = exif_data.get(tag_id)
+            if val and isinstance(val, str):
+                try:
+                    return datetime.strptime(val, '%Y:%m:%d %H:%M:%S').isoformat()
+                except ValueError:
+                    pass
+    except Exception:
+        pass
+    return None
+
+
+def build_index(source, st):
+    """Scan source folder, build metadata index, update st['index_cache']."""
+    new_index = {}
+    if source.is_dir():
+        for f in source.iterdir():
+            if not f.is_file() or f.suffix.lower() not in EXTENSIONS:
+                continue
+            try:
+                stat = f.stat()
+                new_index[f.name] = {
+                    'created':   datetime.fromtimestamp(stat.st_ctime).isoformat(),
+                    'modified':  datetime.fromtimestamp(stat.st_mtime).isoformat(),
+                    'exif_date': get_exif_date(f),
+                    'size':      stat.st_size,
+                    'type':      f.suffix.lower(),
+                }
+            except Exception:
+                pass
+    index_path = source / '__photoparser_index.json'
+    try:
+        with open(index_path, 'w', encoding='utf-8') as fh:
+            json.dump(new_index, fh)
+    except Exception:
+        pass
+    st['index_cache'] = new_index
+
+
 def human_size(nbytes):
     for unit in ('B', 'KB', 'MB', 'GB'):
         if nbytes < 1024:
@@ -111,13 +155,12 @@ def extract_exif(filepath):
     result = {}
     try:
         img = Image.open(filepath)
-        exif_data = img._getexif()
-        if exif_data:
-            for tag_id, value in exif_data.items():
-                tag_name = TAGS.get(tag_id, tag_id)
-                if isinstance(value, bytes) and len(value) > 256:
-                    continue
-                result[str(tag_name)] = str(value)
+        exif_data = img.getexif()
+        for tag_id, value in exif_data.items():
+            tag_name = TAGS.get(tag_id, tag_id)
+            if isinstance(value, bytes) and len(value) > 256:
+                continue
+            result[str(tag_name)] = str(value)
     except Exception:
         pass
     return result
@@ -144,11 +187,23 @@ def create_app(root_dir, source, config, selected_name, dust_name):
     app = Flask(__name__, static_folder=None)
     allow_dir_change = config.get('permissions', {}).get('allow_dir_change', False)
 
+    index_cache = {}
+    index_path = source / '__photoparser_index.json'
+    if index_path.is_file():
+        try:
+            with open(index_path, encoding='utf-8') as fh:
+                index_cache = json.load(fh)
+        except Exception:
+            pass
+
     st = {
         'source':       source,
         'selected_dir': source / selected_name,
         'dust_dir':     source / dust_name,
+        'index_cache':  index_cache,
     }
+
+    threading.Thread(target=build_index, args=(source, st), daemon=True).start()
 
     def resolve_folder():
         folder = request.args.get('folder', 'source')
@@ -168,25 +223,69 @@ def create_app(root_dir, source, config, selected_name, dust_name):
     @app.route('/api/photos')
     def list_photos():
         target = resolve_folder()
-        sort_by = request.args.get('sort_by', 'name')
-        sort_asc = request.args.get('sort_asc', 'true') == 'true'
-        offset = int(request.args.get('offset', 0))
-        limit = int(request.args.get('limit', 50))
+        sort_by     = request.args.get('sort_by', 'name')
+        sort_asc    = request.args.get('sort_asc', 'true') == 'true'
+        offset      = int(request.args.get('offset', 0))
+        limit       = int(request.args.get('limit', 50))
         filter_text = request.args.get('filter', '').strip().lower()
+        date_field  = request.args.get('date_field', '')
+        date_from   = request.args.get('date_from', '')
+        date_to     = request.args.get('date_to', '')
+        types_raw   = request.args.get('types', '')
+        size_min    = request.args.get('size_min', '')
+        size_max    = request.args.get('size_max', '')
+
+        filter_types    = [t.strip() for t in types_raw.split(',') if t.strip()] if types_raw else []
+        filter_size_min = int(size_min) if size_min else None
+        filter_size_max = int(size_max) if size_max else None
+        date_from_dt    = datetime.fromisoformat(date_from) if date_from else None
+        date_to_dt      = datetime.fromisoformat(date_to + 'T23:59:59') if date_to else None
 
         photos = []
         if target.is_dir():
             for f in target.iterdir():
-                if f.is_file() and f.suffix.lower() in EXTENSIONS:
-                    if filter_text and filter_text not in f.name.lower():
-                        continue
-                    stat = f.stat()
-                    photos.append({
-                        'filename': f.name,
-                        'modified': datetime.fromtimestamp(stat.st_mtime).isoformat(),
-                        'size': stat.st_size,
-                        'size_human': human_size(stat.st_size),
-                    })
+                if not f.is_file() or f.suffix.lower() not in EXTENSIONS:
+                    continue
+                if filter_text and filter_text not in f.name.lower():
+                    continue
+                if filter_types and f.suffix.lower() not in filter_types:
+                    continue
+
+                stat = f.stat()
+
+                if filter_size_min is not None and stat.st_size < filter_size_min:
+                    continue
+                if filter_size_max is not None and stat.st_size > filter_size_max:
+                    continue
+
+                if date_field and (date_from_dt or date_to_dt):
+                    entry = st['index_cache'].get(f.name, {})
+                    if date_field == 'created':
+                        date_str = entry.get('created') or datetime.fromtimestamp(stat.st_ctime).isoformat()
+                    elif date_field == 'modified':
+                        date_str = entry.get('modified') or datetime.fromtimestamp(stat.st_mtime).isoformat()
+                    elif date_field == 'exif':
+                        date_str = entry.get('exif_date')
+                        if not date_str:
+                            continue
+                    else:
+                        date_str = None
+                    if date_str:
+                        try:
+                            file_dt = datetime.fromisoformat(date_str)
+                            if date_from_dt and file_dt < date_from_dt:
+                                continue
+                            if date_to_dt and file_dt > date_to_dt:
+                                continue
+                        except ValueError:
+                            continue
+
+                photos.append({
+                    'filename':  f.name,
+                    'modified':  datetime.fromtimestamp(stat.st_mtime).isoformat(),
+                    'size':      stat.st_size,
+                    'size_human': human_size(stat.st_size),
+                })
 
         if sort_by == 'modified':
             photos.sort(key=lambda p: p['modified'], reverse=not sort_asc)
@@ -270,6 +369,7 @@ def create_app(root_dir, source, config, selected_name, dust_name):
         dest_path = dest_dir / filename
 
         shutil.move(str(src_path), str(dest_path))
+        st['index_cache'].pop(filename, None)
 
         undo_stack.append({
             'filename': filename,
@@ -489,8 +589,25 @@ def create_app(root_dir, source, config, selected_name, dust_name):
         st['source']       = new_source
         st['selected_dir'] = new_source / selected_name
         st['dust_dir']     = new_source / dust_name
+        st['index_cache']  = {}
         undo_stack.clear()
+        threading.Thread(target=build_index, args=(new_source, st), daemon=True).start()
         return jsonify({'ok': True, 'source_name': new_source.name})
+
+    @app.route('/api/refresh', methods=['POST'])
+    def refresh():
+        st['index_cache'] = {}
+        threading.Thread(target=build_index, args=(st['source'], st), daemon=True).start()
+        return jsonify({'ok': True})
+
+    @app.route('/api/file-types')
+    def file_types():
+        types = set()
+        if st['source'].is_dir():
+            for f in st['source'].iterdir():
+                if f.is_file() and f.suffix.lower() in EXTENSIONS:
+                    types.add(f.suffix.lower())
+        return jsonify({'types': sorted(types)})
 
     # --- Static / SPA routes ---
 

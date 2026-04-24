@@ -1,0 +1,33 @@
+.filter-section {
+  margin-bottom: 20px;
+}
+
+.section-label {
+  font-size: 12px;
+  color: #888;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 8px;
+}
+
+.radio-row {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 10px;
+}
+
+.date-row,
+.size-row {
+  display: flex;
+  gap: 12px;
+
+  mat-form-field {
+    flex: 1;
+  }
+}
+
+.type-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+}

@@ -2,7 +2,7 @@ import { Component, OnInit, OnDestroy, inject } from '@angular/core';
 import { Subject, Subscription } from 'rxjs';
 import { debounceTime, distinctUntilChanged, finalize } from 'rxjs/operators';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
-import { MatFabButton } from '@angular/material/button';
+import { MatFabButton, MatIconButton } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
@@ -16,6 +16,7 @@ import { InfoPanel } from './components/info-panel/info-panel';
 import { PreviewPanel } from './components/preview-panel/preview-panel';
 import { GenerateDialog } from './components/generate-dialog/generate-dialog';
 import { FolderSelectDialog } from './components/folder-select-dialog/folder-select-dialog';
+import { FilterDialog, ActiveFilters, emptyFilters, hasActiveFilters } from './components/filter-dialog/filter-dialog';
 
 const DEFAULT_FLUX_WORKFLOW: Record<string, any> = {
   "1": {
@@ -62,7 +63,7 @@ const DEFAULT_FLUX_WORKFLOW: Record<string, any> = {
 
 @Component({
   selector: 'pp-root',
-  imports: [MatSnackBarModule, MatFabButton, MatIconModule, MatMenuModule, MatProgressSpinnerModule, MatDividerModule, ImageStrip, InfoPanel, PreviewPanel],
+  imports: [MatSnackBarModule, MatFabButton, MatIconButton, MatIconModule, MatMenuModule, MatProgressSpinnerModule, MatDividerModule, ImageStrip, InfoPanel, PreviewPanel],
   templateUrl: './app.html',
   styleUrl: './app.scss',
 })
@@ -90,6 +91,8 @@ export class App implements OnInit, OnDestroy {
 
   // Filter
   filterText = '';
+  activeFilters: ActiveFilters = emptyFilters();
+  get hasActiveFilters(): boolean { return hasActiveFilters(this.activeFilters); }
   private filterSubject = new Subject<string>();
 
   // Resizable layout percentages
@@ -135,6 +138,12 @@ export class App implements OnInit, OnDestroy {
         sortBy: this.sortBy,
         sortAsc: this.sortAsc,
         filter: this.filterText,
+        dateField: this.activeFilters.dateField,
+        dateFrom: this.activeFilters.dateFrom,
+        dateTo: this.activeFilters.dateTo,
+        types: this.activeFilters.types,
+        sizeMin: this.activeFilters.sizeMin,
+        sizeMax: this.activeFilters.sizeMax,
       })
       .pipe(finalize(() => (this.loading = false)))
       .subscribe(res => {
@@ -227,6 +236,29 @@ export class App implements OnInit, OnDestroy {
           error: () => this.snackBar.open('Folder change not allowed', '', { duration: 3000 }),
         });
       });
+  }
+
+  refresh(): void {
+    this.photoService.refresh().subscribe(() => {
+      this.pageOffset = 0;
+      this.currentIndex = 0;
+      this.loadPhotos();
+    });
+  }
+
+  openFilterDialog(): void {
+    this.photoService.getFileTypes().subscribe(res => {
+      this.dialog.open(FilterDialog, {
+        width: '380px',
+        data: { current: this.activeFilters, availableTypes: res.types },
+      }).afterClosed().subscribe((result: ActiveFilters | undefined) => {
+        if (result === undefined) return;
+        this.activeFilters = result;
+        this.pageOffset = 0;
+        this.currentIndex = 0;
+        this.loadPhotos();
+      });
+    });
   }
 
   openGenerator(): void {

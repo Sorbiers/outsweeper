@@ -7,6 +7,9 @@
         class="filter-input"
         (input)="onFilterInput($any($event.target).value)"
       />
+      <button mat-icon-button (click)="openFilterDialog()" [class.filter-active]="hasActiveFilters" title="Advanced filter">
+        <mat-icon>filter_list</mat-icon>
+      </button>
       <span class="folder-name" (click)="openFolderDialog()" title="Change folder">{{ sourceFolderName }}</span>
       <span class="photo-counter">{{ totalPhotos > 0 ? (currentIndex + 1) : 0 }} / {{ totalPhotos }}</span>
     </div>
@@ -72,6 +75,9 @@
     <mat-icon>bolt</mat-icon> Generator
   </button>
   <mat-divider></mat-divider>
+  <button mat-menu-item (click)="refresh()">
+    <mat-icon>refresh</mat-icon> Refresh
+  </button>
   <button mat-menu-item (click)="openFolderDialog()">
     <mat-icon>drive_folder_upload</mat-icon> Change Folder
   </button>

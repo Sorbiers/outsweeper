@@ -9,7 +9,11 @@ export class PhotoService {
 
   listPhotos(
     folder = 'source',
-    options: { offset?: number; limit?: number; sortBy?: string; sortAsc?: boolean; filter?: string } = {},
+    options: {
+      offset?: number; limit?: number; sortBy?: string; sortAsc?: boolean; filter?: string;
+      dateField?: string; dateFrom?: string; dateTo?: string;
+      types?: string[]; sizeMin?: number | null; sizeMax?: number | null;
+    } = {},
   ): Observable<{ photos: PhotoListItem[]; total: number; offset: number; source_folder: string; source_name: string }> {
     const params: Record<string, string> = { folder };
     if (options.offset != null) params['offset'] = String(options.offset);
@@ -17,6 +21,12 @@ export class PhotoService {
     if (options.sortBy) params['sort_by'] = options.sortBy;
     if (options.sortAsc != null) params['sort_asc'] = String(options.sortAsc);
     if (options.filter) params['filter'] = options.filter;
+    if (options.dateField) params['date_field'] = options.dateField;
+    if (options.dateFrom) params['date_from'] = options.dateFrom;
+    if (options.dateTo) params['date_to'] = options.dateTo;
+    if (options.types?.length) params['types'] = options.types.join(',');
+    if (options.sizeMin != null) params['size_min'] = String(options.sizeMin);
+    if (options.sizeMax != null) params['size_max'] = String(options.sizeMax);
     return this.http.get<{ photos: PhotoListItem[]; total: number; offset: number; source_folder: string; source_name: string }>(
       '/api/photos',
       { params },
@@ -67,6 +77,14 @@ export class PhotoService {
 
   getComfySamplers(comfyUrl: string): Observable<{ samplers: string[]; schedulers: string[] }> {
     return this.http.post<{ samplers: string[]; schedulers: string[] }>('/api/comfy/samplers', { comfy_url: comfyUrl });
+  }
+
+  refresh(): Observable<{ ok: boolean }> {
+    return this.http.post<{ ok: boolean }>('/api/refresh', {});
+  }
+
+  getFileTypes(): Observable<{ types: string[] }> {
+    return this.http.get<{ types: string[] }>('/api/file-types');
   }
 
   listFolders(): Observable<{ folders: string[]; root_name: string; current: string }> {
