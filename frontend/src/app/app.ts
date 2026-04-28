@@ -131,6 +131,10 @@ export class App implements OnInit, OnDestroy {
         types: this.activeFilters.types,
         sizeMin: this.activeFilters.sizeMin,
         sizeMax: this.activeFilters.sizeMax,
+        widthMin: this.activeFilters.widthMin,
+        widthMax: this.activeFilters.widthMax,
+        heightMin: this.activeFilters.heightMin,
+        heightMax: this.activeFilters.heightMax,
       })
       .pipe(finalize(() => (this.loading = false)))
       .subscribe(res => {

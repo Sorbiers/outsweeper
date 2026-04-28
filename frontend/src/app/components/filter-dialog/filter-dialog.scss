@@ -20,10 +20,16 @@
 .size-row {
   display: flex;
   gap: 12px;
+  align-items: center;
 
   mat-form-field {
     flex: 1;
   }
+}
+
+.dim-sep {
+  color: #888;
+  margin-top: -18px;
 }
 
 .type-list {

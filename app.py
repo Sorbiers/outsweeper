@@ -180,12 +180,20 @@ def build_index(source, st):
                 continue
             try:
                 stat = f.stat()
+                w = h = None
+                try:
+                    with Image.open(f) as im:
+                        w, h = im.size
+                except Exception:
+                    pass
                 new_index[f.name] = {
                     'created':   datetime.fromtimestamp(stat.st_ctime).isoformat(),
                     'modified':  datetime.fromtimestamp(stat.st_mtime).isoformat(),
                     'exif_date': get_exif_date(f),
                     'size':      stat.st_size,
                     'type':      f.suffix.lower(),
+                    'width':     w,
+                    'height':    h,
                 }
             except Exception:
                 pass
@@ -391,10 +399,19 @@ def create_app(root_dir, source, config, selected_name, dust_name,
         types_raw   = request.args.get('types', '')
         size_min    = request.args.get('size_min', '')
         size_max    = request.args.get('size_max', '')
+        width_min   = request.args.get('width_min', '')
+        width_max   = request.args.get('width_max', '')
+        height_min  = request.args.get('height_min', '')
+        height_max  = request.args.get('height_max', '')
 
         filter_types    = [t.strip() for t in types_raw.split(',') if t.strip()] if types_raw else []
         filter_size_min = int(size_min) if size_min else None
         filter_size_max = int(size_max) if size_max else None
+        filter_w_min    = int(width_min)  if width_min  else None
+        filter_w_max    = int(width_max)  if width_max  else None
+        filter_h_min    = int(height_min) if height_min else None
+        filter_h_max    = int(height_max) if height_max else None
+        need_dims       = any(v is not None for v in (filter_w_min, filter_w_max, filter_h_min, filter_h_max))
         date_from_dt    = datetime.fromisoformat(date_from) if date_from else None
         date_to_dt      = datetime.fromisoformat(date_to + 'T23:59:59') if date_to else None
 
@@ -423,6 +440,25 @@ def create_app(root_dir, source, config, selected_name, dust_name,
                     continue
                 if filter_size_max is not None and stat.st_size > filter_size_max:
                     continue
+
+                if need_dims:
+                    entry = st['index_cache'].get(f.name, {})
+                    w = entry.get('width')
+                    h = entry.get('height')
+                    if w is None or h is None:
+                        try:
+                            with Image.open(f) as im:
+                                w, h = im.size
+                        except Exception:
+                            continue
+                    if filter_w_min is not None and w < filter_w_min:
+                        continue
+                    if filter_w_max is not None and w > filter_w_max:
+                        continue
+                    if filter_h_min is not None and h < filter_h_min:
+                        continue
+                    if filter_h_max is not None and h > filter_h_max:
+                        continue
 
                 if date_field and (date_from_dt or date_to_dt):
                     entry = st['index_cache'].get(f.name, {})

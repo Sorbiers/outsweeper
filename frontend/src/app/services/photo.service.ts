@@ -13,6 +13,8 @@ export class PhotoService {
       offset?: number; limit?: number; sortBy?: string; sortAsc?: boolean; filter?: string;
       dateField?: string; dateFrom?: string; dateTo?: string;
       types?: string[]; sizeMin?: number | null; sizeMax?: number | null;
+      widthMin?: number | null; widthMax?: number | null;
+      heightMin?: number | null; heightMax?: number | null;
     } = {},
   ): Observable<{ photos: PhotoListItem[]; total: number; offset: number; source_folder: string; source_name: string }> {
     const params: Record<string, string> = { folder };
@@ -27,6 +29,10 @@ export class PhotoService {
     if (options.types?.length) params['types'] = options.types.join(',');
     if (options.sizeMin != null) params['size_min'] = String(options.sizeMin);
     if (options.sizeMax != null) params['size_max'] = String(options.sizeMax);
+    if (options.widthMin != null) params['width_min'] = String(options.widthMin);
+    if (options.widthMax != null) params['width_max'] = String(options.widthMax);
+    if (options.heightMin != null) params['height_min'] = String(options.heightMin);
+    if (options.heightMax != null) params['height_max'] = String(options.heightMax);
     return this.http.get<{ photos: PhotoListItem[]; total: number; offset: number; source_folder: string; source_name: string }>(
       '/api/photos',
       { params },

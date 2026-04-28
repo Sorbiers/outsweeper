@@ -40,7 +40,7 @@
   }
 
   <div class="filter-section">
-    <div class="section-label">Size</div>
+    <div class="section-label">File size</div>
     <div class="size-row">
       <mat-form-field>
         <mat-label>Min (KB)</mat-label>
@@ -49,6 +49,32 @@
       <mat-form-field>
         <mat-label>Max (KB)</mat-label>
         <input matInput type="number" min="0" [(ngModel)]="sizeMaxKb" placeholder="any" />
+      </mat-form-field>
+    </div>
+  </div>
+
+  <div class="filter-section">
+    <div class="section-label">Dimensions (px)</div>
+    <div class="size-row">
+      <mat-form-field>
+        <mat-label>Min W</mat-label>
+        <input matInput type="number" min="0" [(ngModel)]="filters.widthMin" placeholder="0" />
+      </mat-form-field>
+      <span class="dim-sep">×</span>
+      <mat-form-field>
+        <mat-label>Min H</mat-label>
+        <input matInput type="number" min="0" [(ngModel)]="filters.heightMin" placeholder="0" />
+      </mat-form-field>
+    </div>
+    <div class="size-row">
+      <mat-form-field>
+        <mat-label>Max W</mat-label>
+        <input matInput type="number" min="0" [(ngModel)]="filters.widthMax" placeholder="any" />
+      </mat-form-field>
+      <span class="dim-sep">×</span>
+      <mat-form-field>
+        <mat-label>Max H</mat-label>
+        <input matInput type="number" min="0" [(ngModel)]="filters.heightMax" placeholder="any" />
       </mat-form-field>
     </div>
   </div>

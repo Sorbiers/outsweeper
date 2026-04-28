@@ -17,14 +17,18 @@ export interface ActiveFilters {
   types: string[];
   sizeMin: number | null;
   sizeMax: number | null;
+  widthMin: number | null;
+  widthMax: number | null;
+  heightMin: number | null;
+  heightMax: number | null;
 }
 
 export function emptyFilters(): ActiveFilters {
-  return { dateField: 'modified', dateFrom: '', dateTo: '', types: [], sizeMin: null, sizeMax: null };
+  return { dateField: 'modified', dateFrom: '', dateTo: '', types: [], sizeMin: null, sizeMax: null, widthMin: null, widthMax: null, heightMin: null, heightMax: null };
 }
 
 export function hasActiveFilters(f: ActiveFilters): boolean {
-  return !!(f.dateFrom || f.dateTo || f.types.length || f.sizeMin != null || f.sizeMax != null);
+  return !!(f.dateFrom || f.dateTo || f.types.length || f.sizeMin != null || f.sizeMax != null || f.widthMin != null || f.widthMax != null || f.heightMin != null || f.heightMax != null);
 }
 
 export interface FilterDialogData {
