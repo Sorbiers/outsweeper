@@ -138,6 +138,7 @@
           <button mat-stroked-button color="warn" (click)="move.emit('dust')" title="Move to Dust (Delete)">
             <mat-icon>delete</mat-icon> Move to Dust
           </button>
+          <ng-container *ngTemplateOutlet="toolsBtn"></ng-container>
         </mat-card-actions>
       }
       @if (folder === 'selected') {
@@ -145,6 +146,7 @@
           <button mat-stroked-button (click)="move.emit('source')" title="Move back to working folder">
             <mat-icon>undo</mat-icon> Unselect
           </button>
+          <ng-container *ngTemplateOutlet="toolsBtn"></ng-container>
         </mat-card-actions>
       }
       @if (folder === 'dust') {
@@ -152,8 +154,22 @@
           <button mat-stroked-button (click)="move.emit('source')" title="Move back to working folder">
             <mat-icon>restore</mat-icon> Restore
           </button>
+          <ng-container *ngTemplateOutlet="toolsBtn"></ng-container>
         </mat-card-actions>
       }
+
+      <ng-template #toolsBtn>
+        @if (tools.length > 0) {
+          <button mat-stroked-button [matMenuTriggerFor]="toolsMenu">
+            <mat-icon>build</mat-icon> Tools
+          </button>
+          <mat-menu #toolsMenu="matMenu">
+            @for (t of tools; track t) {
+              <button mat-menu-item (click)="runTool(t)">{{ t }}</button>
+            }
+          </mat-menu>
+        }
+      </ng-template>
     </mat-card>
   </div>
 } @else {

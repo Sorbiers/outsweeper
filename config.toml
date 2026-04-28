@@ -14,3 +14,6 @@ lmstudio_url      = "http://localhost:1234/v1"
 [widgets]
 gpu_monitor = true
 comfy_queue = true
+
+[tools]
+"Split to Four" = "python F:/ai/tools/split_tiles.py %filename%"

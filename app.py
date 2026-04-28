@@ -5,6 +5,8 @@ import shutil
 import time
 import threading
 import webbrowser
+import subprocess
+import shlex
 import psutil
 import base64
 import mimetypes
@@ -318,6 +320,7 @@ def create_app(root_dir, source, config, selected_name, dust_name,
     static_dir = Path(__file__).parent / 'static'
     app = Flask(__name__, static_folder=None)
     allow_dir_change = config.get('permissions', {}).get('allow_dir_change', False)
+    tools_cfg = config.get('tools', {})
 
     index_cache = {}
     index_path = source / index_filename
@@ -825,6 +828,42 @@ def create_app(root_dir, source, config, selected_name, dust_name,
         threading.Thread(target=build_index, args=(new_source, st), daemon=True).start()
         _start_observer(new_source)
         return jsonify({'ok': True, 'source_name': new_source.name})
+
+    @app.route('/api/tools')
+    def list_tools():
+        return jsonify({'tools': list(tools_cfg.keys())})
+
+    @app.route('/api/tools/run', methods=['POST'])
+    def run_tool():
+        data     = request.json
+        name     = data.get('name', '')
+        filename = data.get('filename', '')
+        folder   = data.get('folder', 'source')
+        if name not in tools_cfg:
+            return jsonify({'ok': False, 'error': 'Unknown tool'}), 400
+        if folder == 'selected':
+            dir_path = st['selected_dir']
+        elif folder == 'dust':
+            dir_path = st['dust_dir']
+        else:
+            dir_path = st['source']
+        filepath = dir_path / filename
+        if not filepath.is_file():
+            return jsonify({'ok': False, 'error': 'File not found'}), 404
+        quoted = f'"{filepath}"' if sys.platform == 'win32' else shlex.quote(str(filepath))
+        cmd = tools_cfg[name].replace('%filename%', quoted)
+        try:
+            result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=60)
+            return jsonify({
+                'ok': result.returncode == 0,
+                'stdout': result.stdout,
+                'stderr': result.stderr,
+                'returncode': result.returncode,
+            })
+        except subprocess.TimeoutExpired:
+            return jsonify({'ok': False, 'error': 'Command timed out'}), 500
+        except Exception as e:
+            return jsonify({'ok': False, 'error': str(e)}), 500
 
     @app.route('/api/metrics/pause', methods=['POST'])
     def metrics_pause():

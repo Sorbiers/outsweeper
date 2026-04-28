@@ -1,12 +1,15 @@
-import { Component, EventEmitter, Input, Output, inject } from '@angular/core';
-import { DatePipe, KeyValuePipe } from '@angular/common';
+import { Component, EventEmitter, Input, OnInit, Output, inject } from '@angular/core';
+import { DatePipe, KeyValuePipe, NgTemplateOutlet } from '@angular/common';
 import { MatCardModule } from '@angular/material/card';
 import { MatDividerModule } from '@angular/material/divider';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
+import { MatMenuModule } from '@angular/material/menu';
+import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatDialog } from '@angular/material/dialog';
 import { PhotoInfo } from '../../models/photo.model';
+import { PhotoService } from '../../services/photo.service';
 import { GenerateDialog, DEFAULT_FLUX_WORKFLOW } from '../generate-dialog/generate-dialog';
 import { DescribeDialog } from '../describe-dialog/describe-dialog';
 
@@ -15,16 +18,38 @@ const COMFYUI_KEYS = new Set(['prompt', 'workflow']);
 
 @Component({
   selector: 'pp-info-panel',
-  imports: [DatePipe, KeyValuePipe, MatCardModule, MatDividerModule, MatChipsModule, MatButtonModule, MatIconModule],
+  imports: [DatePipe, KeyValuePipe, NgTemplateOutlet, MatCardModule, MatDividerModule, MatChipsModule, MatButtonModule, MatIconModule, MatMenuModule],
   templateUrl: './info-panel.html',
   styleUrl: './info-panel.scss',
 })
-export class InfoPanel {
+export class InfoPanel implements OnInit {
   @Input() info: PhotoInfo | null = null;
   @Input() folder = 'source';
   @Output() move = new EventEmitter<'selected' | 'dust' | 'source'>();
 
   private dialog = inject(MatDialog);
+  private photoService = inject(PhotoService);
+  private snackBar = inject(MatSnackBar);
+
+  tools: string[] = [];
+
+  ngOnInit(): void {
+    this.photoService.getTools().subscribe(r => this.tools = r.tools);
+  }
+
+  runTool(name: string): void {
+    if (!this.info) return;
+    this.photoService.runTool(name, this.info.filename, this.folder).subscribe({
+      next: res => {
+        if (res.ok) {
+          this.snackBar.open(`${name}: done`, '', { duration: 3000 });
+        } else {
+          this.snackBar.open(`${name} failed: ${res.stderr || res.error || 'error'}`, '', { duration: 5000 });
+        }
+      },
+      error: err => this.snackBar.open(`${name}: ${err.error?.error || 'failed'}`, '', { duration: 5000 }),
+    });
+  }
 
   openDescribe(): void {
     if (!this.info) return;

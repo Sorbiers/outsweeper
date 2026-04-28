@@ -98,6 +98,14 @@ export class PhotoService {
     return this.http.post<{ ok: boolean }>('/api/comfy-queue/pause', { paused, client_id: clientId });
   }
 
+  getTools(): Observable<{ tools: string[] }> {
+    return this.http.get<{ tools: string[] }>('/api/tools');
+  }
+
+  runTool(name: string, filename: string, folder: string): Observable<{ ok: boolean; stdout: string; stderr: string; error?: string }> {
+    return this.http.post<any>('/api/tools/run', { name, filename, folder });
+  }
+
   refresh(): Observable<{ ok: boolean }> {
     return this.http.post<{ ok: boolean }>('/api/refresh', {});
   }
