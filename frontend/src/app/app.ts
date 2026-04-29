@@ -18,6 +18,7 @@ import { PreviewPanel } from './components/preview-panel/preview-panel';
 import { GenerateDialog, DEFAULT_FLUX_WORKFLOW } from './components/generate-dialog/generate-dialog';
 import { FolderSelectDialog, FolderSelectResult } from './components/folder-select-dialog/folder-select-dialog';
 import { FilterDialog, ActiveFilters, emptyFilters, hasActiveFilters } from './components/filter-dialog/filter-dialog';
+import { BatchDialog } from './components/batch-dialog/batch-dialog';
 import { GpuMonitorWidget } from './components/gpu-monitor/gpu-monitor';
 import { ComfyQueueWidget } from './components/comfy-queue/comfy-queue';
 import { SystemMetrics } from './models/metrics.model';
@@ -61,13 +62,18 @@ export class App implements OnInit, OnDestroy {
   // Pagination
   totalPhotos = 0;
   pageOffset = 0;
-  pageSize = 50; // default; updated by ImageStrip's pageSizeChange after layout
+  pageSize = 50;
 
   // Filter
   filterText = '';
   activeFilters: ActiveFilters = emptyFilters();
   get hasActiveFilters(): boolean { return hasActiveFilters(this.activeFilters); }
   private filterSubject = new Subject<string>();
+
+  // Favorites
+  favorites = new Set<string>();
+  get favoriteCount(): number { return this.favorites.size; }
+  showFavoritesOnly = false;
 
   // Resizable layout percentages
   stripHeight = 25;
@@ -77,7 +83,6 @@ export class App implements OnInit, OnDestroy {
   private boundDragEnd = () => this.onDragEnd();
 
   ngOnInit(): void {
-    // Restore sort from localStorage
     const savedSort = localStorage.getItem('pp_sortBy');
     if (savedSort === 'name' || savedSort === 'modified') this.sortBy = savedSort;
     const savedAsc = localStorage.getItem('pp_sortAsc');
@@ -93,6 +98,7 @@ export class App implements OnInit, OnDestroy {
       else if (e.data.startsWith('comfy_queue:')) this.comfyQueue.status.set(JSON.parse(e.data.slice(12)));
     };
     this.loadPhotos();
+    this.loadFavorites();
     this.photoService.getConfig().subscribe(cfg => {
       if (!this.connState.comfy.url)     this.connState.comfy.url     = cfg.comfy_url;
       if (!this.connState.lmstudio.url)  this.connState.lmstudio.url  = cfg.lmstudio_url;
@@ -125,6 +131,7 @@ export class App implements OnInit, OnDestroy {
         sortBy: this.sortBy,
         sortAsc: this.sortAsc,
         filter: this.filterText,
+        favoritesOnly: this.showFavoritesOnly,
         dateField: this.activeFilters.dateField,
         dateFrom: this.activeFilters.dateFrom,
         dateTo: this.activeFilters.dateTo,
@@ -157,6 +164,11 @@ export class App implements OnInit, OnDestroy {
       });
   }
 
+  private loadFavorites(): void {
+    this.photoService.listPhotos(this.currentFolder, { favoritesOnly: true, limit: 999999, offset: 0 })
+      .subscribe(res => { this.favorites = new Set(res.photos.map(p => p.filename)); });
+  }
+
   private fetchInfo(relativeIndex: number): void {
     const photo = this.photos[relativeIndex];
     if (photo) {
@@ -184,14 +196,13 @@ export class App implements OnInit, OnDestroy {
 
   onPageChange(newOffset: number): void {
     this.pageOffset = newOffset;
-    this.currentIndex = newOffset; // select first on new page
+    this.currentIndex = newOffset;
     this.loadPhotos();
   }
 
   onPageSizeChange(newSize: number): void {
     if (newSize === this.pageSize) return;
     this.pageSize = newSize;
-    // Recalculate pageOffset to align with new page size
     this.pageOffset = Math.floor(this.currentIndex / this.pageSize) * this.pageSize;
     this.loadPhotos();
   }
@@ -224,10 +235,12 @@ export class App implements OnInit, OnDestroy {
             if (!res.ok) return;
             this.sourceFolderName = res.source_name;
             this.currentFolder = 'source';
+            this.favorites = new Set();
             this.pageOffset = 0;
             this.currentIndex = 0;
             this.filterText = '';
             this.loadPhotos();
+            this.loadFavorites();
           },
           error: () => this.snackBar.open('Folder change not allowed', '', { duration: 3000 }),
         });
@@ -237,10 +250,12 @@ export class App implements OnInit, OnDestroy {
             if (!res.ok) return;
             this.sourceFolderName = res.source_name;
             this.currentFolder = 'source';
+            this.favorites = new Set();
             this.pageOffset = 0;
             this.currentIndex = 0;
             this.filterText = '';
             this.loadPhotos();
+            this.loadFavorites();
           },
           error: () => this.snackBar.open('Folder change not allowed', '', { duration: 3000 }),
         });
@@ -283,10 +298,12 @@ export class App implements OnInit, OnDestroy {
   switchFolder(folder: 'source' | 'selected' | 'dust'): void {
     if (folder === this.currentFolder) return;
     this.currentFolder = folder;
+    this.favorites = new Set();
     this.pageOffset = 0;
     this.currentIndex = 0;
     this.filterText = '';
     this.loadPhotos();
+    this.loadFavorites();
   }
 
   onHDividerDown(e: MouseEvent): void {
@@ -322,14 +339,10 @@ export class App implements OnInit, OnDestroy {
   private handleAction(action: PhotoAction): void {
     switch (action) {
       case 'next':
-        if (this.currentIndex + 1 < this.totalPhotos) {
-          this.selectPhoto(this.currentIndex + 1);
-        }
+        if (this.currentIndex + 1 < this.totalPhotos) this.selectPhoto(this.currentIndex + 1);
         break;
       case 'prev':
-        if (this.currentIndex > 0) {
-          this.selectPhoto(this.currentIndex - 1);
-        }
+        if (this.currentIndex > 0) this.selectPhoto(this.currentIndex - 1);
         break;
       case 'first':
         this.selectPhoto(0);
@@ -366,6 +379,8 @@ export class App implements OnInit, OnDestroy {
       case 'undo':
         if (this.currentFolder === 'source') this.undoLast();
         break;
+      case 'toggleSelection': this.toggleFavoriteCurrent(); break;
+      case 'selectAll':       this.toggleAllFavorites();    break;
     }
   }
 
@@ -416,6 +431,82 @@ export class App implements OnInit, OnDestroy {
       } else {
         this.snackBar.open('Nothing to undo', '', { duration: 1500 });
       }
+    });
+  }
+
+  toggleFavorite(filename: string): void {
+    const newState = !this.favorites.has(filename);
+    const next = new Set(this.favorites);
+    if (newState) next.add(filename); else next.delete(filename);
+    this.favorites = next;
+    this.photoService.toggleFavorite(filename, this.currentFolder).subscribe({
+      next: res => {
+        const confirmed = new Set(this.favorites);
+        if (res.favorite) confirmed.add(filename); else confirmed.delete(filename);
+        this.favorites = confirmed;
+      },
+      error: () => {
+        const rb = new Set(this.favorites);
+        if (newState) rb.delete(filename); else rb.add(filename);
+        this.favorites = rb;
+      },
+    });
+  }
+
+  private toggleFavoriteCurrent(): void {
+    const rel = this.currentIndex - this.pageOffset;
+    if (rel >= 0 && rel < this.photos.length)
+      this.toggleFavorite(this.photos[rel].filename);
+  }
+
+  toggleAllFavorites(): void {
+    if (this.favorites.size >= this.totalPhotos) {
+      const all = [...this.favorites];
+      this.photoService.setFavorites(all, false, this.currentFolder).subscribe();
+      this.favorites = new Set();
+    } else {
+      this.photoService.listPhotos(this.currentFolder, {
+        offset: 0, limit: this.totalPhotos,
+        sortBy: this.sortBy, sortAsc: this.sortAsc, filter: this.filterText,
+        dateField: this.activeFilters.dateField,
+        dateFrom: this.activeFilters.dateFrom, dateTo: this.activeFilters.dateTo,
+        types: this.activeFilters.types,
+        sizeMin: this.activeFilters.sizeMin, sizeMax: this.activeFilters.sizeMax,
+        widthMin: this.activeFilters.widthMin, widthMax: this.activeFilters.widthMax,
+        heightMin: this.activeFilters.heightMin, heightMax: this.activeFilters.heightMax,
+      }).subscribe(res => {
+        const fns = res.photos.map(p => p.filename);
+        this.photoService.setFavorites(fns, true, this.currentFolder).subscribe();
+        this.favorites = new Set(fns);
+      });
+    }
+  }
+
+  clearFavorites(): void {
+    if (this.favorites.size)
+      this.photoService.setFavorites([...this.favorites], false, this.currentFolder).subscribe();
+    this.favorites = new Set();
+  }
+
+  toggleFavoritesFilter(): void {
+    this.showFavoritesOnly = !this.showFavoritesOnly;
+    this.pageOffset = 0;
+    this.currentIndex = 0;
+    this.loadPhotos();
+  }
+
+  downloadFavorites(): void {
+    this.photoService.downloadFavorites(this.currentFolder);
+  }
+
+  openBatchDialog(operation: 'copy' | 'move'): void {
+    this.dialog.open(BatchDialog, {
+      width: '420px', maxHeight: '80vh',
+      data: { operation, filenames: [...this.favorites], sourceFolder: this.currentFolder },
+    }).afterClosed().subscribe((result?: { ok: boolean }) => {
+      if (!result?.ok) return;
+      this.pageOffset = 0; this.currentIndex = 0;
+      this.loadPhotos();
     });
   }
 }

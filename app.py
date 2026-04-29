@@ -1,4 +1,5 @@
 import sys
+import io
 import json
 import queue
 import shutil
@@ -7,6 +8,7 @@ import threading
 import webbrowser
 import subprocess
 import shlex
+import zipfile
 import psutil
 import base64
 import mimetypes
@@ -171,8 +173,18 @@ def get_exif_date(filepath):
     return None
 
 
+def save_index(st):
+    index_path = st['source'] / st.get('index_filename', '__photoparser_index.json')
+    try:
+        with open(index_path, 'w', encoding='utf-8') as fh:
+            json.dump(st['index_cache'], fh)
+    except Exception:
+        pass
+
+
 def build_index(source, st):
     """Scan source folder, build metadata index, update st['index_cache']."""
+    old_index = st.get('index_cache', {})
     new_index = {}
     if source.is_dir():
         for f in source.iterdir():
@@ -194,6 +206,7 @@ def build_index(source, st):
                     'type':      f.suffix.lower(),
                     'width':     w,
                     'height':    h,
+                    'favorite':  old_index.get(f.name, {}).get('favorite', False),
                 }
             except Exception:
                 pass
@@ -403,6 +416,7 @@ def create_app(root_dir, source, config, selected_name, dust_name,
         width_max   = request.args.get('width_max', '')
         height_min  = request.args.get('height_min', '')
         height_max  = request.args.get('height_max', '')
+        favorites_only = request.args.get('favorites_only', 'false') == 'true'
 
         filter_types    = [t.strip() for t in types_raw.split(',') if t.strip()] if types_raw else []
         filter_size_min = int(size_min) if size_min else None
@@ -482,11 +496,15 @@ def create_app(root_dir, source, config, selected_name, dust_name,
                         except ValueError:
                             continue
 
+                if favorites_only and not st['index_cache'].get(f.name, {}).get('favorite', False):
+                    continue
+
                 photos.append({
                     'filename':  f.name,
                     'modified':  datetime.fromtimestamp(stat.st_mtime).isoformat(),
                     'size':      stat.st_size,
                     'size_human': human_size(stat.st_size),
+                    'favorite':  st['index_cache'].get(f.name, {}).get('favorite', False),
                 })
 
         if sort_by == 'modified':
@@ -831,6 +849,8 @@ def create_app(root_dir, source, config, selected_name, dust_name,
             'comfy_output': co or None,
             'comfy_output_name': Path(co).name if co else None,
             'comfy_output_active': co_active,
+            'selected_name': selected_name,
+            'dust_name': dust_name,
         })
 
     @app.route('/api/change-folder', methods=['POST'])
@@ -900,6 +920,96 @@ def create_app(root_dir, source, config, selected_name, dust_name,
             return jsonify({'ok': False, 'error': 'Command timed out'}), 500
         except Exception as e:
             return jsonify({'ok': False, 'error': str(e)}), 500
+
+    @app.route('/api/batch', methods=['POST'])
+    def batch_operation():
+        data        = request.get_json()
+        filenames   = data.get('filenames', [])
+        operation   = data.get('operation', 'copy')
+        use_comfy   = data.get('use_comfy_output', False)
+        destination = data.get('destination', '')
+        do_zip      = data.get('zip', False)
+        src_folder  = data.get('folder', 'source')
+
+        src_dir = resolve_folder_from_name(src_folder)
+
+        if use_comfy:
+            co = st['comfy_output']
+            if not co:
+                return jsonify({'ok': False, 'error': 'comfy_output not configured'}), 400
+            dst_dir = Path(co)
+        elif destination == '__selected':
+            dst_dir = st['selected_dir']
+        elif destination == '__dust':
+            dst_dir = st['dust_dir']
+        else:
+            dst_dir = (root_dir / destination).resolve() if destination else root_dir
+            try:
+                dst_dir.relative_to(root_dir)
+            except ValueError:
+                return jsonify({'ok': False, 'error': 'invalid destination'}), 400
+
+        dst_dir.mkdir(parents=True, exist_ok=True)
+        resolved = [(fn, src_dir / fn) for fn in filenames if (src_dir / fn).is_file()]
+        processed, errors = [], []
+
+        if do_zip:
+            ts = datetime.now().strftime('%Y%m%d_%H%M%S')
+            zip_path = dst_dir / f'batch_{ts}.zip'
+            with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
+                for fn, p in resolved:
+                    zf.write(p, fn)
+                    processed.append(fn)
+            if operation == 'move':
+                for _, p in resolved:
+                    p.unlink(missing_ok=True)
+        else:
+            for fn, p in resolved:
+                try:
+                    if operation == 'move':
+                        shutil.move(str(p), dst_dir / fn)
+                    else:
+                        shutil.copy2(p, dst_dir / fn)
+                    processed.append(fn)
+                except Exception as e:
+                    errors.append(str(e))
+
+        return jsonify({'ok': True, 'count': len(processed), 'errors': errors})
+
+    @app.route('/api/photos/<path:filename>/favorite', methods=['POST'])
+    def toggle_favorite(filename):
+        folder_name = request.args.get('folder', 'source')
+        dir_path = resolve_folder_from_name(folder_name)
+        if not (dir_path / filename).is_file():
+            return jsonify({'ok': False, 'error': 'not found'}), 404
+        entry = st['index_cache'].setdefault(filename, {})
+        entry['favorite'] = not entry.get('favorite', False)
+        save_index(st)
+        return jsonify({'ok': True, 'favorite': entry['favorite']})
+
+    @app.route('/api/favorites', methods=['POST'])
+    def set_favorites():
+        data = request.get_json()
+        filenames = data.get('filenames', [])
+        favorite  = data.get('favorite', True)
+        for fn in filenames:
+            st['index_cache'].setdefault(fn, {})['favorite'] = favorite
+        save_index(st)
+        return jsonify({'ok': True})
+
+    @app.route('/api/favorites/download')
+    def download_favorites():
+        folder_name = request.args.get('folder', 'source')
+        dir_path    = resolve_folder_from_name(folder_name)
+        fav_files   = [fn for fn, e in st['index_cache'].items()
+                       if e.get('favorite') and (dir_path / fn).is_file()]
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
+            for fn in fav_files:
+                zf.write(dir_path / fn, fn)
+        buf.seek(0)
+        return send_file(buf, mimetype='application/zip',
+                         as_attachment=True, download_name='favorites.zip')
 
     @app.route('/api/metrics/pause', methods=['POST'])
     def metrics_pause():

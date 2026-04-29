@@ -1,0 +1,63 @@
+<h2 mat-dialog-title>
+  {{ operation === 'copy' ? 'Copy' : 'Move' }} {{ count }} {{ count === 1 ? 'file' : 'files' }}
+</h2>
+
+<mat-dialog-content>
+  @if (phase === 'select') {
+    @if (loading) {
+      <div class="center"><mat-spinner diameter="36"></mat-spinner></div>
+    } @else if (notAllowed) {
+      <p class="hint">Folder changing is disabled in server config.</p>
+    } @else {
+      <div class="folder-list">
+        <div class="folder-item"
+             [class.is-selected]="!selectedComfyOutput && selectedFolder === '__selected'"
+             (click)="selectFolder('__selected')">
+          <mat-icon>check_circle</mat-icon>
+          <span class="folder-label">Selected ({{ selectedName }})</span>
+        </div>
+        <div class="folder-item"
+             [class.is-selected]="!selectedComfyOutput && selectedFolder === '__dust'"
+             (click)="selectFolder('__dust')">
+          <mat-icon>delete</mat-icon>
+          <span class="folder-label">Dust ({{ dustName }})</span>
+        </div>
+        <mat-divider></mat-divider>
+        @for (folder of folders; track folder) {
+          <div class="folder-item"
+               [class.is-selected]="!selectedComfyOutput && folder === selectedFolder"
+               (click)="selectFolder(folder)">
+            <mat-icon>{{ folder === '' ? 'folder_special' : 'folder' }}</mat-icon>
+            <span class="folder-label">{{ displayName(folder) }}</span>
+          </div>
+        }
+        @if (comfyOutputPath) {
+          <mat-divider></mat-divider>
+          <div class="folder-item" [class.is-selected]="selectedComfyOutput" (click)="selectComfyOutput()">
+            <mat-icon>output</mat-icon>
+            <span class="folder-label">ComfyUI Output — {{ comfyOutputName }}</span>
+          </div>
+        }
+      </div>
+      <mat-checkbox [(ngModel)]="zipFiles" class="zip-check">Zip files</mat-checkbox>
+    }
+  } @else if (phase === 'progress') {
+    <div class="center">
+      <mat-spinner diameter="48"></mat-spinner>
+      <p>Processing {{ count }} file(s)…</p>
+    </div>
+  } @else {
+    <p class="result-msg">{{ resultMessage }}</p>
+  }
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  @if (phase === 'select') {
+    <button mat-button mat-dialog-close>Cancel</button>
+    <button mat-raised-button color="primary" [disabled]="applyDisabled" (click)="apply()">
+      {{ operation === 'copy' ? 'Copy' : 'Move' }}
+    </button>
+  } @else if (phase === 'done') {
+    <button mat-button mat-dialog-close>Close</button>
+  }
+</mat-dialog-actions>

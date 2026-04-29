@@ -1,0 +1,51 @@
+.folder-list {
+  max-height: 40vh;
+  overflow-y: auto;
+  margin-bottom: 8px;
+}
+
+.folder-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  border-radius: 4px;
+
+  &:hover       { background: rgba(255, 255, 255, 0.05); }
+  &.is-selected { background: rgba(79, 195, 247, 0.15); }
+
+  mat-icon { color: #888; flex-shrink: 0; }
+}
+
+.folder-label {
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.zip-check {
+  display: block;
+  margin-top: 12px;
+}
+
+.center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 24px 0;
+  color: #aaa;
+}
+
+.result-msg {
+  text-align: center;
+  padding: 24px 0;
+  color: #eee;
+}
+
+.hint {
+  color: #888;
+  font-size: 13px;
+}

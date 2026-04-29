@@ -3,6 +3,7 @@
     <div
       class="thumb"
       [class.active]="(pageOffset + i) === currentIndex"
+      [class.favorited]="isFavorite(photo.filename)"
       [style.width.px]="thumbSize"
       [style.height.px]="thumbSize"
       (click)="onThumbClick(i)">
@@ -14,6 +15,9 @@
         [alt]="photo.filename"
         [class.visible]="photo.loaded"
         (load)="onImageLoad(photo)" />
+      <div class="selection-overlay" (click)="onFavoriteClick($event, photo.filename)">
+        <mat-icon>{{ isFavorite(photo.filename) ? 'favorite' : 'favorite_border' }}</mat-icon>
+      </div>
     </div>
   }
   @empty {

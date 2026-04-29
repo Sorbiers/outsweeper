@@ -30,7 +30,11 @@
     border-color: #4fc3f7;
   }
 
-  &:hover:not(.active) {
+  &.favorited {
+    box-shadow: inset 0 0 0 2px #69f0ae;
+  }
+
+  &:hover:not(.active):not(.favorited) {
     border-color: #666;
   }
 
@@ -50,6 +54,31 @@
       opacity: 1;
     }
   }
+}
+
+.selection-overlay {
+  position: absolute;
+  bottom: 2px;
+  right: 2px;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+
+  mat-icon {
+    font-size: 18px;
+    width: 18px;
+    height: 18px;
+    color: rgba(255, 255, 255, 0.25);
+    transition: color 0.1s;
+  }
+}
+
+.thumb.favorited .selection-overlay mat-icon,
+.thumb:hover .selection-overlay mat-icon {
+  color: #4fc3f7;
 }
 
 .paginator {

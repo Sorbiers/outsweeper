@@ -12,6 +12,9 @@
       <button mat-icon-button (click)="openFilterDialog()" [class.filter-active]="hasActiveFilters" title="Advanced filter">
         <mat-icon>filter_list</mat-icon>
       </button>
+      <button mat-icon-button (click)="toggleFavoritesFilter()" [class.filter-active]="showFavoritesOnly" title="Show favorites only">
+        <mat-icon>{{ showFavoritesOnly ? 'favorite' : 'favorite_border' }}</mat-icon>
+      </button>
       <span class="folder-name" (click)="openFolderDialog()" title="Change folder">{{ sourceFolderName }}{{ currentFolder !== 'source' ? ' (' + (currentFolder === 'selected' ? 'Selected' : 'Dust') + ')' : '' }}</span>
       <span class="photo-counter">{{ totalPhotos > 0 ? (currentIndex + 1) : 0 }} / {{ totalPhotos }}</span>
       @if (pendingRefresh) {
@@ -26,9 +29,11 @@
       [pageOffset]="pageOffset"
       [totalPhotos]="totalPhotos"
       [folder]="currentFolder"
+      [favorites]="favorites"
       (photoSelected)="selectPhoto($event)"
       (pageChange)="onPageChange($event)"
-      (pageSizeChange)="onPageSizeChange($event)">
+      (pageSizeChange)="onPageSizeChange($event)"
+      (favoriteToggled)="toggleFavorite($event)">
     </pp-image-strip>
   </div>
 
@@ -49,6 +54,30 @@
   <div class="loading-overlay">
     <mat-spinner diameter="48"></mat-spinner>
   </div>
+}
+
+@if (favoriteCount > 0) {
+  <div class="favorites-fab-wrap">
+    <button mat-fab [matMenuTriggerFor]="favMenu">
+      <mat-icon>favorite</mat-icon>
+    </button>
+    <span class="favorites-count">{{ favoriteCount }}</span>
+  </div>
+  <mat-menu #favMenu="matMenu">
+    <button mat-menu-item (click)="openBatchDialog('copy')">
+      <mat-icon>file_copy</mat-icon> Copy to folder
+    </button>
+    <button mat-menu-item (click)="openBatchDialog('move')">
+      <mat-icon>drive_file_move</mat-icon> Move to folder
+    </button>
+    <button mat-menu-item (click)="downloadFavorites()">
+      <mat-icon>download</mat-icon> Download as .zip
+    </button>
+    <mat-divider></mat-divider>
+    <button mat-menu-item (click)="clearFavorites()">
+      <mat-icon>heart_broken</mat-icon> Clear favorites
+    </button>
+  </mat-menu>
 }
 
 <button mat-fab [matMenuTriggerFor]="folderMenu" class="folder-fab" [class.viewing-other]="currentFolder !== 'source'">

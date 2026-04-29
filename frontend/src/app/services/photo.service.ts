@@ -11,6 +11,7 @@ export class PhotoService {
     folder = 'source',
     options: {
       offset?: number; limit?: number; sortBy?: string; sortAsc?: boolean; filter?: string;
+      favoritesOnly?: boolean;
       dateField?: string; dateFrom?: string; dateTo?: string;
       types?: string[]; sizeMin?: number | null; sizeMax?: number | null;
       widthMin?: number | null; widthMax?: number | null;
@@ -23,6 +24,7 @@ export class PhotoService {
     if (options.sortBy) params['sort_by'] = options.sortBy;
     if (options.sortAsc != null) params['sort_asc'] = String(options.sortAsc);
     if (options.filter) params['filter'] = options.filter;
+    if (options.favoritesOnly) params['favorites_only'] = 'true';
     if (options.dateField) params['date_field'] = options.dateField;
     if (options.dateFrom) params['date_from'] = options.dateFrom;
     if (options.dateTo) params['date_to'] = options.dateTo;
@@ -124,12 +126,33 @@ export class PhotoService {
     return this.http.post<{ ok: boolean }>('/api/comfy/free', { comfy_url: comfyUrl });
   }
 
+  batchOperation(params: {
+    filenames: string[]; operation: 'copy' | 'move';
+    destination: string; use_comfy_output?: boolean;
+    zip: boolean; folder: string;
+  }): Observable<{ ok: boolean; count: number; errors: string[] }> {
+    return this.http.post<{ ok: boolean; count: number; errors: string[] }>('/api/batch', params);
+  }
+
+  toggleFavorite(filename: string, folder: string): Observable<{ ok: boolean; favorite: boolean }> {
+    return this.http.post<{ ok: boolean; favorite: boolean }>(
+      `/api/photos/${encodeURIComponent(filename)}/favorite`, {}, { params: { folder } });
+  }
+
+  setFavorites(filenames: string[], favorite: boolean, folder: string): Observable<{ ok: boolean }> {
+    return this.http.post<{ ok: boolean }>('/api/favorites', { filenames, favorite, folder });
+  }
+
+  downloadFavorites(folder: string): void {
+    window.location.href = `/api/favorites/download?folder=${folder}`;
+  }
+
   getFileTypes(): Observable<{ types: string[] }> {
     return this.http.get<{ types: string[] }>('/api/file-types');
   }
 
-  listFolders(): Observable<{ folders: string[]; root_name: string; current: string | null; comfy_output: string | null; comfy_output_name: string | null; comfy_output_active: boolean }> {
-    return this.http.get<{ folders: string[]; root_name: string; current: string | null; comfy_output: string | null; comfy_output_name: string | null; comfy_output_active: boolean }>('/api/folders');
+  listFolders(): Observable<{ folders: string[]; root_name: string; current: string | null; comfy_output: string | null; comfy_output_name: string | null; comfy_output_active: boolean; selected_name: string; dust_name: string }> {
+    return this.http.get<{ folders: string[]; root_name: string; current: string | null; comfy_output: string | null; comfy_output_name: string | null; comfy_output_active: boolean; selected_name: string; dust_name: string }>('/api/folders');
   }
 
   changeFolder(folder: string): Observable<{ ok: boolean; source_name: string }> {

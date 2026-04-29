@@ -30,10 +30,12 @@ export class ImageStrip implements AfterViewInit, OnDestroy {
   @Input() pageOffset = 0;
   @Input() totalPhotos = 0;
   @Input() folder = 'source';
+  @Input() favorites: ReadonlySet<string> = new Set();
 
   @Output() photoSelected = new EventEmitter<number>();
   @Output() pageChange = new EventEmitter<number>();
   @Output() pageSizeChange = new EventEmitter<number>();
+  @Output() favoriteToggled = new EventEmitter<string>();
 
   thumbSize = 100;
   pageCapacity = 0; // 0 means not yet measured
@@ -69,6 +71,15 @@ export class ImageStrip implements AfterViewInit, OnDestroy {
 
   onThumbClick(localIndex: number): void {
     this.photoSelected.emit(this.pageOffset + localIndex);
+  }
+
+  isFavorite(filename: string): boolean {
+    return this.favorites.has(filename);
+  }
+
+  onFavoriteClick(event: MouseEvent, filename: string): void {
+    event.stopPropagation();
+    this.favoriteToggled.emit(filename);
   }
 
   onImageLoad(photo: PhotoListItem): void {
