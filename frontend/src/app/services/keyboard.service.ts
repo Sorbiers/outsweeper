@@ -1,7 +1,25 @@
 import { Injectable, NgZone, inject } from '@angular/core';
 import { Subject } from 'rxjs';
 
-export type PhotoAction = 'next' | 'prev' | 'first' | 'last' | 'select' | 'dust' | 'undo' | 'pageForward' | 'pageBackward' | 'pageForward10' | 'pageBackward10' | 'toggleSelection' | 'selectAll' | 'rowUp' | 'rowDown';
+export type PhotoAction =
+  | 'next'
+  | 'prev'
+  | 'first'
+  | 'last'
+  | 'select'
+  | 'dust'
+  | 'undo'
+  | 'pageForward'
+  | 'pageBackward'
+  | 'pageForward10'
+  | 'pageBackward10'
+  | 'toggleSelection'
+  | 'selectAll'
+  | 'rowUp'
+  | 'rowDown'
+  | 'selectSourceFolder'
+  | 'selectSelectedFolder'
+  | 'selectDustFolder';
 
 @Injectable({ providedIn: 'root' })
 export class KeyboardService {
@@ -13,7 +31,11 @@ export class KeyboardService {
       document.addEventListener('keydown', (event: KeyboardEvent) => {
         // Skip when a dialog or overlay input is focused
         const target = event.target as HTMLElement;
-        if (target.closest('.cdk-overlay-container') || target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
+        if (
+          target.closest('.cdk-overlay-container') ||
+          target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA'
+        ) {
           return;
         }
 
@@ -34,6 +56,9 @@ export class KeyboardService {
         else if (event.key === 'z' && event.ctrlKey) action = 'undo';
         else if (event.key === ' ') action = 'toggleSelection';
         else if (event.key === 'a' && event.ctrlKey) action = 'selectAll';
+        else if (event.key === '1' && event.ctrlKey) action = 'selectSourceFolder';
+        else if (event.key === '2' && event.ctrlKey) action = 'selectSelectedFolder';
+        else if (event.key === '3' && event.ctrlKey) action = 'selectDustFolder';
 
         if (action) {
           event.preventDefault();

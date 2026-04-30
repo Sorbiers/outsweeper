@@ -1,24 +1,25 @@
-import { Component, EventEmitter, Input, OnInit, Output, inject } from '@angular/core';
+import { ClipboardModule } from '@angular/cdk/clipboard';
 import { DatePipe, KeyValuePipe, NgTemplateOutlet } from '@angular/common';
-import { MatCardModule } from '@angular/material/card';
-import { MatDividerModule } from '@angular/material/divider';
-import { MatChipsModule } from '@angular/material/chips';
+import { Component, EventEmitter, Input, OnInit, Output, inject, signal } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
+import { MatCardModule } from '@angular/material/card';
+import { MatChipsModule } from '@angular/material/chips';
+import { MatDialog } from '@angular/material/dialog';
+import { MatDividerModule } from '@angular/material/divider';
 import { MatIconModule } from '@angular/material/icon';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { MatDialog } from '@angular/material/dialog';
 import { PhotoInfo } from '../../models/photo.model';
 import { PhotoService } from '../../services/photo.service';
-import { GenerateDialog, DEFAULT_FLUX_WORKFLOW } from '../generate-dialog/generate-dialog';
 import { DescribeDialog } from '../describe-dialog/describe-dialog';
+import { DEFAULT_FLUX_WORKFLOW, GenerateDialog } from '../generate-dialog/generate-dialog';
 
 /** PNG text chunk keys that are handled by the ComfyUI section */
 const COMFYUI_KEYS = new Set(['prompt', 'workflow']);
 
 @Component({
   selector: 'pp-info-panel',
-  imports: [DatePipe, KeyValuePipe, NgTemplateOutlet, MatCardModule, MatDividerModule, MatChipsModule, MatButtonModule, MatIconModule, MatMenuModule],
+  imports: [DatePipe, KeyValuePipe, NgTemplateOutlet, MatCardModule, MatDividerModule, MatChipsModule, MatButtonModule, MatIconModule, MatMenuModule, ClipboardModule],
   templateUrl: './info-panel.html',
   styleUrl: './info-panel.scss',
 })
@@ -30,6 +31,7 @@ export class InfoPanel implements OnInit {
   private dialog = inject(MatDialog);
   private photoService = inject(PhotoService);
   private snackBar = inject(MatSnackBar);
+  copyDoneIconActive = signal(false);
 
   tools: string[] = [];
 
@@ -103,5 +105,10 @@ export class InfoPanel implements OnInit {
 
   isLongValue(value: string): boolean {
     return value.length > 120;
+  }
+
+  onCopySuccess(): void {
+    this.copyDoneIconActive.set(true);
+    setTimeout(() => this.copyDoneIconActive.set(false), 2000);
   }
 }

@@ -3,18 +3,12 @@
     <mat-card class="info-card">
       <mat-card-header>
         <mat-card-title>{{ info.filename }}</mat-card-title>
-        <button mat-stroked-button (click)="locate()" title="Show in Explorer">
-          <mat-icon>folder_open</mat-icon> Locate
-        </button>
-        <button mat-stroked-button class="describe-btn" (click)="openDescribe()">
-          <mat-icon>visibility</mat-icon> Describe
-        </button>
       </mat-card-header>
       <mat-card-content>
         <div class="meta-grid">
           <div class="meta-item">
             <span class="label">Modified</span>
-            <span class="value">{{ info.modified | date:'medium' }}</span>
+            <span class="value">{{ info.modified | date: 'medium' }}</span>
           </div>
           <div class="meta-item">
             <span class="label">Size</span>
@@ -29,9 +23,20 @@
             <span class="value">{{ info.format }}</span>
           </div>
         </div>
-
+      </mat-card-content>
+      <mat-card-actions class="meta-actions">
+        <button mat-stroked-button (click)="locate()" title="Show in Explorer">
+          <mat-icon>folder_open</mat-icon> Locate
+        </button>
+        <button mat-stroked-button class="describe-btn" (click)="openDescribe()">
+          <mat-icon>visibility</mat-icon> Describe
+        </button>
+      </mat-card-actions>
+    </mat-card>
+    <mat-card class="info-card">
+      <mat-card-content>
         @if (info.comfyui.found) {
-          <mat-divider />
+          <!-- <mat-divider /> -->
           <div class="section-header">
             <h3>ComfyUI Workflow</h3>
             @if (info.png_metadata['prompt']) {
@@ -95,7 +100,19 @@
           }
 
           @if (info.comfyui.prompt) {
-            <h4>Prompt</h4>
+            <div class="prompt-title">
+              <h4>Prompt</h4>
+              @if (copyDoneIconActive()) {
+                <mat-icon color="primary">check</mat-icon>
+              } @else {
+                <mat-icon
+                  class="copy-button"
+                  [cdkCopyToClipboard]="info.comfyui.prompt"
+                  (cdkCopyToClipboardCopied)="onCopySuccess()"
+                  >content_copy</mat-icon
+                >
+              }
+            </div>
             <div class="prompt-text">{{ info.comfyui.prompt }}</div>
           }
 
@@ -138,7 +155,12 @@
           <button mat-stroked-button (click)="move.emit('selected')" title="Move to Selected (+/=)">
             <mat-icon>check_circle</mat-icon> Move to Selected
           </button>
-          <button mat-stroked-button color="warn" (click)="move.emit('dust')" title="Move to Dust (Delete)">
+          <button
+            mat-stroked-button
+            color="warn"
+            (click)="move.emit('dust')"
+            title="Move to Dust (Delete)"
+          >
             <mat-icon>delete</mat-icon> Move to Dust
           </button>
           <ng-container *ngTemplateOutlet="toolsBtn"></ng-container>
@@ -146,7 +168,11 @@
       }
       @if (folder === 'selected') {
         <mat-card-actions>
-          <button mat-stroked-button (click)="move.emit('source')" title="Move back to working folder">
+          <button
+            mat-stroked-button
+            (click)="move.emit('source')"
+            title="Move back to working folder"
+          >
             <mat-icon>undo</mat-icon> Unselect
           </button>
           <ng-container *ngTemplateOutlet="toolsBtn"></ng-container>
@@ -154,7 +180,11 @@
       }
       @if (folder === 'dust') {
         <mat-card-actions>
-          <button mat-stroked-button (click)="move.emit('source')" title="Move back to working folder">
+          <button
+            mat-stroked-button
+            (click)="move.emit('source')"
+            title="Move back to working folder"
+          >
             <mat-icon>restore</mat-icon> Restore
           </button>
           <ng-container *ngTemplateOutlet="toolsBtn"></ng-container>
