@@ -51,6 +51,13 @@ export class InfoPanel implements OnInit {
     });
   }
 
+  locate(): void {
+    if (!this.info) return;
+    this.photoService.locate(this.info.filename, this.folder).subscribe({
+      error: () => this.snackBar.open('Could not open Explorer', '', { duration: 3000 }),
+    });
+  }
+
   openDescribe(): void {
     if (!this.info) return;
     this.dialog.open(DescribeDialog, {

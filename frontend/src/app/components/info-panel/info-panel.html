@@ -3,6 +3,9 @@
     <mat-card class="info-card">
       <mat-card-header>
         <mat-card-title>{{ info.filename }}</mat-card-title>
+        <button mat-stroked-button (click)="locate()" title="Show in Explorer">
+          <mat-icon>folder_open</mat-icon> Locate
+        </button>
         <button mat-stroked-button class="describe-btn" (click)="openDescribe()">
           <mat-icon>visibility</mat-icon> Describe
         </button>

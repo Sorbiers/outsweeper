@@ -184,4 +184,11 @@ export class PhotoService {
       { folder, description }
     );
   }
+
+  locate(filename: string, folder: string): Observable<{ ok: boolean }> {
+    return this.http.post<{ ok: boolean }>(
+      `/api/photos/${encodeURIComponent(filename)}/locate`,
+      { folder }
+    );
+  }
 }

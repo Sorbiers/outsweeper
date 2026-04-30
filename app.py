@@ -22,6 +22,7 @@ try:
 except ImportError:
     import tomli as tomllib
 
+
 import requests as http_requests
 from flask import Flask, jsonify, request, send_from_directory, send_file
 from PIL import Image
@@ -826,6 +827,19 @@ def create_app(root_dir, source, config, selected_name, dust_name,
             else:
                 return jsonify({'error': f'Unsupported format: {ext}'}), 400
 
+            return jsonify({'ok': True})
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+
+    @app.route('/api/photos/<path:filename>/locate', methods=['POST'])
+    def locate_photo(filename):
+        data = request.get_json(silent=True, force=True) or {}
+        target = resolve_folder_from_name(data.get('folder', 'source'))
+        filepath = target / filename
+        if not filepath.is_file():
+            return jsonify({'error': 'not found'}), 404
+        try:
+            subprocess.Popen(['explorer', f'/select,{filepath}'])
             return jsonify({'ok': True})
         except Exception as e:
             return jsonify({'error': str(e)}), 500
