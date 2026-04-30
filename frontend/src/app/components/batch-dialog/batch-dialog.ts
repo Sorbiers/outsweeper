@@ -11,7 +11,7 @@ import { PhotoService } from '../../services/photo.service';
 export interface BatchDialogData {
   operation: 'copy' | 'move';
   filenames: string[];
-  sourceFolder: 'source' | 'selected' | 'dust';
+  sourceFolder: string;
 }
 
 @Component({

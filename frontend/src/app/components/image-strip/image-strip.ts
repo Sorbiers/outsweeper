@@ -37,7 +37,7 @@ export class ImageStrip implements AfterViewInit, OnDestroy {
   @Input() currentIndex = 0;
   @Input() pageOffset = 0;
   @Input() totalPhotos = 0;
-  @Input() folder = 'source';
+  @Input() folder = '';
   @Input() favorites: ReadonlySet<string> = new Set();
 
   @Output() photoSelected = new EventEmitter<number>();

@@ -43,7 +43,9 @@ export class App implements OnInit, OnDestroy {
   photos: PhotoListItem[] = [];
   currentIndex = 0;
   currentInfo: PhotoInfo | null = null;
-  currentFolder: 'source' | 'selected' | 'dust' = 'source';
+  currentPath = '';
+  selectedName = '__selected';
+  dustName = '__dust';
   sourceFolderName = '';
   sortBy: 'name' | 'modified' = 'name';
   sortAsc = true;
@@ -83,6 +85,14 @@ export class App implements OnInit, OnDestroy {
   private boundDrag = (e: MouseEvent) => this.onDrag(e);
   private boundDragEnd = () => this.onDragEnd();
 
+  get folderType(): 'source' | 'selected' | 'dust' | 'sub' {
+    if (!this.currentPath) return 'source';
+    const last = this.currentPath.split('/').at(-1)!;
+    if (last === this.selectedName) return 'selected';
+    if (last === this.dustName)     return 'dust';
+    return 'sub';
+  }
+
   ngOnInit(): void {
     const savedSort = localStorage.getItem('pp_sortBy');
     if (savedSort === 'name' || savedSort === 'modified') this.sortBy = savedSort;
@@ -104,6 +114,9 @@ export class App implements OnInit, OnDestroy {
       if (!this.connState.comfy.url)     this.connState.comfy.url     = cfg.comfy_url;
       if (!this.connState.lmstudio.url)  this.connState.lmstudio.url  = cfg.lmstudio_url;
       if (cfg.widgets?.comfy_queue) this.comfyQueueEnabled.set(true);
+      if (cfg.selected_name)   this.selectedName                  = cfg.selected_name;
+      if (cfg.dust_name)       this.dustName                      = cfg.dust_name;
+      if (cfg.thumbnails_name) this.photoService.thumbnailsName   = cfg.thumbnails_name;
     });
 
     this.filterSub = this.filterSubject
@@ -126,7 +139,7 @@ export class App implements OnInit, OnDestroy {
     if (this.pageSize <= 0) return;
     this.loading = true;
     this.photoService
-      .listPhotos(this.currentFolder, {
+      .listPhotos(this.currentPath, {
         offset: this.pageOffset,
         limit: this.pageSize,
         sortBy: this.sortBy,
@@ -166,14 +179,14 @@ export class App implements OnInit, OnDestroy {
   }
 
   private loadFavorites(): void {
-    this.photoService.listPhotos(this.currentFolder, { favoritesOnly: true, limit: 999999, offset: 0 })
+    this.photoService.listPhotos(this.currentPath, { favoritesOnly: true, limit: 999999, offset: 0 })
       .subscribe(res => { this.favorites = new Set(res.photos.map(p => p.filename)); });
   }
 
   private fetchInfo(relativeIndex: number): void {
     const photo = this.photos[relativeIndex];
     if (photo) {
-      this.photoService.getInfo(photo.filename, this.currentFolder).subscribe(info => {
+      this.photoService.getInfo(photo.filename, this.currentPath).subscribe(info => {
         this.currentInfo = info;
       });
     }
@@ -225,48 +238,16 @@ export class App implements OnInit, OnDestroy {
   openFolderDialog(): void {
     this.dialog.open(FolderSelectDialog, {
       width: '420px', maxHeight: '80vh',
-      data: { currentView: this.currentFolder },
+      data: { currentPath: this.currentPath },
     }).afterClosed().subscribe((result: FolderSelectResult | undefined) => {
       if (!result) return;
-      if (result.kind === 'view') {
-        this.switchFolder(result.folder);
-      } else if (result.kind === 'change-comfy-output') {
-        this.photoService.changeToComfyOutput().subscribe({
-          next: res => {
-            if (!res.ok) return;
-            this.sourceFolderName = res.source_name;
-            this.currentFolder = 'source';
-            this.favorites = new Set();
-            this.pageOffset = 0;
-            this.currentIndex = 0;
-            this.filterText = '';
-            this.loadPhotos();
-            this.loadFavorites();
-          },
-          error: () => this.snackBar.open('Folder change not allowed', '', { duration: 3000 }),
-        });
-      } else {
-        this.photoService.changeFolder(result.path).subscribe({
-          next: res => {
-            if (!res.ok) return;
-            this.sourceFolderName = res.source_name;
-            this.currentFolder = 'source';
-            this.favorites = new Set();
-            this.pageOffset = 0;
-            this.currentIndex = 0;
-            this.filterText = '';
-            this.loadPhotos();
-            this.loadFavorites();
-          },
-          error: () => this.snackBar.open('Folder change not allowed', '', { duration: 3000 }),
-        });
-      }
+      this.switchFolder(result.path);
     });
   }
 
   refresh(): void {
     this.pendingRefresh = false;
-    this.photoService.refresh().subscribe(() => {
+    this.photoService.refresh(this.currentPath).subscribe(() => {
       this.pageOffset = 0;
       this.currentIndex = 0;
       this.loadPhotos();
@@ -274,7 +255,7 @@ export class App implements OnInit, OnDestroy {
   }
 
   openFilterDialog(): void {
-    this.photoService.getFileTypes().subscribe(res => {
+    this.photoService.getFileTypes(this.currentPath).subscribe(res => {
       this.dialog.open(FilterDialog, {
         width: '380px',
         data: { current: this.activeFilters, availableTypes: res.types },
@@ -296,9 +277,9 @@ export class App implements OnInit, OnDestroy {
     });
   }
 
-  switchFolder(folder: 'source' | 'selected' | 'dust'): void {
-    if (folder === this.currentFolder) return;
-    this.currentFolder = folder;
+  switchFolder(path: string): void {
+    if (path === this.currentPath) return;
+    this.currentPath = path;
     this.favorites = new Set();
     this.pageOffset = 0;
     this.currentIndex = 0;
@@ -372,13 +353,13 @@ export class App implements OnInit, OnDestroy {
         break;
       }
       case 'select':
-        if (this.currentFolder === 'source') this.moveCurrentPhoto('selected');
+        if (this.folderType === 'source' || this.folderType === 'sub') this.moveCurrentPhoto('selected');
         break;
       case 'dust':
-        if (this.currentFolder === 'source') this.moveCurrentPhoto('dust');
+        if (this.folderType === 'source' || this.folderType === 'sub') this.moveCurrentPhoto('dust');
         break;
       case 'undo':
-        if (this.currentFolder === 'source') this.undoLast();
+        if (this.folderType === 'source' || this.folderType === 'sub') this.undoLast();
         break;
       case 'toggleSelection': this.toggleFavoriteCurrent(); break;
       case 'selectAll':       this.toggleAllFavorites();    break;
@@ -395,18 +376,24 @@ export class App implements OnInit, OnDestroy {
     }
   }
 
-  moveCurrentPhoto(destination: 'selected' | 'dust' | 'source'): void {
+  moveCurrentPhoto(action: 'selected' | 'dust' | 'source'): void {
     if (!this.photos.length) return;
     const relIdx = this.currentIndex - this.pageOffset;
     const filename = this.photos[relIdx].filename;
-    const move$ =
-      destination === 'selected' ? this.photoService.moveToSelected(filename) :
-      destination === 'dust'     ? this.photoService.moveToDust(filename) :
-                                   this.photoService.moveToSource(filename, this.currentFolder);
 
-    move$.subscribe(res => {
+    let destPath: string;
+    if (action === 'selected') {
+      destPath = this.currentPath ? `${this.currentPath}/${this.selectedName}` : this.selectedName;
+    } else if (action === 'dust') {
+      destPath = this.currentPath ? `${this.currentPath}/${this.dustName}` : this.dustName;
+    } else {
+      const idx = this.currentPath.lastIndexOf('/');
+      destPath = idx === -1 ? '' : this.currentPath.slice(0, idx);
+    }
+
+    this.photoService.move(filename, this.currentPath, destPath).subscribe(res => {
       if (res.ok) {
-        const label = destination === 'selected' ? 'Selected' : destination === 'dust' ? 'Dusted' : 'Restored';
+        const label = action === 'selected' ? 'Selected' : action === 'dust' ? 'Dusted' : 'Restored';
         this.snackBar
           .open(`${label}: ${filename}`, 'Undo', { duration: 3000 })
           .onAction()
@@ -450,7 +437,7 @@ export class App implements OnInit, OnDestroy {
     const next = new Set(this.favorites);
     if (newState) next.add(filename); else next.delete(filename);
     this.favorites = next;
-    this.photoService.toggleFavorite(filename, this.currentFolder).subscribe({
+    this.photoService.toggleFavorite(filename, this.currentPath).subscribe({
       next: res => {
         const confirmed = new Set(this.favorites);
         if (res.favorite) confirmed.add(filename); else confirmed.delete(filename);
@@ -473,10 +460,10 @@ export class App implements OnInit, OnDestroy {
   toggleAllFavorites(): void {
     if (this.favorites.size >= this.totalPhotos) {
       const all = [...this.favorites];
-      this.photoService.setFavorites(all, false, this.currentFolder).subscribe();
+      this.photoService.setFavorites(all, false, this.currentPath).subscribe();
       this.favorites = new Set();
     } else {
-      this.photoService.listPhotos(this.currentFolder, {
+      this.photoService.listPhotos(this.currentPath, {
         offset: 0, limit: this.totalPhotos,
         sortBy: this.sortBy, sortAsc: this.sortAsc, filter: this.filterText,
         dateField: this.activeFilters.dateField,
@@ -487,7 +474,7 @@ export class App implements OnInit, OnDestroy {
         heightMin: this.activeFilters.heightMin, heightMax: this.activeFilters.heightMax,
       }).subscribe(res => {
         const fns = res.photos.map(p => p.filename);
-        this.photoService.setFavorites(fns, true, this.currentFolder).subscribe();
+        this.photoService.setFavorites(fns, true, this.currentPath).subscribe();
         this.favorites = new Set(fns);
       });
     }
@@ -495,7 +482,7 @@ export class App implements OnInit, OnDestroy {
 
   clearFavorites(): void {
     if (this.favorites.size)
-      this.photoService.setFavorites([...this.favorites], false, this.currentFolder).subscribe();
+      this.photoService.setFavorites([...this.favorites], false, this.currentPath).subscribe();
     this.favorites = new Set();
   }
 
@@ -507,13 +494,13 @@ export class App implements OnInit, OnDestroy {
   }
 
   downloadFavorites(): void {
-    this.photoService.downloadFavorites(this.currentFolder);
+    this.photoService.downloadFavorites(this.currentPath);
   }
 
   openBatchDialog(operation: 'copy' | 'move'): void {
     this.dialog.open(BatchDialog, {
       width: '420px', maxHeight: '80vh',
-      data: { operation, filenames: [...this.favorites], sourceFolder: this.currentFolder },
+      data: { operation, filenames: [...this.favorites], sourceFolder: this.currentPath },
     }).afterClosed().subscribe((result?: { ok: boolean }) => {
       if (!result?.ok) return;
       this.pageOffset = 0; this.currentIndex = 0;

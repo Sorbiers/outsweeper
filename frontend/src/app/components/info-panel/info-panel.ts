@@ -25,7 +25,8 @@ const COMFYUI_KEYS = new Set(['prompt', 'workflow']);
 })
 export class InfoPanel implements OnInit {
   @Input() info: PhotoInfo | null = null;
-  @Input() folder = 'source';
+  @Input() folder = '';
+  @Input() folderType = 'source';
   @Output() move = new EventEmitter<'selected' | 'dust' | 'source'>();
 
   private dialog = inject(MatDialog);

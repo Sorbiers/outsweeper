@@ -1,51 +1,41 @@
 <h2 mat-dialog-title>Folder</h2>
 
 <mat-dialog-content>
-  <div class="view-list">
-    @for (v of views; track v.key) {
-      <div class="folder-item" [class.is-current]="v.key === currentView" (click)="switchView(v.key)">
-        <mat-icon>{{ v.icon }}</mat-icon>
-        <span class="folder-label">{{ v.label }}</span>
-        @if (v.key === currentView) {
-          <mat-icon class="current-mark">radio_button_checked</mat-icon>
-        }
-      </div>
+  <!-- Collection picker -->
+  <div class="collection-row">
+    @for (c of collections; track c.value) {
+      <button mat-stroked-button
+              [class.active-collection]="isActiveCollection(c)"
+              (click)="selectCollection(c)">
+        <mat-icon>{{ c.icon }}</mat-icon> {{ c.label }}
+      </button>
     }
   </div>
 
   <mat-divider />
 
+  <!-- Subfolder picker -->
   @if (loading) {
     <div class="spinner-wrap">
       <mat-spinner diameter="36"></mat-spinner>
     </div>
-  } @else if (notAllowed) {
-    <p class="not-allowed">Folder changing is disabled in server config.</p>
   } @else {
     @if (comfyOutputPath) {
       <div class="folder-item comfy-output-item"
-           [class.is-selected]="selectedComfyOutput"
-           [class.is-current]="comfyOutputActive"
+           [class.is-selected]="selectedSubfolder === '__comfy_output'"
            (click)="selectComfyOutput()">
         <mat-icon>output</mat-icon>
         <span class="folder-label">ComfyUI Output — {{ comfyOutputName }}</span>
-        @if (comfyOutputActive) {
-          <mat-icon class="current-mark">radio_button_checked</mat-icon>
-        }
       </div>
       <mat-divider />
     }
     <div class="folder-list">
       @for (folder of folders; track folder) {
         <div class="folder-item"
-             [class.is-selected]="!selectedComfyOutput && folder === selected"
-             [class.is-current]="current !== null && folder === current"
-             (click)="selectFolder(folder)">
+             [class.is-selected]="selectedSubfolder === folder && selectedSubfolder !== '__comfy_output'"
+             (click)="selectSubfolder(folder)">
           <mat-icon>{{ folder === '' ? 'folder_special' : 'folder' }}</mat-icon>
           <span class="folder-label">{{ displayName(folder) }}</span>
-          @if (current !== null && folder === current) {
-            <mat-icon class="current-mark">radio_button_checked</mat-icon>
-          }
         </div>
       }
     </div>
@@ -55,6 +45,6 @@
 <mat-dialog-actions align="end">
   <button mat-button mat-dialog-close>Cancel</button>
   <button mat-flat-button (click)="confirm()" [disabled]="confirmDisabled">
-    Change Working Folder
+    Navigate
   </button>
 </mat-dialog-actions>

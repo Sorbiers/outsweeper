@@ -15,7 +15,7 @@
       <button mat-icon-button (click)="toggleFavoritesFilter()" [class.filter-active]="showFavoritesOnly" title="Show favorites only">
         <mat-icon>{{ showFavoritesOnly ? 'favorite' : 'favorite_border' }}</mat-icon>
       </button>
-      <span class="folder-name" (click)="openFolderDialog()" title="Change folder">{{ sourceFolderName }}{{ currentFolder !== 'source' ? ' (' + (currentFolder === 'selected' ? 'Selected' : 'Dust') + ')' : '' }}</span>
+      <span class="folder-name" (click)="openFolderDialog()" title="Change folder">{{ sourceFolderName }}{{ folderType !== 'source' ? ' (' + (folderType === 'selected' ? 'Selected' : folderType === 'dust' ? 'Dust' : 'Sub') + ')' : '' }}</span>
       <span class="photo-counter">{{ totalPhotos > 0 ? (currentIndex + 1) : 0 }} / {{ totalPhotos }}</span>
       @if (pendingRefresh) {
         <button mat-icon-button class="refresh-pending" (click)="refresh()" title="New files detected — click to refresh">
@@ -28,7 +28,7 @@
       [currentIndex]="currentIndex"
       [pageOffset]="pageOffset"
       [totalPhotos]="totalPhotos"
-      [folder]="currentFolder"
+      [folder]="currentPath"
       [favorites]="favorites"
       (photoSelected)="selectPhoto($event)"
       (pageChange)="onPageChange($event)"
@@ -42,11 +42,11 @@
 
   <div class="bottom-area" [style.height.%]="100 - stripHeight">
     <div class="preview-area" [style.width.%]="previewWidth">
-      <pp-preview-panel [info]="currentInfo" [folder]="currentFolder"></pp-preview-panel>
+      <pp-preview-panel [info]="currentInfo" [folder]="currentPath"></pp-preview-panel>
     </div>
     <div class="divider-v" (mousedown)="onVDividerDown($event)"></div>
     <div class="info-area" [style.width.%]="100 - previewWidth">
-      <pp-info-panel [info]="currentInfo" [folder]="currentFolder" (move)="moveCurrentPhoto($event)"></pp-info-panel>
+      <pp-info-panel [info]="currentInfo" [folder]="currentPath" [folderType]="folderType" (move)="moveCurrentPhoto($event)"></pp-info-panel>
     </div>
   </div>
 </div>
@@ -81,7 +81,7 @@
   </mat-menu>
 }
 
-<button mat-fab [matMenuTriggerFor]="folderMenu" class="folder-fab" [class.viewing-other]="currentFolder !== 'source'">
+<button mat-fab [matMenuTriggerFor]="folderMenu" class="folder-fab" [class.viewing-other]="folderType !== 'source'">
   <mat-icon>folder</mat-icon>
 </button>
 <mat-menu #folderMenu="matMenu">

@@ -44,7 +44,7 @@ export class PreviewPanel implements OnChanges, OnDestroy {
     this._info!.loaded = loaded; // Preserve loaded state when info object is replaced
   }
 
-  private _folder = 'source';
+  private _folder = '';
   public get folder() {
     return this._folder;
   }

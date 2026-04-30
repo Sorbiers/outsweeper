@@ -150,7 +150,7 @@
           </div>
         }
       </mat-card-content>
-      @if (folder === 'source') {
+      @if (folderType === 'source' || folderType === 'sub') {
         <mat-card-actions>
           <button mat-stroked-button (click)="move.emit('selected')" title="Move to Selected (+/=)">
             <mat-icon>check_circle</mat-icon> Move to Selected
@@ -166,7 +166,7 @@
           <ng-container *ngTemplateOutlet="toolsBtn"></ng-container>
         </mat-card-actions>
       }
-      @if (folder === 'selected') {
+      @if (folderType === 'selected') {
         <mat-card-actions>
           <button
             mat-stroked-button
@@ -178,7 +178,7 @@
           <ng-container *ngTemplateOutlet="toolsBtn"></ng-container>
         </mat-card-actions>
       }
-      @if (folder === 'dust') {
+      @if (folderType === 'dust') {
         <mat-card-actions>
           <button
             mat-stroked-button

@@ -6,9 +6,10 @@ import { PhotoListItem, PhotoInfo, MoveResponse, UndoResponse } from '../models/
 @Injectable({ providedIn: 'root' })
 export class PhotoService {
   private http = inject(HttpClient);
+  thumbnailsName = '__thumbnails';
 
   listPhotos(
-    folder = 'source',
+    folder = '',
     options: {
       offset?: number; limit?: number; sortBy?: string; sortAsc?: boolean; filter?: string;
       favoritesOnly?: boolean;
@@ -41,36 +42,26 @@ export class PhotoService {
     );
   }
 
-  getInfo(filename: string, folder = 'source'): Observable<PhotoInfo> {
+  getInfo(filename: string, folder = ''): Observable<PhotoInfo> {
     return this.http.get<PhotoInfo>(`/api/photos/${encodeURIComponent(filename)}/info`, { params: { folder } });
   }
 
-  getImageUrl(filename: string, folder = 'source'): string {
-    return `/api/photos/${encodeURIComponent(filename)}/image?folder=${folder}`;
+  getImageUrl(filename: string, folder = ''): string {
+    const rel = folder ? `${folder}/${filename}` : filename;
+    return '/api/photos/' + rel.split('/').map(encodeURIComponent).join('/');
   }
 
-  getThumbnailUrl(filename: string, folder = 'source'): string {
-    return `/api/photos/${encodeURIComponent(filename)}/thumbnail?folder=${folder}`;
+  getThumbnailUrl(filename: string, folder = ''): string {
+    const rel = folder
+      ? `${folder}/${this.thumbnailsName}/${filename}`
+      : `${this.thumbnailsName}/${filename}`;
+    return '/api/photos/' + rel.split('/').map(encodeURIComponent).join('/');
   }
 
-  moveToSelected(filename: string): Observable<MoveResponse> {
+  move(filename: string, fromFolder: string, toFolder: string): Observable<MoveResponse> {
     return this.http.post<MoveResponse>(
       `/api/photos/${encodeURIComponent(filename)}/move`,
-      { destination: 'selected' }
-    );
-  }
-
-  moveToDust(filename: string): Observable<MoveResponse> {
-    return this.http.post<MoveResponse>(
-      `/api/photos/${encodeURIComponent(filename)}/move`,
-      { destination: 'dust' }
-    );
-  }
-
-  moveToSource(filename: string, fromFolder: string): Observable<MoveResponse> {
-    return this.http.post<MoveResponse>(
-      `/api/photos/${encodeURIComponent(filename)}/move`,
-      { destination: 'source', folder: fromFolder }
+      { folder: fromFolder, destination: toFolder }
     );
   }
 
@@ -94,8 +85,8 @@ export class PhotoService {
     return this.http.post<{ samplers: string[]; schedulers: string[] }>('/api/comfy/samplers', { comfy_url: comfyUrl });
   }
 
-  getConfig(): Observable<{ comfy_url: string; lmstudio_url: string; widgets: { gpu_monitor: boolean; comfy_queue: boolean } }> {
-    return this.http.get<{ comfy_url: string; lmstudio_url: string; widgets: { gpu_monitor: boolean; comfy_queue: boolean } }>('/api/config');
+  getConfig(): Observable<{ comfy_url: string; lmstudio_url: string; widgets: { gpu_monitor: boolean; comfy_queue: boolean }; selected_name: string; dust_name: string; thumbnails_name: string; root_name: string }> {
+    return this.http.get<{ comfy_url: string; lmstudio_url: string; widgets: { gpu_monitor: boolean; comfy_queue: boolean }; selected_name: string; dust_name: string; thumbnails_name: string; root_name: string }>('/api/config');
   }
 
   setMetricsPaused(paused: boolean, clientId: string): Observable<{ ok: boolean }> {
@@ -114,8 +105,8 @@ export class PhotoService {
     return this.http.post<any>('/api/tools/run', { name, filename, folder });
   }
 
-  refresh(): Observable<{ ok: boolean }> {
-    return this.http.post<{ ok: boolean }>('/api/refresh', {});
+  refresh(folder = ''): Observable<{ ok: boolean }> {
+    return this.http.post<{ ok: boolean }>('/api/refresh', { folder });
   }
 
   unloadLmStudio(lmstudioUrl: string): Observable<{ ok: boolean }> {
@@ -144,23 +135,15 @@ export class PhotoService {
   }
 
   downloadFavorites(folder: string): void {
-    window.location.href = `/api/favorites/download?folder=${folder}`;
+    window.location.href = `/api/favorites/download?folder=${encodeURIComponent(folder)}`;
   }
 
-  getFileTypes(): Observable<{ types: string[] }> {
-    return this.http.get<{ types: string[] }>('/api/file-types');
+  getFileTypes(folder = ''): Observable<{ types: string[] }> {
+    return this.http.get<{ types: string[] }>('/api/file-types', { params: { folder } });
   }
 
   listFolders(): Observable<{ folders: string[]; root_name: string; current: string | null; comfy_output: string | null; comfy_output_name: string | null; comfy_output_active: boolean; selected_name: string; dust_name: string }> {
     return this.http.get<{ folders: string[]; root_name: string; current: string | null; comfy_output: string | null; comfy_output_name: string | null; comfy_output_active: boolean; selected_name: string; dust_name: string }>('/api/folders');
-  }
-
-  changeFolder(folder: string): Observable<{ ok: boolean; source_name: string }> {
-    return this.http.post<{ ok: boolean; source_name: string }>('/api/change-folder', { folder });
-  }
-
-  changeToComfyOutput(): Observable<{ ok: boolean; source_name: string }> {
-    return this.http.post<{ ok: boolean; source_name: string }>('/api/change-folder', { use_comfy_output: true });
   }
 
   sendToComfy(comfyUrl: string, prompt: object): Observable<any> {
