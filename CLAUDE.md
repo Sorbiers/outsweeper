@@ -5,6 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Workflow Rules
 
 - **NEVER commit without explicit user approval.** Always show what will be committed and wait for the user to say "commit" or otherwise explicitly approve before running `git commit`.
+- **Flag naming issues before implementing.** If a prompt contains a word or name that is clearly wrong, a typo that changes meaning, or conflicts with a strong established convention (e.g. "Localize" when "Locate" is the standard term), say so in one line before implementing. Do not second-guess intent — only flag obvious slips.
 
 ## Project Overview
 
