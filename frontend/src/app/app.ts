@@ -62,7 +62,7 @@ export class App implements OnInit, OnDestroy {
   // Pagination
   totalPhotos = 0;
   pageOffset = 0;
-  pageSize = 50;
+  pageSize = 0;
   stripCols = 1;
 
   // Filter
