@@ -3,6 +3,8 @@ export interface PhotoListItem {
   modified: string;
   size: number;
   size_human: string;
+  width?: number;
+  height?: number;
   favorite?: boolean;
   loaded?: boolean;
 }

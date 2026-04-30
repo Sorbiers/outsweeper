@@ -499,12 +499,21 @@ def create_app(root_dir, source, config, selected_name, dust_name,
                 if favorites_only and not st['index_cache'].get(f.name, {}).get('favorite', False):
                     continue
 
+                cache_entry = st['index_cache'].get(f.name, {})
+                if need_dims:
+                    photo_w, photo_h = w, h
+                else:
+                    photo_w = cache_entry.get('width')
+                    photo_h = cache_entry.get('height')
+
                 photos.append({
                     'filename':  f.name,
                     'modified':  datetime.fromtimestamp(stat.st_mtime).isoformat(),
                     'size':      stat.st_size,
                     'size_human': human_size(stat.st_size),
-                    'favorite':  st['index_cache'].get(f.name, {}).get('favorite', False),
+                    'favorite':  cache_entry.get('favorite', False),
+                    'width':     photo_w,
+                    'height':    photo_h,
                 })
 
         if sort_by == 'modified':

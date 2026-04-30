@@ -82,6 +82,10 @@ export class PreviewPanel implements OnChanges, OnDestroy {
     return this.info ? this.photoService.getImageUrl(this.info.filename, this.folder) : null;
   }
 
+  get thumbnailUrl(): string | null {
+    return this.info ? this.photoService.getThumbnailUrl(this.info.filename, this.folder) : null;
+  }
+
   setFit() {
     this.disposeSphere();
     this.zoomMode = 'fit';
