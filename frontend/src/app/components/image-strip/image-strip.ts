@@ -6,7 +6,7 @@ import {
   Input,
   OnDestroy,
   Output,
-  inject
+  inject,
 } from '@angular/core';
 import { MatIconButton } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
@@ -25,7 +25,15 @@ const THUMB_BORDER = 4; // 2px border * 2 sides
   imports: [MatIconButton, MatIconModule, MatProgressSpinnerModule],
 })
 export class ImageStrip implements AfterViewInit, OnDestroy {
-  @Input() photos: PhotoListItem[] = [];
+  rev = 0;
+  private _photos: PhotoListItem[] = [];
+  public get photos(): PhotoListItem[] {
+    return this._photos;
+  }
+  @Input() set photos(value: PhotoListItem[]) {
+    this.rev++;
+    this._photos = value;
+  }
   @Input() currentIndex = 0;
   @Input() pageOffset = 0;
   @Input() totalPhotos = 0;
@@ -35,10 +43,13 @@ export class ImageStrip implements AfterViewInit, OnDestroy {
   @Output() photoSelected = new EventEmitter<number>();
   @Output() pageChange = new EventEmitter<number>();
   @Output() pageSizeChange = new EventEmitter<number>();
+  @Output() colsChange = new EventEmitter<number>();
   @Output() favoriteToggled = new EventEmitter<string>();
 
   thumbSize = 100;
   pageCapacity = 0; // 0 means not yet measured
+  rows = 1;
+  private currentCols = 0;
 
   private photoService = inject(PhotoService);
   private hostEl = inject(ElementRef);
@@ -99,13 +110,27 @@ export class ImageStrip implements AfterViewInit, OnDestroy {
     if (h === 0 || w === 0) return;
 
     const availableHeight = h - PAGINATOR_HEIGHT;
-    this.thumbSize = Math.max(40, availableHeight - THUMB_GAP * 2 - THUMB_BORDER);
-    const cellSize = this.thumbSize + THUMB_GAP + THUMB_BORDER;
-    const newCapacity = Math.max(1, Math.floor((w - THUMB_GAP) / cellSize));
+    this.rows = Math.max(1, Math.ceil(h / 300));
+    this.thumbSize = Math.max(
+      40,
+      Math.floor(availableHeight / this.rows) - THUMB_GAP * 2 - THUMB_BORDER,
+    );
 
+    const cellSize = this.thumbSize + THUMB_GAP + THUMB_BORDER;
+    const cols = Math.max(1, Math.floor((w - THUMB_GAP) / cellSize));
+    const newCapacity = cols * this.rows;
+
+    if (cols !== this.currentCols) {
+      this.currentCols = cols;
+      this.colsChange.emit(cols);
+    }
     if (newCapacity !== this.pageCapacity) {
       this.pageCapacity = newCapacity;
       this.pageSizeChange.emit(newCapacity);
     }
+  }
+
+  isImageReady(img: HTMLImageElement): boolean {
+    return img.complete && img.naturalWidth > 0;
   }
 }

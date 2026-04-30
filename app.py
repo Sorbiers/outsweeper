@@ -550,7 +550,7 @@ def create_app(root_dir, source, config, selected_name, dust_name,
         filepath = resolve_folder() / filename
         if not filepath.is_file():
             return jsonify({'error': 'not found'}), 404
-        return send_file(filepath)
+        return send_file(filepath, max_age=3600)
 
     @app.route('/api/photos/<path:filename>/thumbnail')
     def serve_thumbnail(filename):
@@ -569,9 +569,9 @@ def create_app(root_dir, source, config, selected_name, dust_name,
                 img = img.convert('RGB')
                 img.save(thumb_path, 'JPEG', quality=80)
             except Exception:
-                return send_file(filepath)
+                return send_file(filepath, max_age=3600)
 
-        return send_file(thumb_path, mimetype='image/jpeg')
+        return send_file(thumb_path, mimetype='image/jpeg', max_age=86400)
 
     @app.route('/api/photos/<path:filename>/move', methods=['POST'])
     def move_photo(filename):

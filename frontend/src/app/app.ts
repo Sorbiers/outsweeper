@@ -63,6 +63,7 @@ export class App implements OnInit, OnDestroy {
   totalPhotos = 0;
   pageOffset = 0;
   pageSize = 50;
+  stripCols = 1;
 
   // Filter
   filterText = '';
@@ -323,7 +324,7 @@ export class App implements OnInit, OnDestroy {
   private onDrag(e: MouseEvent): void {
     if (this.dragging === 'h') {
       const pct = (e.clientY / window.innerHeight) * 100;
-      this.stripHeight = Math.min(50, Math.max(10, pct));
+      this.stripHeight = Math.min(80, Math.max(10, pct));
     } else if (this.dragging === 'v') {
       const pct = (e.clientX / window.innerWidth) * 100;
       this.previewWidth = Math.min(80, Math.max(20, pct));
@@ -381,6 +382,16 @@ export class App implements OnInit, OnDestroy {
         break;
       case 'toggleSelection': this.toggleFavoriteCurrent(); break;
       case 'selectAll':       this.toggleAllFavorites();    break;
+      case 'rowUp': {
+        const upTarget = this.currentIndex - this.stripCols;
+        if (this.pageSize > this.stripCols && upTarget >= 0) this.selectPhoto(upTarget);
+        break;
+      }
+      case 'rowDown': {
+        const downTarget = this.currentIndex + this.stripCols;
+        if (this.pageSize > this.stripCols && downTarget < this.totalPhotos) this.selectPhoto(downTarget);
+        break;
+      }
     }
   }
 

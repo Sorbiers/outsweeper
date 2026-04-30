@@ -59,7 +59,7 @@ export class InfoPanel implements OnInit {
       maxWidth: '700px',
     }).afterClosed().subscribe(result => {
       if (result?.action === 'generate') {
-        const workflow = this.info?.png_metadata?.['prompt']
+        const workflow = this.info?.png_metadata['prompt']
           ? JSON.parse(this.info.png_metadata['prompt'])
           : JSON.parse(JSON.stringify(DEFAULT_FLUX_WORKFLOW));
         this.dialog.open(GenerateDialog, {
@@ -72,7 +72,7 @@ export class InfoPanel implements OnInit {
   }
 
   openGenerate(): void {
-    if (!this.info?.png_metadata?.['prompt']) return;
+    if (!this.info?.png_metadata['prompt']) return;
     const workflow = JSON.parse(this.info.png_metadata['prompt']);
     this.dialog.open(GenerateDialog, {
       data: { workflow },

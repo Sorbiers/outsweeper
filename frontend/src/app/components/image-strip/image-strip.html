@@ -1,4 +1,4 @@
-<div class="thumbs-container">
+<div class="thumbs-container" [class.multi-row]="rows > 1">
   @for (photo of photos; track photo.filename; let i = $index) {
     <div
       class="thumb"
@@ -11,9 +11,10 @@
         <mat-spinner diameter="24"></mat-spinner>
       }
       <img
+        #imgRef
         [src]="getThumbnailUrl(photo.filename)"
         [alt]="photo.filename"
-        [class.visible]="photo.loaded"
+        [class.visible]="photo.loaded || isImageReady(imgRef)"
         (load)="onImageLoad(photo)" />
       <div class="selection-overlay" (click)="onFavoriteClick($event, photo.filename)">
         <mat-icon>{{ isFavorite(photo.filename) ? 'favorite' : 'favorite_border' }}</mat-icon>
