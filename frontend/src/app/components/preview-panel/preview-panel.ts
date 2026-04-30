@@ -30,8 +30,30 @@ const SPHERE_FOV_DEFAULT = 75;
   imports: [MatButtonModule, MatProgressSpinnerModule],
 })
 export class PreviewPanel implements OnChanges, OnDestroy {
-  @Input() info: PhotoInfo | null = null;
-  @Input() folder = 'source';
+
+  private _info: PhotoInfo | null = null;
+  public get info(): PhotoInfo | null {
+    return this._info;
+  }
+  @Input() public set info(value: PhotoInfo | null) {
+    let loaded = false;
+    if (value && this._info && value.filename === this._info.filename) {
+      loaded = this._info.loaded ?? false; // Preserve loaded state if same photo
+    }
+    this._info = value;
+    this._info!.loaded = loaded; // Preserve loaded state when info object is replaced
+  }
+
+  private _folder = 'source';
+  public get folder() {
+    return this._folder;
+  }
+  @Input() public set folder(value) {
+    if (value !== this._folder && this.info) {
+      this.info.loaded = false;
+    }
+    this._folder = value;
+  }
   @ViewChild('container') containerRef!: ElementRef<HTMLDivElement>;
   @ViewChild('img') imgRef!: ElementRef<HTMLImageElement>;
 
@@ -341,4 +363,5 @@ export class PreviewPanel implements OnChanges, OnDestroy {
       info.loaded = true;
     }
   }
+
 }
