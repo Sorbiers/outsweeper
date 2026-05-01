@@ -47,7 +47,7 @@ export class KeyboardService {
         else if (event.key === 'ArrowDown') action = 'rowDown';
         else if (event.key === 'Home') action = 'first';
         else if (event.key === 'End') action = 'last';
-        else if (event.key === '+' || event.key === '=') action = 'select';
+        else if (event.key === '+') action = 'select';
         else if (event.key === 'Delete') action = 'dust';
         else if (event.key === 'PageDown' && event.shiftKey) action = 'pageForward10';
         else if (event.key === 'PageUp' && event.shiftKey) action = 'pageBackward10';
@@ -56,9 +56,7 @@ export class KeyboardService {
         else if (event.key === 'z' && event.ctrlKey) action = 'undo';
         else if (event.key === ' ') action = 'toggleSelection';
         else if (event.key === 'a' && event.ctrlKey) action = 'selectAll';
-        else if (event.key === '1' && event.ctrlKey) action = 'selectSourceFolder';
-        else if (event.key === '2' && event.ctrlKey) action = 'selectSelectedFolder';
-        else if (event.key === '3' && event.ctrlKey) action = 'selectDustFolder';
+        else if (event.key === '=') action = 'selectSourceFolder';
 
         if (action) {
           event.preventDefault();
