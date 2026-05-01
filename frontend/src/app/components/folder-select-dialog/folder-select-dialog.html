@@ -4,9 +4,11 @@
   <!-- Collection picker -->
   <div class="collection-row">
     @for (c of collections; track c.value) {
-      <button mat-stroked-button
-              [class.active-collection]="isActiveCollection(c)"
-              (click)="selectCollection(c)">
+      <button
+        mat-stroked-button
+        [class.active-collection]="isActiveCollection(c)"
+        (click)="selectCollection(c)"
+      >
         <mat-icon>{{ c.icon }}</mat-icon> {{ c.label }}
       </button>
     }
@@ -21,9 +23,11 @@
     </div>
   } @else {
     @if (comfyOutputPath) {
-      <div class="folder-item comfy-output-item"
-           [class.is-selected]="selectedSubfolder === '__comfy_output'"
-           (click)="selectComfyOutput()">
+      <div
+        class="folder-item comfy-output-item"
+        [class.is-selected]="selectedSubfolder === '__comfy_output'"
+        (click)="selectComfyOutput()"
+      >
         <mat-icon>output</mat-icon>
         <span class="folder-label">ComfyUI Output — {{ comfyOutputName }}</span>
       </div>
@@ -31,9 +35,14 @@
     }
     <div class="folder-list">
       @for (folder of folders; track folder) {
-        <div class="folder-item"
-             [class.is-selected]="selectedSubfolder === folder && selectedSubfolder !== '__comfy_output'"
-             (click)="selectSubfolder(folder)">
+        <div
+          class="folder-item"
+          #folderItem
+          [class.is-selected]="
+            selectedSubfolder === folder && selectedSubfolder !== '__comfy_output'
+          "
+          (click)="selectSubfolder(folder)"
+        >
           <mat-icon>{{ folder === '' ? 'folder_special' : 'folder' }}</mat-icon>
           <span class="folder-label">{{ displayName(folder) }}</span>
         </div>
@@ -44,7 +53,5 @@
 
 <mat-dialog-actions align="end">
   <button mat-button mat-dialog-close>Cancel</button>
-  <button mat-flat-button (click)="confirm()" [disabled]="confirmDisabled">
-    Navigate
-  </button>
+  <button mat-flat-button (click)="confirm()" [disabled]="confirmDisabled">Navigate</button>
 </mat-dialog-actions>

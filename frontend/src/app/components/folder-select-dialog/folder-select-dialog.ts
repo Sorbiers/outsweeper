@@ -1,9 +1,17 @@
-import { Component, inject, OnInit } from '@angular/core';
-import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
+import {
+  Component,
+  ElementRef,
+  HostListener,
+  inject,
+  OnInit,
+  QueryList,
+  ViewChildren,
+} from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
+import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
+import { MatDividerModule } from '@angular/material/divider';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { MatDividerModule } from '@angular/material/divider';
 import { PhotoService } from '../../services/photo.service';
 
 export type FolderSelectResult = { kind: 'navigate'; path: string };
@@ -14,11 +22,44 @@ export interface FolderSelectData {
 
 @Component({
   selector: 'pp-folder-select-dialog',
-  imports: [MatDialogModule, MatButtonModule, MatIconModule, MatProgressSpinnerModule, MatDividerModule],
+  imports: [
+    MatDialogModule,
+    MatButtonModule,
+    MatIconModule,
+    MatProgressSpinnerModule,
+    MatDividerModule,
+  ],
   templateUrl: './folder-select-dialog.html',
   styleUrl: './folder-select-dialog.scss',
 })
 export class FolderSelectDialog implements OnInit {
+  @ViewChildren('folderItem')
+  folderItems!: QueryList<ElementRef<HTMLDivElement>>;
+
+  @HostListener('keydown', ['$event'])
+  onKeydown(event: KeyboardEvent): void {
+    event.stopPropagation();
+    event.preventDefault();
+    if (event.key === 'Enter' && !this.confirmDisabled) {
+      this.confirm();
+    } else if (event.key === 'Escape') {
+      this.dialogRef.close();
+    } else if (event.key === 'ArrowDown') {
+      if (this.folders.length > 1) {
+        this.selectedSubfolder = this.moveSelection(this.folders, this.selectedSubfolder, 1);
+        this.scrollSelectedIntoView();
+      }
+    } else if (event.key === 'ArrowUp') {
+      if (this.folders.length > 1) {
+        this.selectedSubfolder = this.moveSelection(this.folders, this.selectedSubfolder, -1);
+        this.scrollSelectedIntoView();
+      }
+    } else if (event.key === 'ArrowRight') {
+      this.moveCollectionSelection(1);
+    } else if (event.key === 'ArrowLeft') {
+      this.moveCollectionSelection(-1);
+    }
+  }
   private dialogRef = inject(MatDialogRef<FolderSelectDialog>);
   private photoService = inject(PhotoService);
   private data: FolderSelectData = inject(MAT_DIALOG_DATA);
@@ -35,42 +76,44 @@ export class FolderSelectDialog implements OnInit {
   selectedCollection = '';
 
   readonly collections = [
-    { value: '',    label: 'Working', icon: 'folder_open'  },
+    { value: '', label: 'Working', icon: 'folder_open' },
     { value: 'sel', label: 'Selected', icon: 'check_circle' },
-    { value: 'dust', label: 'Dust',    icon: 'delete'        },
+    { value: 'dust', label: 'Dust', icon: 'delete' },
   ];
 
   ngOnInit(): void {
     this.decompose(this.data.currentPath);
     this.photoService.listFolders().subscribe({
-      next: res => {
-        this.rootName        = res.root_name;
-        this.selectedName    = res.selected_name ?? '__selected';
-        this.dustName        = res.dust_name     ?? '__dust';
-        this.folders         = ['', ...res.folders];
+      next: (res) => {
+        this.rootName = res.root_name;
+        this.selectedName = res.selected_name ?? '__selected';
+        this.dustName = res.dust_name ?? '__dust';
+        this.folders = ['', ...res.folders];
         this.comfyOutputPath = res.comfy_output;
         this.comfyOutputName = res.comfy_output_name;
         this.loading = false;
         // re-decompose now that we have real names
         this.decompose(this.data.currentPath);
       },
-      error: () => { this.loading = false; },
+      error: () => {
+        this.loading = false;
+      },
     });
   }
 
   private decompose(path: string): void {
     if (!path) {
-      this.selectedSubfolder  = '';
+      this.selectedSubfolder = '';
       this.selectedCollection = '';
       return;
     }
     const last = path.split('/').at(-1)!;
     if (last === this.selectedName || last === this.dustName) {
       const slash = path.lastIndexOf('/');
-      this.selectedSubfolder  = slash === -1 ? '' : path.slice(0, slash);
+      this.selectedSubfolder = slash === -1 ? '' : path.slice(0, slash);
       this.selectedCollection = last;
     } else {
-      this.selectedSubfolder  = path;
+      this.selectedSubfolder = path;
       this.selectedCollection = '';
     }
   }
@@ -89,7 +132,7 @@ export class FolderSelectDialog implements OnInit {
   }
 
   collectionKey(c: { value: string }): string {
-    if (c.value === 'sel')  return this.selectedName;
+    if (c.value === 'sel') return this.selectedName;
     if (c.value === 'dust') return this.dustName;
     return '';
   }
@@ -107,8 +150,8 @@ export class FolderSelectDialog implements OnInit {
   }
 
   selectComfyOutput(): void {
-    this.selectedSubfolder  = '__comfy_output';
-    this.selectedCollection = '';
+    this.selectedSubfolder = '__comfy_output';
+  //  this.selectedCollection = '';
   }
 
   displayName(folder: string): string {
@@ -117,5 +160,34 @@ export class FolderSelectDialog implements OnInit {
 
   confirm(): void {
     this.dialogRef.close({ kind: 'navigate', path: this.resultPath } satisfies FolderSelectResult);
+  }
+
+  private moveSelection(list: string[], current: string, delta: number): string {
+    if (list.length === 0) return '';
+    const idx = list.indexOf(current);
+    if (idx === -1) return list[0];
+    const newIdx = idx + delta;
+    if (newIdx < 0) return list[list.length - 1];
+    if (newIdx >= list.length) return list[0];
+    return list[newIdx];
+  }
+
+  moveCollectionSelection(delta: number): void {
+    this.selectedCollection = this.moveSelection(
+      this.collections.map((c) => this.collectionKey(c)),
+      this.selectedCollection,
+      delta,
+    );
+  }
+
+  private scrollSelectedIntoView() {
+    queueMicrotask(() => {
+      const index = this.folders.indexOf(this.selectedSubfolder);
+
+      this.folderItems.get(index)?.nativeElement.scrollIntoView({
+        behavior: 'smooth',
+        block: 'nearest',
+      });
+    });
   }
 }

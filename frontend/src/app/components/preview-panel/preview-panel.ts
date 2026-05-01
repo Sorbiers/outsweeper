@@ -30,7 +30,6 @@ const SPHERE_FOV_DEFAULT = 75;
   imports: [MatButtonModule, MatProgressSpinnerModule],
 })
 export class PreviewPanel implements OnChanges, OnDestroy {
-
   private _info: PhotoInfo | null = null;
   public get info(): PhotoInfo | null {
     return this._info;
@@ -41,7 +40,9 @@ export class PreviewPanel implements OnChanges, OnDestroy {
       loaded = this._info.loaded ?? false; // Preserve loaded state if same photo
     }
     this._info = value;
-    this._info!.loaded = loaded; // Preserve loaded state when info object is replaced
+    if (this._info) {
+      this._info.loaded = loaded;
+    }
   }
 
   private _folder = '';
@@ -363,5 +364,4 @@ export class PreviewPanel implements OnChanges, OnDestroy {
       info.loaded = true;
     }
   }
-
 }

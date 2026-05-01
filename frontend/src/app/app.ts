@@ -1,34 +1,58 @@
-import { Component, OnInit, OnDestroy, signal, inject } from '@angular/core';
-import { Subject, Subscription } from 'rxjs';
-import { debounceTime, distinctUntilChanged, finalize } from 'rxjs/operators';
-import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
+import { Component, inject, OnDestroy, OnInit, signal } from '@angular/core';
 import { MatFabButton, MatIconButton } from '@angular/material/button';
+import { MatDialog } from '@angular/material/dialog';
+import { MatDividerModule } from '@angular/material/divider';
 import { MatIconModule } from '@angular/material/icon';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { MatDividerModule } from '@angular/material/divider';
+import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { MatDialog } from '@angular/material/dialog';
-import { PhotoService } from './services/photo.service';
-import { KeyboardService, PhotoAction } from './services/keyboard.service';
-import { PhotoListItem, PhotoInfo } from './models/photo.model';
+import { Subject, Subscription } from 'rxjs';
+import { debounceTime, distinctUntilChanged, finalize } from 'rxjs/operators';
+import { BatchDialog } from './components/batch-dialog/batch-dialog';
+import { ComfyQueueWidget } from './components/comfy-queue/comfy-queue';
+import {
+  ActiveFilters,
+  emptyFilters,
+  FilterDialog,
+  hasActiveFilters,
+} from './components/filter-dialog/filter-dialog';
+import {
+  FolderSelectDialog,
+  FolderSelectResult,
+} from './components/folder-select-dialog/folder-select-dialog';
+import {
+  DEFAULT_FLUX_WORKFLOW,
+  GenerateDialog,
+} from './components/generate-dialog/generate-dialog';
+import { GpuMonitorWidget } from './components/gpu-monitor/gpu-monitor';
 import { ImageStrip } from './components/image-strip/image-strip';
 import { InfoPanel } from './components/info-panel/info-panel';
 import { PreviewPanel } from './components/preview-panel/preview-panel';
-import { GenerateDialog, DEFAULT_FLUX_WORKFLOW } from './components/generate-dialog/generate-dialog';
-import { FolderSelectDialog, FolderSelectResult } from './components/folder-select-dialog/folder-select-dialog';
-import { FilterDialog, ActiveFilters, emptyFilters, hasActiveFilters } from './components/filter-dialog/filter-dialog';
-import { BatchDialog } from './components/batch-dialog/batch-dialog';
-import { GpuMonitorWidget } from './components/gpu-monitor/gpu-monitor';
-import { ComfyQueueWidget } from './components/comfy-queue/comfy-queue';
 import { SystemMetrics } from './models/metrics.model';
-import { ConnectionStateService } from './services/connection-state.service';
+import { PhotoInfo, PhotoListItem } from './models/photo.model';
 import { ComfyQueueService } from './services/comfy-queue.service';
-
+import { ConnectionStateService } from './services/connection-state.service';
+import { KeyboardService, PhotoAction } from './services/keyboard.service';
+import { PhotoService } from './services/photo.service';
 
 @Component({
   selector: 'pp-root',
-  imports: [MatSnackBarModule, MatFabButton, MatIconButton, MatIconModule, MatMenuModule, MatProgressSpinnerModule, MatDividerModule, MatTooltipModule, ImageStrip, InfoPanel, PreviewPanel, GpuMonitorWidget, ComfyQueueWidget],
+  imports: [
+    MatSnackBarModule,
+    MatFabButton,
+    MatIconButton,
+    MatIconModule,
+    MatMenuModule,
+    MatProgressSpinnerModule,
+    MatDividerModule,
+    MatTooltipModule,
+    ImageStrip,
+    InfoPanel,
+    PreviewPanel,
+    GpuMonitorWidget,
+    ComfyQueueWidget,
+  ],
   templateUrl: './app.html',
   styleUrl: './app.scss',
 })
@@ -70,12 +94,16 @@ export class App implements OnInit, OnDestroy {
   // Filter
   filterText = '';
   activeFilters: ActiveFilters = emptyFilters();
-  get hasActiveFilters(): boolean { return hasActiveFilters(this.activeFilters); }
+  get hasActiveFilters(): boolean {
+    return hasActiveFilters(this.activeFilters);
+  }
   private filterSubject = new Subject<string>();
 
   // Favorites
   favorites = new Set<string>();
-  get favoriteCount(): number { return this.favorites.size; }
+  get favoriteCount(): number {
+    return this.favorites.size;
+  }
   showFavoritesOnly = false;
 
   // Resizable layout percentages
@@ -89,7 +117,7 @@ export class App implements OnInit, OnDestroy {
     if (!this.currentPath) return 'source';
     const last = this.currentPath.split('/').at(-1)!;
     if (last === this.selectedName) return 'selected';
-    if (last === this.dustName)     return 'dust';
+    if (last === this.dustName) return 'dust';
     return 'sub';
   }
 
@@ -100,28 +128,29 @@ export class App implements OnInit, OnDestroy {
     if (savedAsc !== null) this.sortAsc = savedAsc === 'true';
 
     this.keyboard.init();
-    this.sub = this.keyboard.action$.subscribe(action => this.handleAction(action));
+    this.sub = this.keyboard.action$.subscribe((action) => this.handleAction(action));
     this.eventSource = new EventSource('/api/events');
     this.eventSource.onmessage = (e) => {
       if (e.data === 'files_changed') this.pendingRefresh = true;
       else if (e.data.startsWith('client_id:')) this.sseClientId = e.data.slice(10);
       else if (e.data.startsWith('metrics:')) this.metrics.set(JSON.parse(e.data.slice(8)));
-      else if (e.data.startsWith('comfy_queue:')) this.comfyQueue.status.set(JSON.parse(e.data.slice(12)));
+      else if (e.data.startsWith('comfy_queue:'))
+        this.comfyQueue.status.set(JSON.parse(e.data.slice(12)));
     };
     this.loadPhotos();
     this.loadFavorites();
-    this.photoService.getConfig().subscribe(cfg => {
-      if (!this.connState.comfy.url)     this.connState.comfy.url     = cfg.comfy_url;
-      if (!this.connState.lmstudio.url)  this.connState.lmstudio.url  = cfg.lmstudio_url;
+    this.photoService.getConfig().subscribe((cfg) => {
+      if (!this.connState.comfy.url) this.connState.comfy.url = cfg.comfy_url;
+      if (!this.connState.lmstudio.url) this.connState.lmstudio.url = cfg.lmstudio_url;
       if (cfg.widgets?.comfy_queue) this.comfyQueueEnabled.set(true);
-      if (cfg.selected_name)   this.selectedName                  = cfg.selected_name;
-      if (cfg.dust_name)       this.dustName                      = cfg.dust_name;
-      if (cfg.thumbnails_name) this.photoService.thumbnailsName   = cfg.thumbnails_name;
+      if (cfg.selected_name) this.selectedName = cfg.selected_name;
+      if (cfg.dust_name) this.dustName = cfg.dust_name;
+      if (cfg.thumbnails_name) this.photoService.thumbnailsName = cfg.thumbnails_name;
     });
 
     this.filterSub = this.filterSubject
       .pipe(debounceTime(300), distinctUntilChanged())
-      .subscribe(text => {
+      .subscribe((text) => {
         this.filterText = text;
         this.pageOffset = 0;
         this.currentIndex = 0;
@@ -158,7 +187,7 @@ export class App implements OnInit, OnDestroy {
         heightMax: this.activeFilters.heightMax,
       })
       .pipe(finalize(() => (this.loading = false)))
-      .subscribe(res => {
+      .subscribe((res) => {
         this.photos = res.photos;
         this.totalPhotos = res.total;
         this.pageOffset = res.offset;
@@ -179,14 +208,17 @@ export class App implements OnInit, OnDestroy {
   }
 
   private loadFavorites(): void {
-    this.photoService.listPhotos(this.currentPath, { favoritesOnly: true, limit: 999999, offset: 0 })
-      .subscribe(res => { this.favorites = new Set(res.photos.map(p => p.filename)); });
+    this.photoService
+      .listPhotos(this.currentPath, { favoritesOnly: true, limit: 999999, offset: 0 })
+      .subscribe((res) => {
+        this.favorites = new Set(res.photos.map((p) => p.filename));
+      });
   }
 
   private fetchInfo(relativeIndex: number): void {
     const photo = this.photos[relativeIndex];
     if (photo) {
-      this.photoService.getInfo(photo.filename, this.currentPath).subscribe(info => {
+      this.photoService.getInfo(photo.filename, this.currentPath).subscribe((info) => {
         this.currentInfo = info;
       });
     }
@@ -236,13 +268,17 @@ export class App implements OnInit, OnDestroy {
   }
 
   openFolderDialog(): void {
-    this.dialog.open(FolderSelectDialog, {
-      width: '420px', maxHeight: '80vh',
-      data: { currentPath: this.currentPath },
-    }).afterClosed().subscribe((result: FolderSelectResult | undefined) => {
-      if (!result) return;
-      this.switchFolder(result.path);
-    });
+    this.dialog
+      .open(FolderSelectDialog, {
+        width: '420px',
+        maxHeight: '80vh',
+        data: { currentPath: this.currentPath },
+      })
+      .afterClosed()
+      .subscribe((result: FolderSelectResult | undefined) => {
+        if (!result) return;
+        this.switchFolder(result.path);
+      });
   }
 
   refresh(): void {
@@ -255,17 +291,20 @@ export class App implements OnInit, OnDestroy {
   }
 
   openFilterDialog(): void {
-    this.photoService.getFileTypes(this.currentPath).subscribe(res => {
-      this.dialog.open(FilterDialog, {
-        width: '380px',
-        data: { current: this.activeFilters, availableTypes: res.types },
-      }).afterClosed().subscribe((result: ActiveFilters | undefined) => {
-        if (result === undefined) return;
-        this.activeFilters = result;
-        this.pageOffset = 0;
-        this.currentIndex = 0;
-        this.loadPhotos();
-      });
+    this.photoService.getFileTypes(this.currentPath).subscribe((res) => {
+      this.dialog
+        .open(FilterDialog, {
+          width: '380px',
+          data: { current: this.activeFilters, availableTypes: res.types },
+        })
+        .afterClosed()
+        .subscribe((result: ActiveFilters | undefined) => {
+          if (result === undefined) return;
+          this.activeFilters = result;
+          this.pageOffset = 0;
+          this.currentIndex = 0;
+          this.loadPhotos();
+        });
     });
   }
 
@@ -344,7 +383,9 @@ export class App implements OnInit, OnDestroy {
       }
       case 'pageForward10': {
         const next10 = this.pageOffset + this.pageSize * 10;
-        this.onPageChange(Math.min(next10, Math.floor((this.totalPhotos - 1) / this.pageSize) * this.pageSize));
+        this.onPageChange(
+          Math.min(next10, Math.floor((this.totalPhotos - 1) / this.pageSize) * this.pageSize),
+        );
         break;
       }
       case 'pageBackward10': {
@@ -353,16 +394,22 @@ export class App implements OnInit, OnDestroy {
         break;
       }
       case 'select':
-        if (this.folderType === 'source' || this.folderType === 'sub') this.moveCurrentPhoto('selected');
+        if (this.folderType === 'source' || this.folderType === 'sub')
+          this.moveCurrentPhoto('selected');
         break;
       case 'dust':
-        if (this.folderType === 'source' || this.folderType === 'sub') this.moveCurrentPhoto('dust');
+        if (this.folderType === 'source' || this.folderType === 'sub')
+          this.moveCurrentPhoto('dust');
         break;
       case 'undo':
         if (this.folderType === 'source' || this.folderType === 'sub') this.undoLast();
         break;
-      case 'toggleSelection': this.toggleFavoriteCurrent(); break;
-      case 'selectAll':       this.toggleAllFavorites();    break;
+      case 'toggleSelection':
+        this.toggleFavoriteCurrent();
+        break;
+      case 'selectAll':
+        this.toggleAllFavorites();
+        break;
       case 'rowUp': {
         const upTarget = this.currentIndex - this.stripCols;
         if (this.pageSize > this.stripCols && upTarget >= 0) this.selectPhoto(upTarget);
@@ -370,7 +417,13 @@ export class App implements OnInit, OnDestroy {
       }
       case 'rowDown': {
         const downTarget = this.currentIndex + this.stripCols;
-        if (this.pageSize > this.stripCols && downTarget < this.totalPhotos) this.selectPhoto(downTarget);
+        if (this.pageSize > this.stripCols && downTarget < this.totalPhotos)
+          this.selectPhoto(downTarget);
+        break;
+      }
+      case 'selectSourceFolder': {
+        console.log('Switching to source folder');
+        this.openFolderDialog();
         break;
       }
     }
@@ -391,9 +444,10 @@ export class App implements OnInit, OnDestroy {
       destPath = idx === -1 ? '' : this.currentPath.slice(0, idx);
     }
 
-    this.photoService.move(filename, this.currentPath, destPath).subscribe(res => {
+    this.photoService.move(filename, this.currentPath, destPath).subscribe((res) => {
       if (res.ok) {
-        const label = action === 'selected' ? 'Selected' : action === 'dust' ? 'Dusted' : 'Restored';
+        const label =
+          action === 'selected' ? 'Selected' : action === 'dust' ? 'Dusted' : 'Restored';
         this.snackBar
           .open(`${label}: ${filename}`, 'Undo', { duration: 3000 })
           .onAction()
@@ -422,7 +476,7 @@ export class App implements OnInit, OnDestroy {
   }
 
   private undoLast(): void {
-    this.photoService.undo().subscribe(res => {
+    this.photoService.undo().subscribe((res) => {
       if (res.ok) {
         this.snackBar.open(`Restored: ${res.filename}`, '', { duration: 2000 });
         this.loadPhotos();
@@ -435,17 +489,20 @@ export class App implements OnInit, OnDestroy {
   toggleFavorite(filename: string): void {
     const newState = !this.favorites.has(filename);
     const next = new Set(this.favorites);
-    if (newState) next.add(filename); else next.delete(filename);
+    if (newState) next.add(filename);
+    else next.delete(filename);
     this.favorites = next;
     this.photoService.toggleFavorite(filename, this.currentPath).subscribe({
-      next: res => {
+      next: (res) => {
         const confirmed = new Set(this.favorites);
-        if (res.favorite) confirmed.add(filename); else confirmed.delete(filename);
+        if (res.favorite) confirmed.add(filename);
+        else confirmed.delete(filename);
         this.favorites = confirmed;
       },
       error: () => {
         const rb = new Set(this.favorites);
-        if (newState) rb.delete(filename); else rb.add(filename);
+        if (newState) rb.delete(filename);
+        else rb.add(filename);
         this.favorites = rb;
       },
     });
@@ -453,8 +510,7 @@ export class App implements OnInit, OnDestroy {
 
   private toggleFavoriteCurrent(): void {
     const rel = this.currentIndex - this.pageOffset;
-    if (rel >= 0 && rel < this.photos.length)
-      this.toggleFavorite(this.photos[rel].filename);
+    if (rel >= 0 && rel < this.photos.length) this.toggleFavorite(this.photos[rel].filename);
   }
 
   toggleAllFavorites(): void {
@@ -463,20 +519,29 @@ export class App implements OnInit, OnDestroy {
       this.photoService.setFavorites(all, false, this.currentPath).subscribe();
       this.favorites = new Set();
     } else {
-      this.photoService.listPhotos(this.currentPath, {
-        offset: 0, limit: this.totalPhotos,
-        sortBy: this.sortBy, sortAsc: this.sortAsc, filter: this.filterText,
-        dateField: this.activeFilters.dateField,
-        dateFrom: this.activeFilters.dateFrom, dateTo: this.activeFilters.dateTo,
-        types: this.activeFilters.types,
-        sizeMin: this.activeFilters.sizeMin, sizeMax: this.activeFilters.sizeMax,
-        widthMin: this.activeFilters.widthMin, widthMax: this.activeFilters.widthMax,
-        heightMin: this.activeFilters.heightMin, heightMax: this.activeFilters.heightMax,
-      }).subscribe(res => {
-        const fns = res.photos.map(p => p.filename);
-        this.photoService.setFavorites(fns, true, this.currentPath).subscribe();
-        this.favorites = new Set(fns);
-      });
+      this.photoService
+        .listPhotos(this.currentPath, {
+          offset: 0,
+          limit: this.totalPhotos,
+          sortBy: this.sortBy,
+          sortAsc: this.sortAsc,
+          filter: this.filterText,
+          dateField: this.activeFilters.dateField,
+          dateFrom: this.activeFilters.dateFrom,
+          dateTo: this.activeFilters.dateTo,
+          types: this.activeFilters.types,
+          sizeMin: this.activeFilters.sizeMin,
+          sizeMax: this.activeFilters.sizeMax,
+          widthMin: this.activeFilters.widthMin,
+          widthMax: this.activeFilters.widthMax,
+          heightMin: this.activeFilters.heightMin,
+          heightMax: this.activeFilters.heightMax,
+        })
+        .subscribe((res) => {
+          const fns = res.photos.map((p) => p.filename);
+          this.photoService.setFavorites(fns, true, this.currentPath).subscribe();
+          this.favorites = new Set(fns);
+        });
     }
   }
 
@@ -498,13 +563,18 @@ export class App implements OnInit, OnDestroy {
   }
 
   openBatchDialog(operation: 'copy' | 'move'): void {
-    this.dialog.open(BatchDialog, {
-      width: '420px', maxHeight: '80vh',
-      data: { operation, filenames: [...this.favorites], sourceFolder: this.currentPath },
-    }).afterClosed().subscribe((result?: { ok: boolean }) => {
-      if (!result?.ok) return;
-      this.pageOffset = 0; this.currentIndex = 0;
-      this.loadPhotos();
-    });
+    this.dialog
+      .open(BatchDialog, {
+        width: '420px',
+        maxHeight: '80vh',
+        data: { operation, filenames: [...this.favorites], sourceFolder: this.currentPath },
+      })
+      .afterClosed()
+      .subscribe((result?: { ok: boolean }) => {
+        if (!result?.ok) return;
+        this.pageOffset = 0;
+        this.currentIndex = 0;
+        this.loadPhotos();
+      });
   }
 }
