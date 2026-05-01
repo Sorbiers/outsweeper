@@ -29,13 +29,12 @@ from PIL import Image
 from PIL.ExifTags import TAGS
 from PIL.PngImagePlugin import PngInfo
 
-EXTENSIONS    = {'.png', '.jpg', '.jpeg', '.webp'}
-INDEX_FILE    = 'index.json'
+EXTENSIONS     = {'.png', '.jpg', '.jpeg', '.webp'}
 THUMBNAILS_DIR = '__thumbnails'
-undo_stack = []
+undo_stack     = []
 
-# SSE client registry
-_sse_clients: dict = {}   # client_id -> {'queue': Queue, 'metrics': bool, 'comfy_queue': bool}
+# SSE client registry (used for metrics + comfy queue widgets only)
+_sse_clients: dict = {}
 _sse_lock = threading.Lock()
 
 
@@ -136,32 +135,7 @@ def _comfy_queue_loop(comfy_url: str, interval: float = 2.0) -> None:
             pass
 
 
-class _SourceWatcher:
-    """Watchdog-based file-system watcher that broadcasts SSE events."""
-    def __init__(self, st: dict):
-        self.st = st
-
-    def _relevant(self, path: str) -> bool:
-        p = Path(path)
-        return THUMBNAILS_DIR not in p.parts and p.suffix.lower() in EXTENSIONS
-
-    def dispatch(self, event) -> None:
-        if event.is_directory:
-            return
-        src  = getattr(event, 'src_path', '')
-        dest = getattr(event, 'dest_path', '')
-        changed = False
-        for p in (src, dest):
-            if p and self._relevant(p):
-                folder = Path(p).parent.resolve()
-                self.st['folder_caches'].pop(str(folder), None)
-                threading.Thread(target=build_index, args=(folder, self.st), daemon=True).start()
-                changed = True
-        if changed:
-            _sse_broadcast('files_changed')
-
-
-def get_exif_date(filepath):
+def get_exif_date(filepath: Path):
     """Return ISO datetime string from EXIF DateTimeOriginal/DateTime, or None."""
     try:
         img = Image.open(filepath)
@@ -178,47 +152,48 @@ def get_exif_date(filepath):
     return None
 
 
-def save_folder_cache(folder_path: Path, cache: dict):
+def stat_entry(stat) -> dict:
+    """Lightweight cache record from a stat result."""
+    return {'mtime': stat.st_mtime, 'ctime': stat.st_ctime, 'size': stat.st_size}
+
+
+def build_index(folder: Path) -> dict:
+    """Fast metadata-only scan: mtime/ctime/size only. No image opens."""
+    start = time.perf_counter()
+    cache: dict = {}
+    if not folder.is_dir():
+        return cache
     try:
-        with open(folder_path / INDEX_FILE, 'w', encoding='utf-8') as fh:
-            json.dump(cache, fh)
-    except Exception:
-        pass
-
-
-def build_index(source: Path, st: dict):
-    """Scan source folder, build full metadata index and persist it."""
-    key = str(source.resolve())
-    old_cache = st.get('folder_caches', {}).get(key, {})
-    new_cache = {}
-    if source.is_dir():
-        for f in source.iterdir():
+        for f in folder.iterdir():
             if not f.is_file() or f.suffix.lower() not in EXTENSIONS:
                 continue
             try:
-                stat = f.stat()
-                w = h = None
-                try:
-                    with Image.open(f) as im:
-                        w, h = im.size
-                except Exception:
-                    pass
-                new_cache[f.name] = {
-                    'created':   datetime.fromtimestamp(stat.st_ctime).isoformat(),
-                    'modified':  datetime.fromtimestamp(stat.st_mtime).isoformat(),
-                    'exif_date': get_exif_date(f),
-                    'size':      stat.st_size,
-                    'type':      f.suffix.lower(),
-                    'width':     w,
-                    'height':    h,
-                    'favorite':  old_cache.get(f.name, {}).get('favorite', False),
-                }
+                cache[f.name] = stat_entry(f.stat())
             except Exception:
                 pass
-    save_folder_cache(source, new_cache)
-    if 'folder_caches' not in st:
-        st['folder_caches'] = {}
-    st['folder_caches'][key] = new_cache
+    except Exception:
+        pass
+    elapsed = (time.perf_counter() - start) * 1000
+    print(f"[index] {folder} — {len(cache)} files in {elapsed:.1f} ms", flush=True)
+    return cache
+
+
+def ensure_dimensions(folder: Path, name: str, entry: dict) -> None:
+    """Lazily open the image and cache width/height on the entry."""
+    if 'width' in entry:
+        return
+    try:
+        with Image.open(folder / name) as im:
+            entry['width'], entry['height'] = im.size
+    except Exception:
+        entry['width'] = entry['height'] = None
+
+
+def ensure_exif_date(folder: Path, name: str, entry: dict) -> None:
+    """Lazily extract and cache EXIF date for a single entry."""
+    if 'exif_date' in entry:
+        return
+    entry['exif_date'] = get_exif_date(folder / name)
 
 
 def human_size(nbytes):
@@ -337,43 +312,63 @@ def extract_png_metadata(filepath):
 
 
 def create_app(root_dir, config, selected_name, dust_name,
-               watch_enabled=False, comfy_url='http://127.0.0.1:8188',
+               comfy_url='http://127.0.0.1:8188',
                lmstudio_url='http://localhost:1234/v1', comfy_output='',
-               monitor_enabled=False, comfy_queue_enabled=False):
+               monitor_enabled=False, comfy_queue_enabled=False,
+               validation_interval=1800):
     static_dir    = Path(__file__).parent / 'static'
     app           = Flask(__name__, static_folder=None)
     tools_cfg     = config.get('tools', {})
     root_resolved = root_dir.resolve()
     co_resolved   = Path(comfy_output).resolve() if comfy_output else None
 
-    initial_cache = {}
-    idx_path = root_dir / INDEX_FILE
-    if idx_path.is_file():
-        try:
-            with open(idx_path, encoding='utf-8') as fh:
-                initial_cache = json.load(fh)
-        except Exception:
-            pass
-
+    # In-memory only. Key: str(resolved_path); value: {filename -> {mtime, ctime, size, [width, height, exif_date]}}
     st = {
-        'folder_caches': {str(root_resolved): initial_cache},
+        'folder_caches': {},
         'comfy_output':  str(co_resolved) if co_resolved else '',
-        'observer':      None,
     }
 
-    def _start_observer() -> None:
-        if watch_enabled:
-            from watchdog.observers import Observer
-            watcher = _SourceWatcher(st)
-            obs = Observer()
-            obs.schedule(watcher, str(root_dir), recursive=True)
-            if co_resolved and co_resolved.is_dir():
-                obs.schedule(watcher, str(co_resolved), recursive=True)
-            obs.start()
-            st['observer'] = obs
+    def _eager_index() -> None:
+        """Pre-build indexes for root + root/__selected + root/__dust."""
+        for folder in (root_resolved,
+                       root_resolved / selected_name,
+                       root_resolved / dust_name):
+            if folder.is_dir():
+                st['folder_caches'][str(folder)] = build_index(folder)
 
-    threading.Thread(target=build_index, args=(root_dir, st), daemon=True).start()
-    _start_observer()
+    def _validation_loop() -> None:
+        """Low-priority incremental cache validation. Adds new files, drops missing ones, refreshes mtime/size."""
+        while True:
+            time.sleep(validation_interval)
+            for key in list(st['folder_caches'].keys()):
+                folder = Path(key)
+                if not folder.is_dir():
+                    st['folder_caches'].pop(key, None)
+                    continue
+                cache = st['folder_caches'].get(key, {})
+                actual: dict = {}
+                try:
+                    for f in folder.iterdir():
+                        if f.is_file() and f.suffix.lower() in EXTENSIONS:
+                            try:
+                                actual[f.name] = f.stat()
+                            except Exception:
+                                pass
+                except Exception:
+                    continue
+                for name, stat in actual.items():
+                    entry = cache.get(name)
+                    if not entry or entry.get('mtime') != stat.st_mtime or entry.get('size') != stat.st_size:
+                        cache[name] = stat_entry(stat)
+                for name in list(cache.keys()):
+                    if name not in actual:
+                        cache.pop(name, None)
+                # Yield occasionally so we don't monopolise the GIL on huge libraries
+                time.sleep(0)
+
+    threading.Thread(target=_eager_index, daemon=True).start()
+    if validation_interval > 0:
+        threading.Thread(target=_validation_loop, daemon=True).start()
     if monitor_enabled:
         threading.Thread(target=_metrics_loop, daemon=True).start()
     if comfy_queue_enabled:
@@ -399,28 +394,19 @@ def create_app(root_dir, config, selected_name, dust_name,
     def get_folder_cache(folder_path: Path) -> dict:
         key = str(folder_path.resolve())
         if key not in st['folder_caches']:
-            cache = {}
-            idx = folder_path / INDEX_FILE
-            if idx.is_file():
-                try:
-                    with open(idx, encoding='utf-8') as fh:
-                        cache = json.load(fh)
-                except Exception:
-                    pass
-            st['folder_caches'][key] = cache
-            threading.Thread(target=build_index, args=(folder_path, st), daemon=True).start()
+            st['folder_caches'][key] = build_index(folder_path)
         return st['folder_caches'][key]
 
-    def save_cache(folder_path: Path) -> None:
-        key = str(folder_path.resolve())
-        save_folder_cache(folder_path, st['folder_caches'].get(key, {}))
+    def cache_for(folder_path: Path) -> dict | None:
+        """Return existing cache for a folder, or None. Does not build."""
+        return st['folder_caches'].get(str(folder_path.resolve()))
 
     # --- API routes ---
 
     @app.route('/api/photos')
     def list_photos():
-        target = resolve_path(request.args.get('path', ''))
-        cache  = get_folder_cache(target)
+        target      = resolve_path(request.args.get('path', ''))
+        cache       = get_folder_cache(target)
         sort_by     = request.args.get('sort_by', 'name')
         sort_asc    = request.args.get('sort_asc', 'true') == 'true'
         offset      = int(request.args.get('offset', 0))
@@ -436,7 +422,6 @@ def create_app(root_dir, config, selected_name, dust_name,
         width_max   = request.args.get('width_max', '')
         height_min  = request.args.get('height_min', '')
         height_max  = request.args.get('height_max', '')
-        favorites_only = request.args.get('favorites_only', 'false') == 'true'
 
         filter_types    = [t.strip() for t in types_raw.split(',') if t.strip()] if types_raw else []
         filter_size_min = int(size_min) if size_min else None
@@ -449,102 +434,75 @@ def create_app(root_dir, config, selected_name, dust_name,
         date_from_dt    = datetime.fromisoformat(date_from) if date_from else None
         date_to_dt      = datetime.fromisoformat(date_to + 'T23:59:59') if date_to else None
 
-        photos = []
-        if target.is_dir():
-            for f in target.iterdir():
-                if not f.is_file() or f.suffix.lower() not in EXTENSIONS:
-                    continue
-                if filter_text:
-                    name_lower = f.name.lower()
-                    invert = filter_text.startswith('!')
-                    pattern = filter_text[1:] if invert else filter_text
-                    if pattern:
-                        if any(c in pattern for c in ('*', '?', '.')):
-                            matched = fnmatch.fnmatch(name_lower, pattern)
-                        else:
-                            matched = pattern in name_lower
-                        if invert == matched:
-                            continue
-                if filter_types and f.suffix.lower() not in filter_types:
-                    continue
-
-                stat = f.stat()
-
-                if filter_size_min is not None and stat.st_size < filter_size_min:
-                    continue
-                if filter_size_max is not None and stat.st_size > filter_size_max:
-                    continue
-
-                if need_dims:
-                    entry = cache.get(f.name, {})
-                    w = entry.get('width')
-                    h = entry.get('height')
-                    if w is None or h is None:
-                        try:
-                            with Image.open(f) as im:
-                                w, h = im.size
-                        except Exception:
-                            continue
-                    if filter_w_min is not None and w < filter_w_min:
-                        continue
-                    if filter_w_max is not None and w > filter_w_max:
-                        continue
-                    if filter_h_min is not None and h < filter_h_min:
-                        continue
-                    if filter_h_max is not None and h > filter_h_max:
-                        continue
-
-                if date_field and (date_from_dt or date_to_dt):
-                    entry = cache.get(f.name, {})
-                    if date_field == 'created':
-                        date_str = entry.get('created') or datetime.fromtimestamp(stat.st_ctime).isoformat()
-                    elif date_field == 'modified':
-                        date_str = entry.get('modified') or datetime.fromtimestamp(stat.st_mtime).isoformat()
-                    elif date_field == 'exif':
-                        date_str = entry.get('exif_date')
-                        if not date_str:
-                            continue
+        filtered = []
+        for name, entry in cache.items():
+            ext = Path(name).suffix.lower()
+            if filter_text:
+                name_lower = name.lower()
+                invert = filter_text.startswith('!')
+                pattern = filter_text[1:] if invert else filter_text
+                if pattern:
+                    if any(c in pattern for c in ('*', '?', '.')):
+                        matched = fnmatch.fnmatch(name_lower, pattern)
                     else:
-                        date_str = None
-                    if date_str:
-                        try:
-                            file_dt = datetime.fromisoformat(date_str)
-                            if date_from_dt and file_dt < date_from_dt:
-                                continue
-                            if date_to_dt and file_dt > date_to_dt:
-                                continue
-                        except ValueError:
-                            continue
-
-                if favorites_only and not cache.get(f.name, {}).get('favorite', False):
+                        matched = pattern in name_lower
+                    if invert == matched:
+                        continue
+            if filter_types and ext not in filter_types:
+                continue
+            if filter_size_min is not None and entry['size'] < filter_size_min:
+                continue
+            if filter_size_max is not None and entry['size'] > filter_size_max:
+                continue
+            if need_dims:
+                ensure_dimensions(target, name, entry)
+                w = entry.get('width')
+                h = entry.get('height')
+                if w is None or h is None:
                     continue
-
-                cache_entry = cache.get(f.name, {})
-                if need_dims:
-                    photo_w, photo_h = w, h
+                if filter_w_min is not None and w < filter_w_min: continue
+                if filter_w_max is not None and w > filter_w_max: continue
+                if filter_h_min is not None and h < filter_h_min: continue
+                if filter_h_max is not None and h > filter_h_max: continue
+            if date_field and (date_from_dt or date_to_dt):
+                if date_field == 'modified':
+                    file_dt = datetime.fromtimestamp(entry['mtime'])
+                elif date_field == 'created':
+                    file_dt = datetime.fromtimestamp(entry['ctime'])
+                elif date_field == 'exif':
+                    ensure_exif_date(target, name, entry)
+                    ed = entry.get('exif_date')
+                    if not ed:
+                        continue
+                    try:
+                        file_dt = datetime.fromisoformat(ed)
+                    except ValueError:
+                        continue
                 else:
-                    photo_w = cache_entry.get('width')
-                    photo_h = cache_entry.get('height')
-
-                photos.append({
-                    'filename':  f.name,
-                    'modified':  datetime.fromtimestamp(stat.st_mtime).isoformat(),
-                    'size':      stat.st_size,
-                    'size_human': human_size(stat.st_size),
-                    'favorite':  cache_entry.get('favorite', False),
-                    'width':     photo_w,
-                    'height':    photo_h,
-                })
+                    file_dt = None
+                if file_dt is not None:
+                    if date_from_dt and file_dt < date_from_dt: continue
+                    if date_to_dt and file_dt > date_to_dt: continue
+            filtered.append((name, entry))
 
         if sort_by == 'modified':
-            photos.sort(key=lambda p: p['modified'], reverse=not sort_asc)
+            filtered.sort(key=lambda kv: kv[1]['mtime'], reverse=not sort_asc)
         else:
-            photos.sort(key=lambda p: p['filename'].lower(), reverse=not sort_asc)
+            filtered.sort(key=lambda kv: kv[0].lower(), reverse=not sort_asc)
 
-        total = len(photos)
-        page = photos[offset:offset + limit]
+        total = len(filtered)
+        page  = filtered[offset:offset + limit]
 
-        return jsonify({'photos': page, 'total': total, 'offset': offset, 'source_name': target.name})
+        photos = [{
+            'filename':   name,
+            'modified':   datetime.fromtimestamp(entry['mtime']).isoformat(),
+            'size':       entry['size'],
+            'size_human': human_size(entry['size']),
+            'width':      entry.get('width'),
+            'height':     entry.get('height'),
+        } for name, entry in page]
+
+        return jsonify({'photos': photos, 'total': total, 'offset': offset, 'source_name': target.name})
 
     @app.route('/api/photo')
     def serve_photo():
@@ -574,20 +532,22 @@ def create_app(root_dir, config, selected_name, dust_name,
         file_path = resolve_path(request.args.get('path', ''))
         if not file_path.is_file():
             return jsonify({'error': 'not found'}), 404
-        stat = file_path.stat()
+        cache = get_folder_cache(file_path.parent)
+        entry = cache.setdefault(file_path.name, stat_entry(file_path.stat()))
+        ensure_dimensions(file_path.parent, file_path.name, entry)
+        ensure_exif_date(file_path.parent, file_path.name, entry)
         try:
             img = Image.open(file_path)
-            width, height = img.size
             fmt = img.format or file_path.suffix.upper().lstrip('.')
         except Exception:
-            width, height, fmt = 0, 0, file_path.suffix.upper().lstrip('.')
+            fmt = file_path.suffix.upper().lstrip('.')
         return jsonify({
             'filename':     file_path.name,
-            'modified':     datetime.fromtimestamp(stat.st_mtime).isoformat(),
-            'size':         stat.st_size,
-            'size_human':   human_size(stat.st_size),
-            'width':        width,
-            'height':       height,
+            'modified':     datetime.fromtimestamp(entry['mtime']).isoformat(),
+            'size':         entry['size'],
+            'size_human':   human_size(entry['size']),
+            'width':        entry.get('width') or 0,
+            'height':       entry.get('height') or 0,
             'format':       fmt,
             'comfyui':      extract_comfyui_data(file_path),
             'exif':         extract_exif(file_path),
@@ -603,7 +563,15 @@ def create_app(root_dir, config, selected_name, dust_name,
         dest_dir.mkdir(parents=True, exist_ok=True)
         dest_path = dest_dir / src_path.name
         shutil.move(str(src_path), str(dest_path))
-        st['folder_caches'].get(str(src_path.parent.resolve()), {}).pop(src_path.name, None)
+        src_cache = cache_for(src_path.parent)
+        if src_cache is not None:
+            src_cache.pop(src_path.name, None)
+        dst_cache = cache_for(dest_dir)
+        if dst_cache is not None:
+            try:
+                dst_cache[src_path.name] = stat_entry(dest_path.stat())
+            except Exception:
+                pass
         undo_stack.append({'filename': src_path.name, 'from': str(src_path), 'to': str(dest_path)})
         return jsonify({'ok': True, 'filename': src_path.name})
 
@@ -618,8 +586,15 @@ def create_app(root_dir, config, selected_name, dust_name,
             return jsonify({'ok': False, 'error': 'file not found'}), 404
         from_path.parent.mkdir(parents=True, exist_ok=True)
         shutil.move(str(to_path), str(from_path))
-        for p in (to_path.parent, from_path.parent):
-            st['folder_caches'].pop(str(p.resolve()), None)
+        to_cache = cache_for(to_path.parent)
+        if to_cache is not None:
+            to_cache.pop(to_path.name, None)
+        from_cache = cache_for(from_path.parent)
+        if from_cache is not None:
+            try:
+                from_cache[from_path.name] = stat_entry(from_path.stat())
+            except Exception:
+                pass
         return jsonify({'ok': True, 'filename': entry['filename']})
 
     @app.route('/api/comfy/free', methods=['POST'])
@@ -775,6 +750,15 @@ def create_app(root_dir, config, selected_name, dust_name,
                 img.save(file_path, quality=98, exif=exif.tobytes())
             else:
                 return jsonify({'error': f'Unsupported format: {ext}'}), 400
+            cache = cache_for(file_path.parent)
+            if cache is not None:
+                try:
+                    entry = cache.get(file_path.name) or {}
+                    entry.update(stat_entry(file_path.stat()))
+                    entry.pop('exif_date', None)
+                    cache[file_path.name] = entry
+                except Exception:
+                    pass
             return jsonify({'ok': True})
         except Exception as e:
             return jsonify({'error': str(e)}), 500
@@ -793,13 +777,16 @@ def create_app(root_dir, config, selected_name, dust_name,
     @app.route('/api/folders')
     def list_folders():
         folders = []
-        for f in sorted(root_dir.rglob('*')):
-            if not f.is_dir():
-                continue
-            rel = f.relative_to(root_dir)
-            if any(p.startswith('__') for p in rel.parts):
-                continue
-            folders.append(str(rel).replace('\\', '/'))
+        try:
+            for f in sorted(root_dir.rglob('*')):
+                if not f.is_dir():
+                    continue
+                rel = f.relative_to(root_dir)
+                if any(p.startswith('_') for p in rel.parts):
+                    continue
+                folders.append(str(rel).replace('\\', '/'))
+        except Exception:
+            pass
         co = st['comfy_output']
         return jsonify({
             'folders':           folders,
@@ -869,55 +856,47 @@ def create_app(root_dir, config, selected_name, dust_name,
             if operation == 'move':
                 for _, p in resolved:
                     p.unlink(missing_ok=True)
+                src_cache = cache_for(src_dir)
+                if src_cache is not None:
+                    for fn in processed:
+                        src_cache.pop(fn, None)
         else:
+            src_cache = cache_for(src_dir)
+            dst_cache = cache_for(dst_dir)
             for fn, p in resolved:
                 try:
+                    target = dst_dir / fn
                     if operation == 'move':
-                        shutil.move(str(p), dst_dir / fn)
+                        shutil.move(str(p), target)
+                        if src_cache is not None:
+                            src_cache.pop(fn, None)
                     else:
-                        shutil.copy2(p, dst_dir / fn)
+                        shutil.copy2(p, target)
+                    if dst_cache is not None:
+                        try:
+                            dst_cache[fn] = stat_entry(target.stat())
+                        except Exception:
+                            pass
                     processed.append(fn)
                 except Exception as e:
                     errors.append(str(e))
 
         return jsonify({'ok': True, 'count': len(processed), 'errors': errors})
 
-    @app.route('/api/favorite', methods=['POST'])
-    def toggle_favorite():
-        file_path = resolve_path(request.args.get('path', ''))
-        if not file_path.is_file():
-            return jsonify({'ok': False, 'error': 'not found'}), 404
-        cache = get_folder_cache(file_path.parent)
-        entry = cache.setdefault(file_path.name, {})
-        entry['favorite'] = not entry.get('favorite', False)
-        save_cache(file_path.parent)
-        return jsonify({'ok': True, 'favorite': entry['favorite']})
-
-    @app.route('/api/favorites', methods=['POST'])
-    def set_favorites():
+    @app.route('/api/zip', methods=['POST'])
+    def zip_files():
         data      = request.get_json()
         folder    = resolve_path(request.args.get('path', ''))
         filenames = data.get('filenames', [])
-        favorite  = data.get('favorite', True)
-        cache     = get_folder_cache(folder)
-        for fn in filenames:
-            cache.setdefault(fn, {})['favorite'] = favorite
-        save_cache(folder)
-        return jsonify({'ok': True})
-
-    @app.route('/api/favorites/download')
-    def download_favorites():
-        folder    = resolve_path(request.args.get('path', ''))
-        cache     = get_folder_cache(folder)
-        fav_files = [fn for fn, e in cache.items()
-                     if e.get('favorite') and (folder / fn).is_file()]
         buf = io.BytesIO()
         with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
-            for fn in fav_files:
-                zf.write(folder / fn, fn)
+            for fn in filenames:
+                p = folder / fn
+                if p.is_file():
+                    zf.write(p, fn)
         buf.seek(0)
         return send_file(buf, mimetype='application/zip',
-                         as_attachment=True, download_name='favorites.zip')
+                         as_attachment=True, download_name='photos.zip')
 
     @app.route('/api/metrics/pause', methods=['POST'])
     def metrics_pause():
@@ -940,8 +919,7 @@ def create_app(root_dir, config, selected_name, dust_name,
     @app.route('/api/refresh', methods=['POST'])
     def refresh():
         target = resolve_path(request.args.get('path', ''))
-        st['folder_caches'].pop(str(target.resolve()), None)
-        threading.Thread(target=build_index, args=(target, st), daemon=True).start()
+        st['folder_caches'][str(target.resolve())] = build_index(target)
         return jsonify({'ok': True})
 
     @app.route('/api/config')
@@ -986,12 +964,9 @@ def create_app(root_dir, config, selected_name, dust_name,
     @app.route('/api/file-types')
     def file_types():
         target = resolve_path(request.args.get('path', ''))
-        types  = set()
-        if target.is_dir():
-            for f in target.iterdir():
-                if f.is_file() and f.suffix.lower() in EXTENSIONS:
-                    types.add(f.suffix.lower())
-        return jsonify({'types': sorted(types)})
+        cache  = get_folder_cache(target)
+        types  = sorted({Path(name).suffix.lower() for name in cache.keys()})
+        return jsonify({'types': types})
 
     # --- Static / SPA routes ---
 
@@ -1031,16 +1006,17 @@ def main():
     selected_name       = defaults.get('selected_dir_name', '__selected')
     dust_name           = defaults.get('dust_dir_name',     '__dust')
     port                = defaults.get('port', 1976)
-    watch_enabled       = defaults.get('live_updates', True)
     comfy_url           = defaults.get('comfy_url', 'http://127.0.0.1:8188')
     lmstudio_url        = defaults.get('lmstudio_url', 'http://localhost:1234/v1')
     comfy_output        = defaults.get('comfy_output', '')
+    validation_interval = defaults.get('index_validation_interval', 1800)
     widgets             = config.get('widgets', {})
     monitor_enabled     = widgets.get('gpu_monitor', False)
     comfy_queue_enabled = widgets.get('comfy_queue', False)
     app = create_app(source, config, selected_name, dust_name,
-                     watch_enabled, comfy_url, lmstudio_url,
-                     comfy_output, monitor_enabled, comfy_queue_enabled)
+                     comfy_url, lmstudio_url, comfy_output,
+                     monitor_enabled, comfy_queue_enabled,
+                     validation_interval)
 
     import socket
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:

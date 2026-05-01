@@ -33,6 +33,7 @@ import { SystemMetrics } from './models/metrics.model';
 import { PhotoInfo, PhotoListItem } from './models/photo.model';
 import { ComfyQueueService } from './services/comfy-queue.service';
 import { ConnectionStateService } from './services/connection-state.service';
+import { FavoritesService } from './services/favorites.service';
 import { KeyboardService, PhotoAction } from './services/keyboard.service';
 import { PhotoService } from './services/photo.service';
 
@@ -58,6 +59,7 @@ import { PhotoService } from './services/photo.service';
 })
 export class App implements OnInit, OnDestroy {
   private photoService = inject(PhotoService);
+  private favoritesSvc = inject(FavoritesService);
   private keyboard = inject(KeyboardService);
   private snackBar = inject(MatSnackBar);
   private dialog = inject(MatDialog);
@@ -79,7 +81,6 @@ export class App implements OnInit, OnDestroy {
   private eventSource: EventSource | null = null;
   private sseClientId = '';
 
-  pendingRefresh = false;
   metrics = signal<SystemMetrics | null>(null);
   widgetVisible = signal(true);
   comfyQueueEnabled = signal(false);
@@ -131,14 +132,13 @@ export class App implements OnInit, OnDestroy {
     this.sub = this.keyboard.action$.subscribe((action) => this.handleAction(action));
     this.eventSource = new EventSource('/api/events');
     this.eventSource.onmessage = (e) => {
-      if (e.data === 'files_changed') this.pendingRefresh = true;
-      else if (e.data.startsWith('client_id:')) this.sseClientId = e.data.slice(10);
+      if (e.data.startsWith('client_id:')) this.sseClientId = e.data.slice(10);
       else if (e.data.startsWith('metrics:')) this.metrics.set(JSON.parse(e.data.slice(8)));
       else if (e.data.startsWith('comfy_queue:'))
         this.comfyQueue.status.set(JSON.parse(e.data.slice(12)));
     };
+    this.favorites = this.favoritesSvc.load(this.currentPath);
     this.loadPhotos();
-    this.loadFavorites();
     this.photoService.getConfig().subscribe((cfg) => {
       if (!this.connState.comfy.url) this.connState.comfy.url = cfg.comfy_url;
       if (!this.connState.lmstudio.url) this.connState.lmstudio.url = cfg.lmstudio_url;
@@ -167,31 +167,40 @@ export class App implements OnInit, OnDestroy {
   loadPhotos(): void {
     if (this.pageSize <= 0) return;
     this.loading = true;
+    const opts = {
+      sortBy: this.sortBy,
+      sortAsc: this.sortAsc,
+      filter: this.filterText,
+      dateField: this.activeFilters.dateField,
+      dateFrom: this.activeFilters.dateFrom,
+      dateTo: this.activeFilters.dateTo,
+      types: this.activeFilters.types,
+      sizeMin: this.activeFilters.sizeMin,
+      sizeMax: this.activeFilters.sizeMax,
+      widthMin: this.activeFilters.widthMin,
+      widthMax: this.activeFilters.widthMax,
+      heightMin: this.activeFilters.heightMin,
+      heightMax: this.activeFilters.heightMax,
+    };
+    // When showing favorites only, fetch the whole list and paginate client-side.
+    const fetchOpts = this.showFavoritesOnly
+      ? { ...opts, offset: 0, limit: 999999 }
+      : { ...opts, offset: this.pageOffset, limit: this.pageSize };
+
     this.photoService
-      .listPhotos(this.currentPath, {
-        offset: this.pageOffset,
-        limit: this.pageSize,
-        sortBy: this.sortBy,
-        sortAsc: this.sortAsc,
-        filter: this.filterText,
-        favoritesOnly: this.showFavoritesOnly,
-        dateField: this.activeFilters.dateField,
-        dateFrom: this.activeFilters.dateFrom,
-        dateTo: this.activeFilters.dateTo,
-        types: this.activeFilters.types,
-        sizeMin: this.activeFilters.sizeMin,
-        sizeMax: this.activeFilters.sizeMax,
-        widthMin: this.activeFilters.widthMin,
-        widthMax: this.activeFilters.widthMax,
-        heightMin: this.activeFilters.heightMin,
-        heightMax: this.activeFilters.heightMax,
-      })
+      .listPhotos(this.currentPath, fetchOpts)
       .pipe(finalize(() => (this.loading = false)))
       .subscribe((res) => {
-        this.photos = res.photos;
-        this.totalPhotos = res.total;
-        this.pageOffset = res.offset;
         if (res.source_name) this.sourceFolderName = res.source_name;
+        if (this.showFavoritesOnly) {
+          const filtered = res.photos.filter((p) => this.favorites.has(p.filename));
+          this.totalPhotos = filtered.length;
+          this.photos = filtered.slice(this.pageOffset, this.pageOffset + this.pageSize);
+        } else {
+          this.photos = res.photos;
+          this.totalPhotos = res.total;
+          this.pageOffset = res.offset;
+        }
 
         if (this.totalPhotos > 0 && this.photos.length > 0) {
           const relIdx = this.currentIndex - this.pageOffset;
@@ -204,14 +213,6 @@ export class App implements OnInit, OnDestroy {
         } else {
           this.currentInfo = null;
         }
-      });
-  }
-
-  private loadFavorites(): void {
-    this.photoService
-      .listPhotos(this.currentPath, { favoritesOnly: true, limit: 999999, offset: 0 })
-      .subscribe((res) => {
-        this.favorites = new Set(res.photos.map((p) => p.filename));
       });
   }
 
@@ -282,7 +283,6 @@ export class App implements OnInit, OnDestroy {
   }
 
   refresh(): void {
-    this.pendingRefresh = false;
     this.photoService.refresh(this.currentPath).subscribe(() => {
       this.pageOffset = 0;
       this.currentIndex = 0;
@@ -319,12 +319,11 @@ export class App implements OnInit, OnDestroy {
   switchFolder(path: string): void {
     if (path === this.currentPath) return;
     this.currentPath = path;
-    this.favorites = new Set();
+    this.favorites = this.favoritesSvc.load(path);
     this.pageOffset = 0;
     this.currentIndex = 0;
     this.filterText = '';
     this.loadPhotos();
-    this.loadFavorites();
   }
 
   onHDividerDown(e: MouseEvent): void {
@@ -487,25 +486,7 @@ export class App implements OnInit, OnDestroy {
   }
 
   toggleFavorite(filename: string): void {
-    const newState = !this.favorites.has(filename);
-    const next = new Set(this.favorites);
-    if (newState) next.add(filename);
-    else next.delete(filename);
-    this.favorites = next;
-    this.photoService.toggleFavorite(filename, this.currentPath).subscribe({
-      next: (res) => {
-        const confirmed = new Set(this.favorites);
-        if (res.favorite) confirmed.add(filename);
-        else confirmed.delete(filename);
-        this.favorites = confirmed;
-      },
-      error: () => {
-        const rb = new Set(this.favorites);
-        if (newState) rb.delete(filename);
-        else rb.add(filename);
-        this.favorites = rb;
-      },
-    });
+    this.favorites = this.favoritesSvc.toggle(this.currentPath, filename);
   }
 
   private toggleFavoriteCurrent(): void {
@@ -515,8 +496,7 @@ export class App implements OnInit, OnDestroy {
 
   toggleAllFavorites(): void {
     if (this.favorites.size >= this.totalPhotos) {
-      const all = [...this.favorites];
-      this.photoService.setFavorites(all, false, this.currentPath).subscribe();
+      this.favoritesSvc.clear(this.currentPath);
       this.favorites = new Set();
     } else {
       this.photoService
@@ -539,15 +519,13 @@ export class App implements OnInit, OnDestroy {
         })
         .subscribe((res) => {
           const fns = res.photos.map((p) => p.filename);
-          this.photoService.setFavorites(fns, true, this.currentPath).subscribe();
-          this.favorites = new Set(fns);
+          this.favorites = this.favoritesSvc.setAll(this.currentPath, fns, true);
         });
     }
   }
 
   clearFavorites(): void {
-    if (this.favorites.size)
-      this.photoService.setFavorites([...this.favorites], false, this.currentPath).subscribe();
+    this.favoritesSvc.clear(this.currentPath);
     this.favorites = new Set();
   }
 
@@ -559,7 +537,8 @@ export class App implements OnInit, OnDestroy {
   }
 
   downloadFavorites(): void {
-    this.photoService.downloadFavorites(this.currentPath);
+    if (!this.favorites.size) return;
+    this.photoService.downloadZip([...this.favorites], this.currentPath, 'favorites.zip');
   }
 
   openBatchDialog(operation: 'copy' | 'move'): void {

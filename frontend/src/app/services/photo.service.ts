@@ -16,7 +16,6 @@ export class PhotoService {
     folder = '',
     options: {
       offset?: number; limit?: number; sortBy?: string; sortAsc?: boolean; filter?: string;
-      favoritesOnly?: boolean;
       dateField?: string; dateFrom?: string; dateTo?: string;
       types?: string[]; sizeMin?: number | null; sizeMax?: number | null;
       widthMin?: number | null; widthMax?: number | null;
@@ -29,7 +28,6 @@ export class PhotoService {
     if (options.sortBy) params['sort_by'] = options.sortBy;
     if (options.sortAsc != null) params['sort_asc'] = String(options.sortAsc);
     if (options.filter) params['filter'] = options.filter;
-    if (options.favoritesOnly) params['favorites_only'] = 'true';
     if (options.dateField) params['date_field'] = options.dateField;
     if (options.dateFrom) params['date_from'] = options.dateFrom;
     if (options.dateTo) params['date_to'] = options.dateTo;
@@ -134,17 +132,21 @@ export class PhotoService {
       '/api/batch', body, { params: { path: folder } });
   }
 
-  toggleFavorite(filename: string, folder: string): Observable<{ ok: boolean; favorite: boolean }> {
-    return this.http.post<{ ok: boolean; favorite: boolean }>(
-      '/api/favorite', {}, { params: { path: this.filePath(filename, folder) } });
-  }
-
-  setFavorites(filenames: string[], favorite: boolean, folder: string): Observable<{ ok: boolean }> {
-    return this.http.post<{ ok: boolean }>('/api/favorites', { filenames, favorite }, { params: { path: folder } });
-  }
-
-  downloadFavorites(folder: string): void {
-    window.location.href = `/api/favorites/download?path=${encodeURIComponent(folder)}`;
+  async downloadZip(filenames: string[], folder: string, downloadName = 'photos.zip'): Promise<void> {
+    const resp = await fetch(`/api/zip?path=${encodeURIComponent(folder)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ filenames }),
+    });
+    const blob = await resp.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = downloadName;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
   }
 
   getFileTypes(folder = ''): Observable<{ types: string[] }> {
