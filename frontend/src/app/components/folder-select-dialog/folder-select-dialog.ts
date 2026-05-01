@@ -119,7 +119,7 @@ export class FolderSelectDialog implements OnInit {
   }
 
   get resultPath(): string {
-    if (this.selectedSubfolder === '__comfy_output') return '__comfy_output';
+    if (this.selectedSubfolder === '%comfy_output%') return '%comfy_output%';
     const col = this.selectedCollection;
     if (!this.selectedSubfolder && !col) return '';
     if (!col) return this.selectedSubfolder;
@@ -150,8 +150,7 @@ export class FolderSelectDialog implements OnInit {
   }
 
   selectComfyOutput(): void {
-    this.selectedSubfolder = '__comfy_output';
-  //  this.selectedCollection = '';
+    this.selectedSubfolder = '%comfy_output%';
   }
 
   displayName(folder: string): string {

@@ -32,7 +32,6 @@ export class BatchDialog implements OnInit {
   phase: 'select' | 'progress' | 'done' = 'select';
   folders: string[]              = [];
   rootName                       = '';
-  current: string | null         = null;
   selectedFolder                 = '__selected';  // default to Selected folder
   selectedComfyOutput            = false;
   comfyOutputPath: string | null = null;
@@ -49,7 +48,6 @@ export class BatchDialog implements OnInit {
       next: res => {
         this.rootName        = res.root_name;
         this.folders         = ['', ...res.folders];
-        this.current         = res.current;
         this.comfyOutputPath = res.comfy_output;
         this.comfyOutputName = res.comfy_output_name;
         this.selectedName    = res.selected_name ?? '__selected';

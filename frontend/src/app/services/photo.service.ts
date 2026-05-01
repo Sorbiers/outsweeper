@@ -8,6 +8,10 @@ export class PhotoService {
   private http = inject(HttpClient);
   thumbnailsName = '__thumbnails';
 
+  private filePath(filename: string, folder: string): string {
+    return folder ? `${folder}/${filename}` : filename;
+  }
+
   listPhotos(
     folder = '',
     options: {
@@ -18,8 +22,8 @@ export class PhotoService {
       widthMin?: number | null; widthMax?: number | null;
       heightMin?: number | null; heightMax?: number | null;
     } = {},
-  ): Observable<{ photos: PhotoListItem[]; total: number; offset: number; source_folder: string; source_name: string }> {
-    const params: Record<string, string> = { folder };
+  ): Observable<{ photos: PhotoListItem[]; total: number; offset: number; source_name: string }> {
+    const params: Record<string, string> = { path: folder };
     if (options.offset != null) params['offset'] = String(options.offset);
     if (options.limit != null) params['limit'] = String(options.limit);
     if (options.sortBy) params['sort_by'] = options.sortBy;
@@ -36,32 +40,27 @@ export class PhotoService {
     if (options.widthMax != null) params['width_max'] = String(options.widthMax);
     if (options.heightMin != null) params['height_min'] = String(options.heightMin);
     if (options.heightMax != null) params['height_max'] = String(options.heightMax);
-    return this.http.get<{ photos: PhotoListItem[]; total: number; offset: number; source_folder: string; source_name: string }>(
-      '/api/photos',
-      { params },
-    );
+    return this.http.get<{ photos: PhotoListItem[]; total: number; offset: number; source_name: string }>(
+      '/api/photos', { params });
   }
 
   getInfo(filename: string, folder = ''): Observable<PhotoInfo> {
-    return this.http.get<PhotoInfo>(`/api/photos/${encodeURIComponent(filename)}/info`, { params: { folder } });
+    return this.http.get<PhotoInfo>('/api/info', { params: { path: this.filePath(filename, folder) } });
   }
 
   getImageUrl(filename: string, folder = ''): string {
-    const rel = folder ? `${folder}/${filename}` : filename;
-    return '/api/photos/' + rel.split('/').map(encodeURIComponent).join('/');
+    return `/api/photo?path=${encodeURIComponent(this.filePath(filename, folder))}`;
   }
 
   getThumbnailUrl(filename: string, folder = ''): string {
-    const rel = folder
-      ? `${folder}/${this.thumbnailsName}/${filename}`
-      : `${this.thumbnailsName}/${filename}`;
-    return '/api/photos/' + rel.split('/').map(encodeURIComponent).join('/');
+    return `/api/thumbnail?path=${encodeURIComponent(this.filePath(filename, folder))}`;
   }
 
   move(filename: string, fromFolder: string, toFolder: string): Observable<MoveResponse> {
     return this.http.post<MoveResponse>(
-      `/api/photos/${encodeURIComponent(filename)}/move`,
-      { folder: fromFolder, destination: toFolder }
+      '/api/move',
+      { destination: toFolder },
+      { params: { path: this.filePath(filename, fromFolder) } },
     );
   }
 
@@ -85,8 +84,12 @@ export class PhotoService {
     return this.http.post<{ samplers: string[]; schedulers: string[] }>('/api/comfy/samplers', { comfy_url: comfyUrl });
   }
 
-  getConfig(): Observable<{ comfy_url: string; lmstudio_url: string; widgets: { gpu_monitor: boolean; comfy_queue: boolean }; selected_name: string; dust_name: string; thumbnails_name: string; root_name: string }> {
-    return this.http.get<{ comfy_url: string; lmstudio_url: string; widgets: { gpu_monitor: boolean; comfy_queue: boolean }; selected_name: string; dust_name: string; thumbnails_name: string; root_name: string }>('/api/config');
+  getConfig(): Observable<{
+    comfy_url: string; lmstudio_url: string;
+    widgets: { gpu_monitor: boolean; comfy_queue: boolean };
+    selected_name: string; dust_name: string; thumbnails_name: string; root_name: string;
+  }> {
+    return this.http.get<any>('/api/config');
   }
 
   setMetricsPaused(paused: boolean, clientId: string): Observable<{ ok: boolean }> {
@@ -102,11 +105,15 @@ export class PhotoService {
   }
 
   runTool(name: string, filename: string, folder: string): Observable<{ ok: boolean; stdout: string; stderr: string; error?: string }> {
-    return this.http.post<any>('/api/tools/run', { name, filename, folder });
+    return this.http.post<any>(
+      '/api/tools/run',
+      { name },
+      { params: { path: this.filePath(filename, folder) } },
+    );
   }
 
   refresh(folder = ''): Observable<{ ok: boolean }> {
-    return this.http.post<{ ok: boolean }>('/api/refresh', { folder });
+    return this.http.post<{ ok: boolean }>('/api/refresh', {}, { params: { path: folder } });
   }
 
   unloadLmStudio(lmstudioUrl: string): Observable<{ ok: boolean }> {
@@ -122,28 +129,34 @@ export class PhotoService {
     destination: string; use_comfy_output?: boolean;
     zip: boolean; folder: string;
   }): Observable<{ ok: boolean; count: number; errors: string[] }> {
-    return this.http.post<{ ok: boolean; count: number; errors: string[] }>('/api/batch', params);
+    const { folder, ...body } = params;
+    return this.http.post<{ ok: boolean; count: number; errors: string[] }>(
+      '/api/batch', body, { params: { path: folder } });
   }
 
   toggleFavorite(filename: string, folder: string): Observable<{ ok: boolean; favorite: boolean }> {
     return this.http.post<{ ok: boolean; favorite: boolean }>(
-      `/api/photos/${encodeURIComponent(filename)}/favorite`, {}, { params: { folder } });
+      '/api/favorite', {}, { params: { path: this.filePath(filename, folder) } });
   }
 
   setFavorites(filenames: string[], favorite: boolean, folder: string): Observable<{ ok: boolean }> {
-    return this.http.post<{ ok: boolean }>('/api/favorites', { filenames, favorite, folder });
+    return this.http.post<{ ok: boolean }>('/api/favorites', { filenames, favorite }, { params: { path: folder } });
   }
 
   downloadFavorites(folder: string): void {
-    window.location.href = `/api/favorites/download?folder=${encodeURIComponent(folder)}`;
+    window.location.href = `/api/favorites/download?path=${encodeURIComponent(folder)}`;
   }
 
   getFileTypes(folder = ''): Observable<{ types: string[] }> {
-    return this.http.get<{ types: string[] }>('/api/file-types', { params: { folder } });
+    return this.http.get<{ types: string[] }>('/api/file-types', { params: { path: folder } });
   }
 
-  listFolders(): Observable<{ folders: string[]; root_name: string; current: string | null; comfy_output: string | null; comfy_output_name: string | null; comfy_output_active: boolean; selected_name: string; dust_name: string }> {
-    return this.http.get<{ folders: string[]; root_name: string; current: string | null; comfy_output: string | null; comfy_output_name: string | null; comfy_output_active: boolean; selected_name: string; dust_name: string }>('/api/folders');
+  listFolders(): Observable<{
+    folders: string[]; root_name: string;
+    comfy_output: string | null; comfy_output_name: string | null;
+    selected_name: string; dust_name: string;
+  }> {
+    return this.http.get<any>('/api/folders');
   }
 
   sendToComfy(comfyUrl: string, prompt: object): Observable<any> {
@@ -156,22 +169,24 @@ export class PhotoService {
 
   describePhoto(filename: string, folder: string, lmstudioUrl: string, prompt: string, model: string): Observable<{ description: string }> {
     return this.http.post<{ description: string }>(
-      `/api/photos/${encodeURIComponent(filename)}/describe`,
-      { lmstudio_url: lmstudioUrl, prompt, model, folder }
+      '/api/describe',
+      { lmstudio_url: lmstudioUrl, prompt, model },
+      { params: { path: this.filePath(filename, folder) } },
     );
   }
 
   writeMeta(filename: string, folder: string, description: string): Observable<{ ok: boolean }> {
     return this.http.post<{ ok: boolean }>(
-      `/api/photos/${encodeURIComponent(filename)}/write-meta`,
-      { folder, description }
+      '/api/write-meta',
+      { description },
+      { params: { path: this.filePath(filename, folder) } },
     );
   }
 
   locate(filename: string, folder: string): Observable<{ ok: boolean }> {
     return this.http.post<{ ok: boolean }>(
-      `/api/photos/${encodeURIComponent(filename)}/locate`,
-      { folder }
+      '/api/locate', {},
+      { params: { path: this.filePath(filename, folder) } },
     );
   }
 }

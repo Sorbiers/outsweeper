@@ -29,7 +29,9 @@ from PIL import Image
 from PIL.ExifTags import TAGS
 from PIL.PngImagePlugin import PngInfo
 
-EXTENSIONS = {'.png', '.jpg', '.jpeg', '.webp'}
+EXTENSIONS    = {'.png', '.jpg', '.jpeg', '.webp'}
+INDEX_FILE    = 'index.json'
+THUMBNAILS_DIR = '__thumbnails'
 undo_stack = []
 
 # SSE client registry
@@ -136,22 +138,24 @@ def _comfy_queue_loop(comfy_url: str, interval: float = 2.0) -> None:
 
 class _SourceWatcher:
     """Watchdog-based file-system watcher that broadcasts SSE events."""
-    def __init__(self, root: Path, st: dict):
-        self.root = root
+    def __init__(self, st: dict):
         self.st = st
 
     def _relevant(self, path: str) -> bool:
-        return Path(path).suffix.lower() in EXTENSIONS
+        p = Path(path)
+        return THUMBNAILS_DIR not in p.parts and p.suffix.lower() in EXTENSIONS
 
     def dispatch(self, event) -> None:
         if event.is_directory:
             return
-        src = getattr(event, 'src_path', '')
+        src  = getattr(event, 'src_path', '')
         dest = getattr(event, 'dest_path', '')
         changed = False
         for p in (src, dest):
             if p and self._relevant(p):
-                self.st['folder_caches'].pop(str(Path(p).parent), None)
+                folder = Path(p).parent.resolve()
+                self.st['folder_caches'].pop(str(folder), None)
+                threading.Thread(target=build_index, args=(folder, self.st), daemon=True).start()
                 changed = True
         if changed:
             _sse_broadcast('files_changed')
@@ -174,19 +178,18 @@ def get_exif_date(filepath):
     return None
 
 
-def save_folder_cache(folder_path: Path, cache: dict, index_filename: str = '__photoparser_index.json'):
-    index_path = folder_path / index_filename
+def save_folder_cache(folder_path: Path, cache: dict):
     try:
-        with open(index_path, 'w', encoding='utf-8') as fh:
+        with open(folder_path / INDEX_FILE, 'w', encoding='utf-8') as fh:
             json.dump(cache, fh)
     except Exception:
         pass
 
 
 def build_index(source: Path, st: dict):
-    """Scan source folder, build metadata index, update st['folder_caches']."""
-    index_filename = st.get('index_filename', '__photoparser_index.json')
-    old_cache = st.get('folder_caches', {}).get(str(source), {})
+    """Scan source folder, build full metadata index and persist it."""
+    key = str(source.resolve())
+    old_cache = st.get('folder_caches', {}).get(key, {})
     new_cache = {}
     if source.is_dir():
         for f in source.iterdir():
@@ -212,10 +215,10 @@ def build_index(source: Path, st: dict):
                 }
             except Exception:
                 pass
-    save_folder_cache(source, new_cache, index_filename)
+    save_folder_cache(source, new_cache)
     if 'folder_caches' not in st:
         st['folder_caches'] = {}
-    st['folder_caches'][str(source)] = new_cache
+    st['folder_caches'][key] = new_cache
 
 
 def human_size(nbytes):
@@ -334,37 +337,38 @@ def extract_png_metadata(filepath):
 
 
 def create_app(root_dir, config, selected_name, dust_name,
-               index_filename='__photoparser_index.json', watch_enabled=False,
-               comfy_url='http://127.0.0.1:8188', lmstudio_url='http://localhost:1234/v1',
-               comfy_output='', monitor_enabled=False, comfy_queue_enabled=False,
-               thumbnails_name='__thumbnails'):
-    static_dir = Path(__file__).parent / 'static'
-    app = Flask(__name__, static_folder=None)
-    allow_dir_change = config.get('permissions', {}).get('allow_dir_change', False)
-    tools_cfg = config.get('tools', {})
+               watch_enabled=False, comfy_url='http://127.0.0.1:8188',
+               lmstudio_url='http://localhost:1234/v1', comfy_output='',
+               monitor_enabled=False, comfy_queue_enabled=False):
+    static_dir    = Path(__file__).parent / 'static'
+    app           = Flask(__name__, static_folder=None)
+    tools_cfg     = config.get('tools', {})
+    root_resolved = root_dir.resolve()
+    co_resolved   = Path(comfy_output).resolve() if comfy_output else None
 
     initial_cache = {}
-    index_path = root_dir / index_filename
-    if index_path.is_file():
+    idx_path = root_dir / INDEX_FILE
+    if idx_path.is_file():
         try:
-            with open(index_path, encoding='utf-8') as fh:
+            with open(idx_path, encoding='utf-8') as fh:
                 initial_cache = json.load(fh)
         except Exception:
             pass
 
     st = {
-        'root':           root_dir,
-        'folder_caches':  {str(root_dir): initial_cache},
-        'index_filename': index_filename,
-        'observer':       None,
-        'comfy_output':   str(Path(comfy_output).resolve()) if comfy_output else '',
+        'folder_caches': {str(root_resolved): initial_cache},
+        'comfy_output':  str(co_resolved) if co_resolved else '',
+        'observer':      None,
     }
 
     def _start_observer() -> None:
         if watch_enabled:
             from watchdog.observers import Observer
+            watcher = _SourceWatcher(st)
             obs = Observer()
-            obs.schedule(_SourceWatcher(root_dir, st), str(root_dir), recursive=True)
+            obs.schedule(watcher, str(root_dir), recursive=True)
+            if co_resolved and co_resolved.is_dir():
+                obs.schedule(watcher, str(co_resolved), recursive=True)
             obs.start()
             st['observer'] = obs
 
@@ -376,46 +380,46 @@ def create_app(root_dir, config, selected_name, dust_name,
         threading.Thread(target=_comfy_queue_loop, args=(comfy_url,), daemon=True).start()
         threading.Thread(target=_comfy_ws_loop, args=(comfy_url,), daemon=True).start()
 
-    def resolve_folder_path(rel: str) -> Path:
-        if not rel or rel == '.':
-            return root_dir
-        if rel == '__comfy_output':
-            co = st['comfy_output']
-            if not co:
-                abort(404, 'comfy_output not configured')
-            return Path(co)
-        target = (root_dir / rel).resolve()
-        if not target.is_relative_to(root_dir):
+    def resolve_path(rel: str) -> Path:
+        """Resolve ?path= to an absolute path. Validates against root and comfy output."""
+        rel = (rel or '').strip().lstrip('/')
+        if rel.startswith('%comfy_output%'):
+            if not co_resolved:
+                abort(404, 'ComfyUI output not configured')
+            suffix = rel[len('%comfy_output%'):].lstrip('/')
+            target = (co_resolved / suffix).resolve() if suffix else co_resolved
+            if not target.is_relative_to(co_resolved):
+                abort(400, 'invalid path')
+            return target
+        target = (root_resolved / rel).resolve() if rel else root_resolved
+        if not target.is_relative_to(root_resolved):
             abort(400, 'invalid path')
-        if not allow_dir_change:
-            allowed = {root_dir, root_dir / selected_name, root_dir / dust_name}
-            if target not in allowed:
-                abort(403, 'not permitted')
         return target
 
     def get_folder_cache(folder_path: Path) -> dict:
-        key = str(folder_path)
+        key = str(folder_path.resolve())
         if key not in st['folder_caches']:
             cache = {}
-            idx_path = folder_path / index_filename
-            if idx_path.is_file():
+            idx = folder_path / INDEX_FILE
+            if idx.is_file():
                 try:
-                    with open(idx_path, encoding='utf-8') as fh:
+                    with open(idx, encoding='utf-8') as fh:
                         cache = json.load(fh)
                 except Exception:
                     pass
             st['folder_caches'][key] = cache
+            threading.Thread(target=build_index, args=(folder_path, st), daemon=True).start()
         return st['folder_caches'][key]
 
     def save_cache(folder_path: Path) -> None:
-        cache = st['folder_caches'].get(str(folder_path), {})
-        save_folder_cache(folder_path, cache, index_filename)
+        key = str(folder_path.resolve())
+        save_folder_cache(folder_path, st['folder_caches'].get(key, {}))
 
     # --- API routes ---
 
     @app.route('/api/photos')
     def list_photos():
-        target = resolve_folder_path(request.args.get('folder', ''))
+        target = resolve_path(request.args.get('path', ''))
         cache  = get_folder_cache(target)
         sort_by     = request.args.get('sort_by', 'name')
         sort_asc    = request.args.get('sort_asc', 'true') == 'true'
@@ -540,120 +544,83 @@ def create_app(root_dir, config, selected_name, dust_name,
         total = len(photos)
         page = photos[offset:offset + limit]
 
-        return jsonify({'photos': page, 'total': total, 'offset': offset, 'source_folder': str(target), 'source_name': target.name})
+        return jsonify({'photos': page, 'total': total, 'offset': offset, 'source_name': target.name})
 
-    @app.route('/api/photos/<path:filename>/info')
-    def photo_info(filename):
-        filepath = resolve_folder_path(request.args.get('folder', '')) / filename
-        if not filepath.is_file():
-            return jsonify({'error': 'not found'}), 404
-
-        stat = filepath.stat()
-        try:
-            img = Image.open(filepath)
-            width, height = img.size
-            fmt = img.format or filepath.suffix.upper().lstrip('.')
-        except Exception:
-            width, height, fmt = 0, 0, filepath.suffix.upper().lstrip('.')
-
-        info = {
-            'filename': filename,
-            'modified': datetime.fromtimestamp(stat.st_mtime).isoformat(),
-            'size': stat.st_size,
-            'size_human': human_size(stat.st_size),
-            'width': width,
-            'height': height,
-            'format': fmt,
-            'comfyui': extract_comfyui_data(filepath),
-            'exif': extract_exif(filepath),
-            'png_metadata': extract_png_metadata(filepath),
-        }
-        return jsonify(info)
-
-    @app.route('/api/photos/<path:rel>')
-    def serve_file(rel):
-        parts = rel.split('/')
-
-        if parts[0] == '__comfy_output':
-            co = st['comfy_output']
-            if not co:
-                abort(404)
-            file_path = Path(co).joinpath(*parts[1:]) if len(parts) > 1 else abort(400)
-        else:
-            if not allow_dir_change and parts[0] and not parts[0].startswith('__'):
-                abort(403, 'not permitted')
-            file_path = (root_dir / rel).resolve()
-            if not file_path.is_relative_to(root_dir):
-                abort(400, 'invalid path')
-
-        if thumbnails_name in parts:
-            idx = parts.index(thumbnails_name)
-            src_parts = parts[:idx] + parts[idx + 1:]
-            if parts[0] == '__comfy_output':
-                source = Path(co).joinpath(*src_parts[1:]) if len(src_parts) > 1 else abort(400)
-            else:
-                source = (root_dir / '/'.join(src_parts)).resolve()
-            if not source.is_file():
-                abort(404)
-            file_path.parent.mkdir(parents=True, exist_ok=True)
-            if not file_path.is_file() or file_path.stat().st_mtime < source.stat().st_mtime:
-                try:
-                    img = Image.open(source)
-                    img.thumbnail((300, 300))
-                    img.convert('RGB').save(file_path, 'JPEG', quality=80)
-                except Exception:
-                    return send_file(source, max_age=3600)
-            return send_file(file_path, mimetype='image/jpeg', max_age=86400)
-
+    @app.route('/api/photo')
+    def serve_photo():
+        file_path = resolve_path(request.args.get('path', ''))
         if not file_path.is_file():
             abort(404)
         return send_file(file_path, max_age=3600)
 
-    @app.route('/api/photos/<path:filename>/move', methods=['POST'])
-    def move_photo(filename):
-        data     = request.get_json()
-        src_rel  = data.get('folder', '')
-        dest_rel = data.get('destination', '')
-        src_dir  = resolve_folder_path(src_rel)
-        dest_dir = resolve_folder_path(dest_rel)
+    @app.route('/api/thumbnail')
+    def serve_thumbnail():
+        img_path = resolve_path(request.args.get('path', ''))
+        if not img_path.is_file():
+            abort(404)
+        thumb_path = img_path.parent / THUMBNAILS_DIR / (img_path.name + '.jpg')
+        if not thumb_path.is_file() or thumb_path.stat().st_mtime < img_path.stat().st_mtime:
+            thumb_path.parent.mkdir(parents=True, exist_ok=True)
+            try:
+                img = Image.open(img_path)
+                img.thumbnail((300, 300))
+                img.convert('RGB').save(thumb_path, 'JPEG', quality=80)
+            except Exception:
+                return send_file(img_path, max_age=3600)
+        return send_file(thumb_path, mimetype='image/jpeg', max_age=86400)
 
-        src_path = src_dir / filename
-        if not src_path.is_file():
-            return jsonify({'error': 'file not found'}), 404
-
-        dest_dir.mkdir(parents=True, exist_ok=True)
-        dest_path = dest_dir / filename
-        shutil.move(str(src_path), str(dest_path))
-
-        get_folder_cache(src_dir).pop(filename, None)
-
-        undo_stack.append({
-            'filename': filename,
-            'from': str(src_path),
-            'to':   str(dest_path),
+    @app.route('/api/info')
+    def photo_info():
+        file_path = resolve_path(request.args.get('path', ''))
+        if not file_path.is_file():
+            return jsonify({'error': 'not found'}), 404
+        stat = file_path.stat()
+        try:
+            img = Image.open(file_path)
+            width, height = img.size
+            fmt = img.format or file_path.suffix.upper().lstrip('.')
+        except Exception:
+            width, height, fmt = 0, 0, file_path.suffix.upper().lstrip('.')
+        return jsonify({
+            'filename':     file_path.name,
+            'modified':     datetime.fromtimestamp(stat.st_mtime).isoformat(),
+            'size':         stat.st_size,
+            'size_human':   human_size(stat.st_size),
+            'width':        width,
+            'height':       height,
+            'format':       fmt,
+            'comfyui':      extract_comfyui_data(file_path),
+            'exif':         extract_exif(file_path),
+            'png_metadata': extract_png_metadata(file_path),
         })
 
-        return jsonify({'ok': True, 'action': 'moved', 'filename': filename, 'destination': dest_rel})
+    @app.route('/api/move', methods=['POST'])
+    def move_photo():
+        src_path = resolve_path(request.args.get('path', ''))
+        dest_dir = resolve_path(request.get_json().get('destination', ''))
+        if not src_path.is_file():
+            return jsonify({'error': 'file not found'}), 404
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        dest_path = dest_dir / src_path.name
+        shutil.move(str(src_path), str(dest_path))
+        st['folder_caches'].get(str(src_path.parent.resolve()), {}).pop(src_path.name, None)
+        undo_stack.append({'filename': src_path.name, 'from': str(src_path), 'to': str(dest_path)})
+        return jsonify({'ok': True, 'filename': src_path.name})
 
     @app.route('/api/undo', methods=['POST'])
     def undo():
         if not undo_stack:
             return jsonify({'ok': False, 'error': 'nothing to undo'}), 400
-
-        entry = undo_stack.pop()
-        to_path = Path(entry['to'])
+        entry     = undo_stack.pop()
+        to_path   = Path(entry['to'])
         from_path = Path(entry['from'])
-
-        if to_path.is_file():
-            shutil.move(str(to_path), str(from_path))
-            return jsonify({
-                'ok': True,
-                'action': 'undo',
-                'filename': entry['filename'],
-                'restored_to': str(from_path),
-            })
-        else:
-            return jsonify({'ok': False, 'error': 'file not found in destination'}), 404
+        if not to_path.is_file():
+            return jsonify({'ok': False, 'error': 'file not found'}), 404
+        from_path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(to_path), str(from_path))
+        for p in (to_path.parent, from_path.parent):
+            st['folder_caches'].pop(str(p.resolve()), None)
+        return jsonify({'ok': True, 'filename': entry['filename']})
 
     @app.route('/api/comfy/free', methods=['POST'])
     def comfy_free():
@@ -758,93 +725,67 @@ def create_app(root_dir, config, selected_name, dust_name,
         except Exception as e:
             return jsonify({'error': str(e)}), 502
 
-    @app.route('/api/photos/<path:filename>/describe', methods=['POST'])
-    def describe_photo(filename):
-        data = request.get_json()
-        target = resolve_folder_path(data.get('folder', ''))
-
-        filepath = target / filename
-        if not filepath.is_file():
+    @app.route('/api/describe', methods=['POST'])
+    def describe_photo():
+        data      = request.get_json()
+        file_path = resolve_path(request.args.get('path', ''))
+        if not file_path.is_file():
             return jsonify({'error': 'not found'}), 404
-
-        lmstudio_url = data.get('lmstudio_url', 'http://localhost:1234/v1')
-        prompt = data.get('prompt', 'Describe this image in detail.')
-        model = data.get('model', 'model-identifier')
-
-        mt, _ = mimetypes.guess_type(str(filepath))
-        mt = mt or 'image/png'
-        with open(filepath, 'rb') as f:
+        lms_url = data.get('lmstudio_url', 'http://localhost:1234/v1')
+        prompt  = data.get('prompt', 'Describe this image in detail.')
+        model   = data.get('model', 'model-identifier')
+        mt, _   = mimetypes.guess_type(str(file_path))
+        mt      = mt or 'image/png'
+        with open(file_path, 'rb') as f:
             b64 = base64.b64encode(f.read()).decode('ascii')
-        data_url = f"data:{mt};base64,{b64}"
-
         try:
             resp = http_requests.post(
-                f"{lmstudio_url}/chat/completions",
-                json={
-                    'model': model,
-                    'messages': [{
-                        'role': 'user',
-                        'content': [
-                            {'type': 'text', 'text': prompt},
-                            {'type': 'image_url', 'image_url': {'url': data_url}},
-                        ],
-                    }],
-                    'temperature': 0.2,
-                },
+                f"{lms_url}/chat/completions",
+                json={'model': model, 'messages': [{'role': 'user', 'content': [
+                    {'type': 'text', 'text': prompt},
+                    {'type': 'image_url', 'image_url': {'url': f'data:{mt};base64,{b64}'}},
+                ]}], 'temperature': 0.2},
                 timeout=120,
             )
-            result = resp.json()
-            description = result['choices'][0]['message']['content']
-            return jsonify({'description': description})
+            return jsonify({'description': resp.json()['choices'][0]['message']['content']})
         except Exception as e:
             return jsonify({'error': str(e)}), 502
 
-    @app.route('/api/photos/<path:filename>/write-meta', methods=['POST'])
-    def write_meta(filename):
-        data = request.get_json()
+    @app.route('/api/write-meta', methods=['POST'])
+    def write_meta():
+        data        = request.get_json()
+        file_path   = resolve_path(request.args.get('path', ''))
         description = data.get('description', '')
-        key = data.get('key', 'Description')
-        target = resolve_folder_path(data.get('folder', ''))
-
-        filepath = target / filename
-        if not filepath.is_file():
+        key         = data.get('key', 'Description')
+        if not file_path.is_file():
             return jsonify({'error': 'not found'}), 404
-
         try:
-            img = Image.open(filepath)
-            ext = filepath.suffix.lower()
-
+            img = Image.open(file_path)
+            ext = file_path.suffix.lower()
             if ext == '.png':
                 info = PngInfo()
                 for k, v in img.info.items():
                     if isinstance(v, str):
                         info.add_text(k, v)
                 info.add_text(key, description)
-                img.save(filepath, pnginfo=info)
-            elif ext in ('.jpg', '.jpeg'):
-                exif = img.getexif()
-                exif[0x010E] = description  # ImageDescription
-                img.save(filepath, quality=98, exif=exif.tobytes())
-            elif ext == '.webp':
+                img.save(file_path, pnginfo=info)
+            elif ext in ('.jpg', '.jpeg', '.webp'):
                 exif = img.getexif()
                 exif[0x010E] = description
-                img.save(filepath, quality=98, exif=exif.tobytes())
+                img.save(file_path, quality=98, exif=exif.tobytes())
             else:
                 return jsonify({'error': f'Unsupported format: {ext}'}), 400
-
             return jsonify({'ok': True})
         except Exception as e:
             return jsonify({'error': str(e)}), 500
 
-    @app.route('/api/photos/<path:filename>/locate', methods=['POST'])
-    def locate_photo(filename):
-        data = request.get_json(silent=True, force=True) or {}
-        target = resolve_folder_path(data.get('folder', ''))
-        filepath = target / filename
-        if not filepath.is_file():
+    @app.route('/api/locate', methods=['POST'])
+    def locate_photo():
+        file_path = resolve_path(request.args.get('path', ''))
+        if not file_path.is_file():
             return jsonify({'error': 'not found'}), 404
         try:
-            subprocess.Popen(['explorer', f'/select,{filepath}'])
+            subprocess.Popen(['explorer', f'/select,{file_path}'])
             return jsonify({'ok': True})
         except Exception as e:
             return jsonify({'error': str(e)}), 500
@@ -861,14 +802,12 @@ def create_app(root_dir, config, selected_name, dust_name,
             folders.append(str(rel).replace('\\', '/'))
         co = st['comfy_output']
         return jsonify({
-            'folders': folders,
-            'root_name': root_dir.name,
-            'current': None,
-            'comfy_output': co or None,
+            'folders':           folders,
+            'root_name':         root_dir.name,
+            'comfy_output':      co or None,
             'comfy_output_name': Path(co).name if co else None,
-            'comfy_output_active': False,
-            'selected_name': selected_name,
-            'dust_name': dust_name,
+            'selected_name':     selected_name,
+            'dust_name':         dust_name,
         })
 
     @app.route('/api/tools')
@@ -877,17 +816,13 @@ def create_app(root_dir, config, selected_name, dust_name,
 
     @app.route('/api/tools/run', methods=['POST'])
     def run_tool():
-        data     = request.json
-        name     = data.get('name', '')
-        filename = data.get('filename', '')
-        folder   = data.get('folder', '')
+        name      = request.json.get('name', '')
+        file_path = resolve_path(request.args.get('path', ''))
         if name not in tools_cfg:
             return jsonify({'ok': False, 'error': 'Unknown tool'}), 400
-        dir_path = resolve_folder_path(folder)
-        filepath = dir_path / filename
-        if not filepath.is_file():
+        if not file_path.is_file():
             return jsonify({'ok': False, 'error': 'File not found'}), 404
-        quoted = f'"{filepath}"' if sys.platform == 'win32' else shlex.quote(str(filepath))
+        quoted = f'"{file_path}"' if sys.platform == 'win32' else shlex.quote(str(file_path))
         cmd = tools_cfg[name].replace('%filename%', quoted)
         try:
             result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=60)
@@ -905,14 +840,12 @@ def create_app(root_dir, config, selected_name, dust_name,
     @app.route('/api/batch', methods=['POST'])
     def batch_operation():
         data        = request.get_json()
+        src_dir     = resolve_path(request.args.get('path', ''))
         filenames   = data.get('filenames', [])
         operation   = data.get('operation', 'copy')
         use_comfy   = data.get('use_comfy_output', False)
         destination = data.get('destination', '')
         do_zip      = data.get('zip', False)
-        src_folder  = data.get('folder', '')
-
-        src_dir = resolve_folder_path(src_folder)
 
         if use_comfy:
             co = st['comfy_output']
@@ -920,7 +853,7 @@ def create_app(root_dir, config, selected_name, dust_name,
                 return jsonify({'ok': False, 'error': 'comfy_output not configured'}), 400
             dst_dir = Path(co)
         else:
-            dst_dir = resolve_folder_path(destination) if destination else root_dir
+            dst_dir = resolve_path(destination) if destination else root_dir
 
         dst_dir.mkdir(parents=True, exist_ok=True)
         resolved = [(fn, src_dir / fn) for fn in filenames if (src_dir / fn).is_file()]
@@ -949,42 +882,39 @@ def create_app(root_dir, config, selected_name, dust_name,
 
         return jsonify({'ok': True, 'count': len(processed), 'errors': errors})
 
-    @app.route('/api/photos/<path:filename>/favorite', methods=['POST'])
-    def toggle_favorite(filename):
-        folder_rel = request.args.get('folder', '')
-        dir_path = resolve_folder_path(folder_rel)
-        if not (dir_path / filename).is_file():
+    @app.route('/api/favorite', methods=['POST'])
+    def toggle_favorite():
+        file_path = resolve_path(request.args.get('path', ''))
+        if not file_path.is_file():
             return jsonify({'ok': False, 'error': 'not found'}), 404
-        cache = get_folder_cache(dir_path)
-        entry = cache.setdefault(filename, {})
+        cache = get_folder_cache(file_path.parent)
+        entry = cache.setdefault(file_path.name, {})
         entry['favorite'] = not entry.get('favorite', False)
-        save_cache(dir_path)
+        save_cache(file_path.parent)
         return jsonify({'ok': True, 'favorite': entry['favorite']})
 
     @app.route('/api/favorites', methods=['POST'])
     def set_favorites():
-        data = request.get_json()
-        filenames  = data.get('filenames', [])
-        favorite   = data.get('favorite', True)
-        folder_rel = data.get('folder', '')
-        dir_path = resolve_folder_path(folder_rel)
-        cache = get_folder_cache(dir_path)
+        data      = request.get_json()
+        folder    = resolve_path(request.args.get('path', ''))
+        filenames = data.get('filenames', [])
+        favorite  = data.get('favorite', True)
+        cache     = get_folder_cache(folder)
         for fn in filenames:
             cache.setdefault(fn, {})['favorite'] = favorite
-        save_cache(dir_path)
+        save_cache(folder)
         return jsonify({'ok': True})
 
     @app.route('/api/favorites/download')
     def download_favorites():
-        folder_rel = request.args.get('folder', '')
-        dir_path   = resolve_folder_path(folder_rel)
-        cache      = get_folder_cache(dir_path)
-        fav_files  = [fn for fn, e in cache.items()
-                      if e.get('favorite') and (dir_path / fn).is_file()]
+        folder    = resolve_path(request.args.get('path', ''))
+        cache     = get_folder_cache(folder)
+        fav_files = [fn for fn, e in cache.items()
+                     if e.get('favorite') and (folder / fn).is_file()]
         buf = io.BytesIO()
         with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
             for fn in fav_files:
-                zf.write(dir_path / fn, fn)
+                zf.write(folder / fn, fn)
         buf.seek(0)
         return send_file(buf, mimetype='application/zip',
                          as_attachment=True, download_name='favorites.zip')
@@ -1009,10 +939,8 @@ def create_app(root_dir, config, selected_name, dust_name,
 
     @app.route('/api/refresh', methods=['POST'])
     def refresh():
-        data = request.get_json(silent=True) or {}
-        folder_rel = data.get('folder', '')
-        target = resolve_folder_path(folder_rel)
-        st['folder_caches'].pop(str(target), None)
+        target = resolve_path(request.args.get('path', ''))
+        st['folder_caches'].pop(str(target.resolve()), None)
         threading.Thread(target=build_index, args=(target, st), daemon=True).start()
         return jsonify({'ok': True})
 
@@ -1025,7 +953,7 @@ def create_app(root_dir, config, selected_name, dust_name,
             'widgets':         {'gpu_monitor': monitor_enabled, 'comfy_queue': comfy_queue_enabled},
             'selected_name':   selected_name,
             'dust_name':       dust_name,
-            'thumbnails_name': thumbnails_name,
+            'thumbnails_name': THUMBNAILS_DIR,
             'root_name':       root_dir.name,
         })
 
@@ -1057,9 +985,8 @@ def create_app(root_dir, config, selected_name, dust_name,
 
     @app.route('/api/file-types')
     def file_types():
-        folder_rel = request.args.get('folder', '')
-        target = resolve_folder_path(folder_rel)
-        types = set()
+        target = resolve_path(request.args.get('path', ''))
+        types  = set()
         if target.is_dir():
             for f in target.iterdir():
                 if f.is_file() and f.suffix.lower() in EXTENSIONS:
@@ -1101,22 +1028,19 @@ def main():
             print(f"Error: comfy_output '{source}' is not a valid directory")
             sys.exit(1)
 
-    selected_name    = defaults.get('selected_dir_name',  '__selected')
-    dust_name        = defaults.get('dust_dir_name',      '__dust')
-    thumbnails_name  = defaults.get('thumbnails_dir_name','__thumbnails')
-    index_filename   = defaults.get('index_filename',     '__photoparser_index.json')
-    port             = defaults.get('port', 1976)
-    watch_enabled    = defaults.get('live_updates', True)
-    comfy_url        = defaults.get('comfy_url', 'http://127.0.0.1:8188')
-    lmstudio_url     = defaults.get('lmstudio_url', 'http://localhost:1234/v1')
-    comfy_output     = defaults.get('comfy_output', '')
-    widgets              = config.get('widgets', {})
-    monitor_enabled      = widgets.get('gpu_monitor', False)
-    comfy_queue_enabled  = widgets.get('comfy_queue', False)
+    selected_name       = defaults.get('selected_dir_name', '__selected')
+    dust_name           = defaults.get('dust_dir_name',     '__dust')
+    port                = defaults.get('port', 1976)
+    watch_enabled       = defaults.get('live_updates', True)
+    comfy_url           = defaults.get('comfy_url', 'http://127.0.0.1:8188')
+    lmstudio_url        = defaults.get('lmstudio_url', 'http://localhost:1234/v1')
+    comfy_output        = defaults.get('comfy_output', '')
+    widgets             = config.get('widgets', {})
+    monitor_enabled     = widgets.get('gpu_monitor', False)
+    comfy_queue_enabled = widgets.get('comfy_queue', False)
     app = create_app(source, config, selected_name, dust_name,
-                     index_filename, watch_enabled, comfy_url, lmstudio_url,
-                     comfy_output, monitor_enabled, comfy_queue_enabled,
-                     thumbnails_name)
+                     watch_enabled, comfy_url, lmstudio_url,
+                     comfy_output, monitor_enabled, comfy_queue_enabled)
 
     import socket
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
