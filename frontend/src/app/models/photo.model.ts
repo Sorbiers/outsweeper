@@ -10,6 +10,7 @@ export interface PhotoListItem {
 }
 
 export interface PhotoInfo extends PhotoListItem {
+  created?: string;
   width: number;
   height: number;
   format: string;

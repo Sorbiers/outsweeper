@@ -1,26 +1,70 @@
 <div class="app-container">
   <div class="strip-area" [style.height.%]="stripHeight">
+    <!-- Toolbar -->
     <div class="strip-toolbar">
-      <input
-        type="text"
-        placeholder="Filter by filename..."
-        class="filter-input"
-        (input)="onFilterInput($any($event.target).value)"
-        matTooltip="Substring: cat&#10;Wildcard: *.jp*  img_???.png&#10;Invert: !cat  !*.png"
-        matTooltipShowDelay="600"
-      />
-      <button mat-icon-button (click)="openFilterDialog()" [class.filter-active]="hasActiveFilters" title="Advanced filter">
-        <mat-icon>filter_list</mat-icon>
-      </button>
-      <button mat-icon-button (click)="toggleFavoritesFilter()" [class.filter-active]="showFavoritesOnly" title="Show favorites only">
-        <mat-icon>{{ showFavoritesOnly ? 'favorite' : 'favorite_border' }}</mat-icon>
-      </button>
-      <span class="folder-name" (click)="openFolderDialog()" title="Change folder">{{ sourceFolderName }}{{ folderType !== 'source' ? ' (' + (folderType === 'selected' ? 'Selected' : folderType === 'dust' ? 'Dust' : 'Sub') + ')' : '' }}</span>
-      <span class="photo-counter">{{ totalPhotos > 0 ? (currentIndex + 1) : 0 }} / {{ totalPhotos }}</span>
-      <button mat-icon-button (click)="refresh()" title="Refresh folder">
-        <mat-icon>refresh</mat-icon>
-      </button>
+      <div class="strip-toolbar-section">
+        <div class="strip-toolbar-filter">
+          <input
+            type="text"
+            placeholder="Filter by filename..."
+            class="filter-input"
+            (input)="onFilterInput($any($event.target).value)"
+            matTooltip="Substring: cat&#10;Wildcard: *.jp*  img_???.png&#10;Invert: !cat  !*.png"
+            matTooltipShowDelay="600"
+          />
+          <button
+            mat-icon-button
+            (click)="openFilterDialog()"
+            [class.filter-active]="hasActiveFilters"
+            matTooltip="Advanced filters"
+            matTooltipShowDelay="600"
+          >
+            <mat-icon>filter_list</mat-icon>
+          </button>
+          <button
+            mat-icon-button
+            (click)="toggleFavoritesFilter()"
+            [class.filter-active]="showFavoritesOnly"
+            title="Show favorites only"
+            matTooltip="Show favorites only"
+            matTooltipShowDelay="600"
+          >
+            <mat-icon>{{ showFavoritesOnly ? 'favorite' : 'favorite_border' }}</mat-icon>
+          </button>
+        </div>
+      </div>
+
+      <div class="strip-toolbar-section strip-toolbar-folder" >
+        <div class="folder" matTooltip="Change folder (=)" matTooltipShowDelay="600">
+          <mat-icon>folder</mat-icon>
+          <span class="folder-name" (click)="openFolderDialog()" title="Change folder">
+            {{ sourceFolderName }}
+            {{
+              folderType !== 'source'
+                ? ' (' +
+                  (folderType === 'selected'
+                    ? 'Selected'
+                    : folderType === 'dust'
+                      ? 'Dust'
+                      : 'Sub') +
+                  ')'
+                : ''
+            }}</span
+          >
+        </div>
+      </div>
+
+      <div class="strip-toolbar-section strip-toolbar-counter">
+        <span class="photo-counter"
+          >{{ totalPhotos > 0 ? currentIndex + 1 : 0 }} / {{ totalPhotos }}</span
+        >
+        <button mat-icon-button (click)="refresh()" title="Refresh folder">
+          <mat-icon>refresh</mat-icon>
+        </button>
+      </div>
     </div>
+
+    <!-- -->
     <pp-image-strip
       [photos]="photos"
       [currentIndex]="currentIndex"
@@ -32,7 +76,8 @@
       (pageChange)="onPageChange($event)"
       (pageSizeChange)="onPageSizeChange($event)"
       (colsChange)="stripCols = $event"
-      (favoriteToggled)="toggleFavorite($event)">
+      (favoriteToggled)="toggleFavorite($event)"
+    >
     </pp-image-strip>
   </div>
 
@@ -44,7 +89,12 @@
     </div>
     <div class="divider-v" (mousedown)="onVDividerDown($event)"></div>
     <div class="info-area" [style.width.%]="100 - previewWidth">
-      <pp-info-panel [info]="currentInfo" [folder]="currentPath" [folderType]="folderType" (move)="moveCurrentPhoto($event)"></pp-info-panel>
+      <pp-info-panel
+        [info]="currentInfo"
+        [folder]="currentPath"
+        [folderType]="folderType"
+        (move)="moveCurrentPhoto($event)"
+      ></pp-info-panel>
     </div>
   </div>
 </div>
@@ -79,7 +129,12 @@
   </mat-menu>
 }
 
-<button mat-fab [matMenuTriggerFor]="folderMenu" class="folder-fab" [class.viewing-other]="folderType !== 'source'">
+<button
+  mat-fab
+  [matMenuTriggerFor]="folderMenu"
+  class="folder-fab"
+  [class.viewing-other]="folderType !== 'source'"
+>
   <mat-icon>folder</mat-icon>
 </button>
 <mat-menu #folderMenu="matMenu">
@@ -96,13 +151,9 @@
     <mat-icon>{{ sortBy === 'modified' && sortAsc ? 'check' : 'schedule' }}</mat-icon> Oldest first
   </button>
   <mat-divider></mat-divider>
-  <button mat-menu-item (click)="openGenerator()">
-    <mat-icon>bolt</mat-icon> Generator
-  </button>
+  <button mat-menu-item (click)="openGenerator()"><mat-icon>bolt</mat-icon> Generator</button>
   <mat-divider></mat-divider>
-  <button mat-menu-item (click)="refresh()">
-    <mat-icon>refresh</mat-icon> Refresh
-  </button>
+  <button mat-menu-item (click)="refresh()"><mat-icon>refresh</mat-icon> Refresh</button>
   <button mat-menu-item (click)="openFolderDialog()">
     <mat-icon>drive_folder_upload</mat-icon> Folder
   </button>

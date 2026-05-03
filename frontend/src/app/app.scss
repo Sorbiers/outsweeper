@@ -26,10 +26,42 @@
   flex: none;
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 4px 8px;
+  gap: 4px;
+  padding: 4px 4px;
   background: #1a1a1a;
   border-bottom: 1px solid #333;
+  justify-content: space-between;
+  box-sizing: border-box;
+  height: 48px;
+
+  .strip-toolbar-section {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    backdrop-filter: brightness(0.8);
+    height: 100%;
+    padding: 0 18px;
+    box-sizing: border-box;
+    border-radius: 6px;
+  }
+
+  .strip-toolbar-filter {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 18px;
+  }
+
+  .strip-toolbar-folder {
+    flex: 1;
+  }
+
+  .active-folder-counter {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+  }
 }
 
 .filter-input {
@@ -38,24 +70,45 @@
   color: #eee;
   padding: 4px 8px;
   border-radius: 4px;
-  font-size: 13px;
-  width: 200px;
+  font-size: 16px;
+  min-width: 200px;
+  width: 25vw;
   outline: none;
+  max-width: 320px;
 
   &:focus {
     border-color: #4fc3f7;
   }
 }
 
-.folder-name {
+.folder {
+  display: flex;
+  align-items: center;
+  gap: 4px;
   color: #888;
   font-size: 13px;
   cursor: pointer;
+
+  mat-icon {
+    color: rgb(145, 145, 79);
+  }
+  &:hover {
+    color: #4fc3f7;
+    mat-icon {
+      color: yellow;
+    }
+  }
+}
+
+.spacer {
+  flex: 1;
+}
+
+.folder-name {
   white-space: nowrap;
   max-width: 180px;
   overflow: hidden;
   text-overflow: ellipsis;
-  &:hover { color: #4fc3f7; }
 }
 
 .photo-counter {
@@ -70,7 +123,8 @@
   height: 4px;
   background: #333;
   cursor: row-resize;
-  &:hover, &:active {
+  &:hover,
+  &:active {
     background: #666;
   }
 }
@@ -92,7 +146,8 @@
   width: 4px;
   background: #333;
   cursor: col-resize;
-  &:hover, &:active {
+  &:hover,
+  &:active {
     background: #666;
   }
 }
@@ -154,11 +209,17 @@
 }
 
 @keyframes spin-slow {
-  from { transform: rotate(0deg); }
-  to   { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .refresh-pending {
   color: #4fc3f7;
-  mat-icon { animation: spin-slow 2s linear infinite; }
+  mat-icon {
+    animation: spin-slow 2s linear infinite;
+  }
 }

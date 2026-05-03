@@ -10,6 +10,12 @@
             <span class="label">Modified</span>
             <span class="value">{{ info.modified | date: 'medium' }}</span>
           </div>
+          @if (info.created) {
+            <div class="meta-item">
+              <span class="label">Created</span>
+              <span class="value">{{ info.created | date: 'medium' }}</span>
+            </div>
+          }
           <div class="meta-item">
             <span class="label">Size</span>
             <span class="value">{{ info.size_human }}</span>

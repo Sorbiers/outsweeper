@@ -541,9 +541,12 @@ def create_app(root_dir, config, selected_name, dust_name,
             fmt = img.format or file_path.suffix.upper().lstrip('.')
         except Exception:
             fmt = file_path.suffix.upper().lstrip('.')
+        mtime_iso = datetime.fromtimestamp(entry['mtime']).isoformat()
+        ctime_iso = datetime.fromtimestamp(entry['ctime']).isoformat()
         return jsonify({
             'filename':     file_path.name,
-            'modified':     datetime.fromtimestamp(entry['mtime']).isoformat(),
+            'modified':     mtime_iso,
+            'created':      ctime_iso if int(entry['ctime']) != int(entry['mtime']) else None,
             'size':         entry['size'],
             'size_human':   human_size(entry['size']),
             'width':        entry.get('width') or 0,
