@@ -9,6 +9,7 @@ export type PhotoAction =
   | 'select'
   | 'dust'
   | 'undo'
+  | 'download'
   | 'pageForward'
   | 'pageBackward'
   | 'pageForward10'
@@ -54,6 +55,7 @@ export class KeyboardService {
         else if (event.key === 'PageDown') action = 'pageForward';
         else if (event.key === 'PageUp') action = 'pageBackward';
         else if (event.key === 'z' && event.ctrlKey) action = 'undo';
+        else if (event.key === 's' && event.ctrlKey) action = 'download';
         else if (event.key === ' ') action = 'toggleSelection';
         else if (event.key === 'a' && event.ctrlKey) action = 'selectAll';
         else if (event.key === '=') action = 'selectSourceFolder';

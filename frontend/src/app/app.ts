@@ -82,6 +82,7 @@ export class App implements OnInit, OnDestroy {
   private sseClientId = '';
 
   metrics = signal<SystemMetrics | null>(null);
+  gpuMonitorEnabled = signal(false);
   widgetVisible = signal(true);
   comfyQueueEnabled = signal(false);
   comfyQueueVisible = signal(true);
@@ -142,6 +143,7 @@ export class App implements OnInit, OnDestroy {
     this.photoService.getConfig().subscribe((cfg) => {
       if (!this.connState.comfy.url) this.connState.comfy.url = cfg.comfy_url;
       if (!this.connState.lmstudio.url) this.connState.lmstudio.url = cfg.lmstudio_url;
+      if (cfg.widgets?.gpu_monitor) this.gpuMonitorEnabled.set(true);
       if (cfg.widgets?.comfy_queue) this.comfyQueueEnabled.set(true);
       if (cfg.selected_name) this.selectedName = cfg.selected_name;
       if (cfg.dust_name) this.dustName = cfg.dust_name;
@@ -403,6 +405,9 @@ export class App implements OnInit, OnDestroy {
       case 'undo':
         if (this.folderType === 'source' || this.folderType === 'sub') this.undoLast();
         break;
+      case 'download':
+        if (this.currentInfo) this.photoService.downloadFile(this.currentInfo.filename, this.currentPath);
+        break;
       case 'toggleSelection':
         this.toggleFavoriteCurrent();
         break;
@@ -472,6 +477,18 @@ export class App implements OnInit, OnDestroy {
   closeComfyQueueWidget(): void {
     this.comfyQueueVisible.set(false);
     this.photoService.setComfyQueuePaused(true, this.sseClientId).subscribe();
+  }
+
+  toggleGpuWidget(): void {
+    const next = !this.widgetVisible();
+    this.widgetVisible.set(next);
+    this.photoService.setMetricsPaused(!next, this.sseClientId).subscribe();
+  }
+
+  toggleComfyQueueWidget(): void {
+    const next = !this.comfyQueueVisible();
+    this.comfyQueueVisible.set(next);
+    this.photoService.setComfyQueuePaused(!next, this.sseClientId).subscribe();
   }
 
   private undoLast(): void {

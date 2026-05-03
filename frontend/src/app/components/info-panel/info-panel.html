@@ -3,6 +3,60 @@
     <mat-card class="info-card">
       <mat-card-header>
         <mat-card-title>{{ info.filename }}</mat-card-title>
+        <button mat-icon-button [matMenuTriggerFor]="actionsMenu" class="actions-menu-btn">
+          <mat-icon>more_vert</mat-icon>
+        </button>
+        <mat-menu #actionsMenu="matMenu">
+          <button mat-menu-item (click)="openDescribe()">
+            <mat-icon>visibility</mat-icon>
+            <span class="menu-label">Describe</span>
+          </button>
+          <button mat-menu-item (click)="download()">
+            <mat-icon>download</mat-icon>
+            <span class="menu-label">Download <kbd>Ctrl+S</kbd></span>
+          </button>
+          <button mat-menu-item (click)="locate()">
+            <mat-icon>folder_open</mat-icon>
+            <span class="menu-label">Locate</span>
+          </button>
+          @if (folderType === 'source' || folderType === 'sub') {
+            <mat-divider />
+            <button mat-menu-item (click)="move.emit('selected')">
+              <mat-icon>check_circle</mat-icon>
+              <span class="menu-label">Move to Selected <kbd>+</kbd></span>
+            </button>
+            <button mat-menu-item (click)="move.emit('dust')">
+              <mat-icon>delete</mat-icon>
+              <span class="menu-label">Move to Dust <kbd>Del</kbd></span>
+            </button>
+          }
+          @if (folderType === 'selected') {
+            <mat-divider />
+            <button mat-menu-item (click)="move.emit('source')">
+              <mat-icon>undo</mat-icon>
+              <span class="menu-label">Unselect</span>
+            </button>
+          }
+          @if (folderType === 'dust') {
+            <mat-divider />
+            <button mat-menu-item (click)="move.emit('source')">
+              <mat-icon>restore</mat-icon>
+              <span class="menu-label">Restore</span>
+            </button>
+          }
+          @if (tools.length > 0) {
+            <mat-divider />
+            <button mat-menu-item [matMenuTriggerFor]="toolsSubMenu">
+              <mat-icon>build</mat-icon>
+              <span class="menu-label">Tools</span>
+            </button>
+          }
+        </mat-menu>
+        <mat-menu #toolsSubMenu="matMenu">
+          @for (t of tools; track t) {
+            <button mat-menu-item (click)="runTool(t)">{{ t }}</button>
+          }
+        </mat-menu>
       </mat-card-header>
       <mat-card-content>
         <div class="meta-grid">
@@ -30,14 +84,6 @@
           </div>
         </div>
       </mat-card-content>
-      <mat-card-actions class="meta-actions">
-        <button mat-stroked-button (click)="locate()" title="Show in Explorer">
-          <mat-icon>folder_open</mat-icon> Locate
-        </button>
-        <button mat-stroked-button class="describe-btn" (click)="openDescribe()">
-          <mat-icon>visibility</mat-icon> Describe
-        </button>
-      </mat-card-actions>
     </mat-card>
     <mat-card class="info-card">
       <mat-card-content>
@@ -156,59 +202,6 @@
           </div>
         }
       </mat-card-content>
-      @if (folderType === 'source' || folderType === 'sub') {
-        <mat-card-actions>
-          <button mat-stroked-button (click)="move.emit('selected')" title="Move to Selected (+/=)">
-            <mat-icon>check_circle</mat-icon> Move to Selected
-          </button>
-          <button
-            mat-stroked-button
-            color="warn"
-            (click)="move.emit('dust')"
-            title="Move to Dust (Delete)"
-          >
-            <mat-icon>delete</mat-icon> Move to Dust
-          </button>
-          <ng-container *ngTemplateOutlet="toolsBtn"></ng-container>
-        </mat-card-actions>
-      }
-      @if (folderType === 'selected') {
-        <mat-card-actions>
-          <button
-            mat-stroked-button
-            (click)="move.emit('source')"
-            title="Move back to working folder"
-          >
-            <mat-icon>undo</mat-icon> Unselect
-          </button>
-          <ng-container *ngTemplateOutlet="toolsBtn"></ng-container>
-        </mat-card-actions>
-      }
-      @if (folderType === 'dust') {
-        <mat-card-actions>
-          <button
-            mat-stroked-button
-            (click)="move.emit('source')"
-            title="Move back to working folder"
-          >
-            <mat-icon>restore</mat-icon> Restore
-          </button>
-          <ng-container *ngTemplateOutlet="toolsBtn"></ng-container>
-        </mat-card-actions>
-      }
-
-      <ng-template #toolsBtn>
-        @if (tools.length > 0) {
-          <button mat-stroked-button [matMenuTriggerFor]="toolsMenu">
-            <mat-icon>build</mat-icon> Tools
-          </button>
-          <mat-menu #toolsMenu="matMenu">
-            @for (t of tools; track t) {
-              <button mat-menu-item (click)="runTool(t)">{{ t }}</button>
-            }
-          </mat-menu>
-        }
-      </ng-template>
     </mat-card>
   </div>
 } @else {

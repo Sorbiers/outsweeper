@@ -132,6 +132,15 @@ export class PhotoService {
       '/api/batch', body, { params: { path: folder } });
   }
 
+  downloadFile(filename: string, folder: string): void {
+    const a = document.createElement('a');
+    a.href = this.getImageUrl(filename, folder);
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }
+
   async downloadZip(filenames: string[], folder: string, downloadName = 'photos.zip'): Promise<void> {
     const resp = await fetch(`/api/zip?path=${encodeURIComponent(folder)}`, {
       method: 'POST',

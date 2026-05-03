@@ -1,5 +1,5 @@
 import { ClipboardModule } from '@angular/cdk/clipboard';
-import { DatePipe, KeyValuePipe, NgTemplateOutlet } from '@angular/common';
+import { DatePipe, KeyValuePipe } from '@angular/common';
 import { Component, EventEmitter, Input, OnInit, Output, inject, signal } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
@@ -19,7 +19,7 @@ const COMFYUI_KEYS = new Set(['prompt', 'workflow']);
 
 @Component({
   selector: 'pp-info-panel',
-  imports: [DatePipe, KeyValuePipe, NgTemplateOutlet, MatCardModule, MatDividerModule, MatChipsModule, MatButtonModule, MatIconModule, MatMenuModule, ClipboardModule],
+  imports: [DatePipe, KeyValuePipe, MatCardModule, MatDividerModule, MatChipsModule, MatButtonModule, MatIconModule, MatMenuModule, ClipboardModule],
   templateUrl: './info-panel.html',
   styleUrl: './info-panel.scss',
 })
@@ -52,6 +52,11 @@ export class InfoPanel implements OnInit {
       },
       error: err => this.snackBar.open(`${name}: ${err.error?.error || 'failed'}`, '', { duration: 5000 }),
     });
+  }
+
+  download(): void {
+    if (!this.info) return;
+    this.photoService.downloadFile(this.info.filename, this.folder);
   }
 
   locate(): void {
