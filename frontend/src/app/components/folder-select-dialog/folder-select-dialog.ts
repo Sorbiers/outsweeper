@@ -45,12 +45,12 @@ export class FolderSelectDialog implements OnInit {
     } else if (event.key === 'Escape') {
       this.dialogRef.close();
     } else if (event.key === 'ArrowDown') {
-      if (this.folders.length > 1) {
+      if (this.folders.length) {
         this.selectedSubfolder = this.moveSelection(this.folders, this.selectedSubfolder, 1);
         this.scrollSelectedIntoView();
       }
     } else if (event.key === 'ArrowUp') {
-      if (this.folders.length > 1) {
+      if (this.folders.length) {
         this.selectedSubfolder = this.moveSelection(this.folders, this.selectedSubfolder, -1);
         this.scrollSelectedIntoView();
       }
@@ -119,7 +119,6 @@ export class FolderSelectDialog implements OnInit {
   }
 
   get resultPath(): string {
-    if (this.selectedSubfolder === '%comfy_output%') return '%comfy_output%';
     const col = this.selectedCollection;
     if (!this.selectedSubfolder && !col) return '';
     if (!col) return this.selectedSubfolder;
@@ -162,12 +161,15 @@ export class FolderSelectDialog implements OnInit {
   }
 
   private moveSelection(list: string[], current: string, delta: number): string {
+    if (current === '%comfy_output%' && list.length) {
+      return delta === 1 ? list[0] : list[list.length -1];
+    }
     if (list.length === 0) return '';
     const idx = list.indexOf(current);
     if (idx === -1) return list[0];
     const newIdx = idx + delta;
-    if (newIdx < 0) return list[list.length - 1];
-    if (newIdx >= list.length) return list[0];
+    if (newIdx < 0) return '%comfy_output%';
+    if (newIdx >= list.length) return '%comfy_output%';
     return list[newIdx];
   }
 

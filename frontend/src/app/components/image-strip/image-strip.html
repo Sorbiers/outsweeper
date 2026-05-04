@@ -12,7 +12,7 @@
       }
       <img
         #imgRef
-        [src]="getThumbnailUrl(photo.filename)"
+        [src]="getThumbnailUrl(photo)"
         [alt]="photo.filename"
         [class.visible]="photo.loaded || isImageReady(imgRef)"
         (load)="onImageLoad(photo)" />

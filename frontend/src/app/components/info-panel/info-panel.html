@@ -19,6 +19,17 @@
             <mat-icon>folder_open</mat-icon>
             <span class="menu-label">Locate</span>
           </button>
+          @if (exiftoolAvailable()) {
+            <mat-divider />
+            <button mat-menu-item (click)="openMetadataView()">
+              <mat-icon>info</mat-icon>
+              <span class="menu-label">Metadata…</span>
+            </button>
+            <button mat-menu-item (click)="openMetadataStrip()">
+              <mat-icon>delete_sweep</mat-icon>
+              <span class="menu-label">Strip Metadata…</span>
+            </button>
+          }
           @if (folderType === 'source' || folderType === 'sub') {
             <mat-divider />
             <button mat-menu-item (click)="move.emit('selected')">
@@ -83,11 +94,19 @@
             <span class="value">{{ info.format }}</span>
           </div>
         </div>
+        @if (info.tags) {
+          <mat-chip-set>
+            @for (tag of getTags(); track tag) {
+              <mat-chip>{{ tag }}</mat-chip>
+            }
+          </mat-chip-set>
+        }
       </mat-card-content>
     </mat-card>
-    <mat-card class="info-card">
-      <mat-card-content>
-        @if (info.comfyui.found) {
+
+    @if (info.comfyui.found) {
+      <mat-card class="info-card">
+        <mat-card-content>
           <!-- <mat-divider /> -->
           <div class="section-header">
             <h3>ComfyUI Workflow</h3>
@@ -172,10 +191,68 @@
             <h4>Negative Prompt</h4>
             <div class="prompt-text negative">{{ info.comfyui.negative_prompt }}</div>
           }
-        }
+        </mat-card-content>
+      </mat-card>
+    }
 
-        @if (pngMeta; as meta) {
-          <mat-divider />
+    @if (info.exif && (info.exif | keyvalue)?.length) {
+      <mat-card>
+        <mat-card-content>
+          <div class="section-header">
+            <h3>EXIF Data</h3>
+            @if (exiftoolAvailable()) {
+              <button mat-icon-button (click)="openMetadataEdit()" matTooltip="Edit basic fields">
+                <mat-icon>edit</mat-icon>
+              </button>
+            }
+          </div>
+          <div class="meta-grid">
+            @for (item of info.exif | keyvalue; track item.key) {
+              <div class="meta-item">
+                <span class="label">{{ item.key }}</span>
+                <span class="value">{{ item.value }}</span>
+              </div>
+            }
+          </div>
+        </mat-card-content>
+      </mat-card>
+    }
+
+    @if (info.icc && (info.icc | keyvalue)?.length) {
+      <mat-card>
+        <mat-card-content>
+          <h3>ICC Profile</h3>
+          <div class="meta-grid">
+            @for (item of info.icc | keyvalue; track item.key) {
+              <div class="meta-item">
+                <span class="label">{{ item.key }}</span>
+                <span class="value">{{ item.value }}</span>
+              </div>
+            }
+          </div>
+        </mat-card-content>
+      </mat-card>
+    }
+
+    @if (info.gps && (info.gps | keyvalue)?.length) {
+      <mat-card>
+        <mat-card-content>
+          <h3>GPS</h3>
+          <div class="meta-grid">
+            @for (item of info.gps | keyvalue; track item.key) {
+              <div class="meta-item">
+                <span class="label">{{ item.key }}</span>
+                <span class="value">{{ item.value }}</span>
+              </div>
+            }
+          </div>
+        </mat-card-content>
+      </mat-card>
+    }
+
+    @if (pngMeta; as meta) {
+      <mat-card>
+        <mat-card-content>
           <h3>PNG Metadata</h3>
           @for (item of meta | keyvalue; track item.key) {
             <div class="meta-block">
@@ -187,22 +264,9 @@
               }
             </div>
           }
-        }
-
-        @if (info.exif && (info.exif | keyvalue)?.length) {
-          <mat-divider />
-          <h3>EXIF Data</h3>
-          <div class="meta-grid">
-            @for (item of info.exif | keyvalue; track item.key) {
-              <div class="meta-item">
-                <span class="label">{{ item.key }}</span>
-                <span class="value">{{ item.value }}</span>
-              </div>
-            }
-          </div>
-        }
-      </mat-card-content>
-    </mat-card>
+        </mat-card-content>
+      </mat-card>
+    }
   </div>
 } @else {
   <div class="no-selection">Select an image</div>

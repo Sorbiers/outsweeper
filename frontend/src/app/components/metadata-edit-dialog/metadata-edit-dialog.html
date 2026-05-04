@@ -1,0 +1,75 @@
+<h2 mat-dialog-title>{{ title }}</h2>
+
+<mat-dialog-content class="md-content">
+  @if (loading()) {
+    <div class="md-center"><mat-spinner diameter="36"></mat-spinner></div>
+  } @else if (error()) {
+    <p class="md-error">{{ error() }}</p>
+  } @else {
+    @if (isBatch) {
+      <p class="md-hint">
+        Empty fields are skipped — only filled fields are written to every file.
+      </p>
+    }
+
+    <mat-form-field appearance="outline" class="md-full">
+      <mat-label>Image title</mat-label>
+      <input matInput [(ngModel)]="image_title" />
+      @if (invalid('image_title')) {
+        <mat-error>ASCII characters only (no accented letters or ©).</mat-error>
+      }
+    </mat-form-field>
+
+    <mat-form-field appearance="outline" class="md-full">
+      <mat-label>Artist</mat-label>
+      <input matInput [(ngModel)]="artist" />
+      @if (invalid('artist')) {
+        <mat-error>ASCII characters only (no accented letters or ©).</mat-error>
+      }
+    </mat-form-field>
+
+    <mat-form-field appearance="outline" class="md-full">
+      <mat-label>Description</mat-label>
+      <textarea matInput rows="2" [(ngModel)]="description"></textarea>
+      @if (invalid('description')) {
+        <mat-error>ASCII characters only (no accented letters or ©).</mat-error>
+      }
+    </mat-form-field>
+
+    <mat-form-field appearance="outline" class="md-full">
+      <mat-label>Document name</mat-label>
+      <input matInput [(ngModel)]="document_name" />
+      @if (invalid('document_name')) {
+        <mat-error>ASCII characters only (no accented letters or ©).</mat-error>
+      }
+    </mat-form-field>
+
+    <mat-form-field appearance="outline" class="md-full">
+      <mat-label>Copyright</mat-label>
+      <input matInput [(ngModel)]="copyright" />
+      @if (invalid('copyright')) {
+        <mat-error>ASCII characters only (no accented letters or ©).</mat-error>
+      }
+    </mat-form-field>
+
+    <mat-form-field appearance="outline" class="md-full">
+      <mat-label>Comments and tags</mat-label>
+      <textarea matInput rows="3"
+                placeholder="Free text. Tags as #hashtag words, e.g. trip #summer #beach"
+                [(ngModel)]="user_comment"></textarea>
+      @if (invalid('user_comment')) {
+        <mat-error>ASCII characters only (no accented letters or ©).</mat-error>
+      }
+    </mat-form-field>
+  }
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button mat-button mat-dialog-close [disabled]="busy()">Cancel</button>
+  @if (!error()) {
+    <button mat-raised-button color="primary"
+            [disabled]="!canApply()" (click)="apply()">
+      @if (busy()) { <mat-spinner diameter="18"></mat-spinner> } @else { Save }
+    </button>
+  }
+</mat-dialog-actions>

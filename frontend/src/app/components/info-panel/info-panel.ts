@@ -9,17 +9,21 @@ import { MatDividerModule } from '@angular/material/divider';
 import { MatIconModule } from '@angular/material/icon';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatSnackBar } from '@angular/material/snack-bar';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import { PhotoInfo } from '../../models/photo.model';
 import { PhotoService } from '../../services/photo.service';
 import { DescribeDialog } from '../describe-dialog/describe-dialog';
 import { DEFAULT_FLUX_WORKFLOW, GenerateDialog } from '../generate-dialog/generate-dialog';
+import { MetadataEditDialog } from '../metadata-edit-dialog/metadata-edit-dialog';
+import { MetadataStripDialog } from '../metadata-strip-dialog/metadata-strip-dialog';
+import { MetadataViewDialog } from '../metadata-view-dialog/metadata-view-dialog';
 
 /** PNG text chunk keys that are handled by the ComfyUI section */
 const COMFYUI_KEYS = new Set(['prompt', 'workflow']);
 
 @Component({
   selector: 'pp-info-panel',
-  imports: [DatePipe, KeyValuePipe, MatCardModule, MatDividerModule, MatChipsModule, MatButtonModule, MatIconModule, MatMenuModule, ClipboardModule],
+  imports: [DatePipe, KeyValuePipe, MatCardModule, MatDividerModule, MatChipsModule, MatButtonModule, MatIconModule, MatMenuModule, MatTooltipModule, ClipboardModule, MatChipsModule],
   templateUrl: './info-panel.html',
   styleUrl: './info-panel.scss',
 })
@@ -28,16 +32,53 @@ export class InfoPanel implements OnInit {
   @Input() folder = '';
   @Input() folderType = 'source';
   @Output() move = new EventEmitter<'selected' | 'dust' | 'source'>();
+  @Output() metadataChanged = new EventEmitter<void>();
 
   private dialog = inject(MatDialog);
   private photoService = inject(PhotoService);
   private snackBar = inject(MatSnackBar);
   copyDoneIconActive = signal(false);
+  exiftoolAvailable = signal(false);
 
   tools: string[] = [];
 
   ngOnInit(): void {
     this.photoService.getTools().subscribe(r => this.tools = r.tools);
+    this.photoService.exiftoolCapabilities().subscribe({
+      next: caps => this.exiftoolAvailable.set(caps.available),
+      error: () => this.exiftoolAvailable.set(false),
+    });
+  }
+
+  openMetadataView(): void {
+    if (!this.info) return;
+    this.dialog.open(MetadataViewDialog, {
+      data: { filename: this.info.filename, folder: this.folder },
+      width: '90vw',
+      maxWidth: '820px',
+    });
+  }
+
+  openMetadataEdit(): void {
+    if (!this.info) return;
+    this.dialog.open(MetadataEditDialog, {
+      data: { mode: 'single', filename: this.info.filename, folder: this.folder },
+      width: '90vw',
+      maxWidth: '720px',
+    }).afterClosed().subscribe(result => {
+      if (result?.refresh) this.metadataChanged.emit();
+    });
+  }
+
+  openMetadataStrip(): void {
+    if (!this.info) return;
+    this.dialog.open(MetadataStripDialog, {
+      data: { filename: this.info.filename, folder: this.folder },
+      width: '90vw',
+      maxWidth: '640px',
+    }).afterClosed().subscribe(result => {
+      if (result?.refresh) this.metadataChanged.emit();
+    });
   }
 
   runTool(name: string): void {
@@ -116,5 +157,12 @@ export class InfoPanel implements OnInit {
   onCopySuccess(): void {
     this.copyDoneIconActive.set(true);
     setTimeout(() => this.copyDoneIconActive.set(false), 2000);
+  }
+
+  getTags(): string[] {
+    if (this.info?.tags) {
+      return this.info.tags.split(',').map(e => `#${e.trim()}`);
+    }
+    return []
   }
 }

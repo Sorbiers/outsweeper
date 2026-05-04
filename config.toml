@@ -1,15 +1,22 @@
 [permissions]
 allow_dir_change = true
 
+[parameters]
+extract_exif = true
+extract_gps = false
+extract_icc = false
+extract_png = false
+
 [defaults]
 selected_dir_name = "__selected"
 dust_dir_name     = "__dust"
 index_filename    = "__photoparser_index.json"
 port              = 1976
-live_updates      = true
 comfy_output      = "F:/ai/ComfyUI_windows_portable_nvidia_cu128/ComfyUI_windows_portable/ComfyUI/output"
 comfy_url         = "http://127.0.0.1:8188"
 lmstudio_url      = "http://localhost:1234/v1"
+thumb_cache_days  = 3
+exiftool_path     = "f:/exiftool/exiftool.exe"
 
 [widgets]
 gpu_monitor = true

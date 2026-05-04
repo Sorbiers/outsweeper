@@ -1,6 +1,7 @@
 export interface PhotoListItem {
   filename: string;
   modified: string;
+  modified_token?: string;
   size: number;
   size_human: string;
   width?: number;
@@ -17,6 +18,9 @@ export interface PhotoInfo extends PhotoListItem {
   comfyui: ComfyUIData;
   exif: Record<string, string>;
   png_metadata: Record<string, string>;
+  gps?: Record<string, string>;
+  icc?: Record<string, string>;
+  tags?: string;
 }
 
 export interface ComfyUIData {
@@ -54,3 +58,31 @@ export interface UndoResponse {
   restored_to?: string;
   error?: string;
 }
+
+export interface ExiftoolCapabilities {
+  available: boolean;
+  version: string | null;
+  executable: string;
+  error: string | null;
+}
+
+/** Flat dict of exiftool tags as returned by `-j -G1 -a -s`, e.g. { 'EXIF:Make': 'Nikon', ... }. */
+export type ExiftoolMetadata = Record<string, string>;
+
+export interface EditableFields {
+  image_title?: string;
+  artist?: string;
+  description?: string;
+  document_name?: string;
+  copyright?: string;
+  user_comment?: string;
+}
+
+export interface BatchEditResult {
+  ok: boolean;
+  count: number;
+  succeeded: string[];
+  errors: { path: string; error: string }[];
+}
+
+export type StripGroup = 'all' | 'sensitive' | 'icc' | 'exif' | 'gps';

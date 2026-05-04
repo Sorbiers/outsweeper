@@ -1,7 +1,11 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
-import { PhotoListItem, PhotoInfo, MoveResponse, UndoResponse } from '../models/photo.model';
+import {
+  PhotoListItem, PhotoInfo, MoveResponse, UndoResponse,
+  ExiftoolCapabilities, ExiftoolMetadata, EditableFields, StripGroup,
+  BatchEditResult,
+} from '../models/photo.model';
 
 @Injectable({ providedIn: 'root' })
 export class PhotoService {
@@ -20,6 +24,7 @@ export class PhotoService {
       types?: string[]; sizeMin?: number | null; sizeMax?: number | null;
       widthMin?: number | null; widthMax?: number | null;
       heightMin?: number | null; heightMax?: number | null;
+      tags?: string[];
     } = {},
   ): Observable<{ photos: PhotoListItem[]; total: number; offset: number; source_name: string }> {
     const params: Record<string, string> = { path: folder };
@@ -38,6 +43,7 @@ export class PhotoService {
     if (options.widthMax != null) params['width_max'] = String(options.widthMax);
     if (options.heightMin != null) params['height_min'] = String(options.heightMin);
     if (options.heightMax != null) params['height_max'] = String(options.heightMax);
+    if (options.tags?.length) params['tags'] = options.tags.join(',');
     return this.http.get<{ photos: PhotoListItem[]; total: number; offset: number; source_name: string }>(
       '/api/photos', { params });
   }
@@ -46,12 +52,16 @@ export class PhotoService {
     return this.http.get<PhotoInfo>('/api/info', { params: { path: this.filePath(filename, folder) } });
   }
 
-  getImageUrl(filename: string, folder = ''): string {
-    return `/api/photo?path=${encodeURIComponent(this.filePath(filename, folder))}`;
+  getImageUrl(filename: string, folder = '', modifiedToken?: string): string {
+    const path = encodeURIComponent(this.filePath(filename, folder));
+    const tok  = modifiedToken ? `&modified=${modifiedToken}` : '';
+    return `/api/photo?path=${path}${tok}`;
   }
 
-  getThumbnailUrl(filename: string, folder = ''): string {
-    return `/api/thumbnail?path=${encodeURIComponent(this.filePath(filename, folder))}`;
+  getThumbnailUrl(filename: string, folder = '', modifiedToken?: string): string {
+    const path = encodeURIComponent(this.filePath(filename, folder));
+    const tok  = modifiedToken ? `&modified=${modifiedToken}` : '';
+    return `/api/thumbnail?path=${path}${tok}`;
   }
 
   move(filename: string, fromFolder: string, toFolder: string): Observable<MoveResponse> {
@@ -197,6 +207,40 @@ export class PhotoService {
   locate(filename: string, folder: string): Observable<{ ok: boolean }> {
     return this.http.post<{ ok: boolean }>(
       '/api/locate', {},
+      { params: { path: this.filePath(filename, folder) } },
+    );
+  }
+
+  exiftoolCapabilities(): Observable<ExiftoolCapabilities> {
+    return this.http.get<ExiftoolCapabilities>('/api/exiftool/capabilities');
+  }
+
+  getExiftoolMetadata(filename: string, folder: string): Observable<ExiftoolMetadata> {
+    return this.http.get<ExiftoolMetadata>(
+      '/api/exiftool/metadata',
+      { params: { path: this.filePath(filename, folder) } },
+    );
+  }
+
+  editMetadata(filename: string, folder: string, fields: EditableFields): Observable<{ ok: boolean }> {
+    return this.http.post<{ ok: boolean }>(
+      '/api/exiftool/edit',
+      { fields },
+      { params: { path: this.filePath(filename, folder) } },
+    );
+  }
+
+  editMetadataBatch(filenames: string[], folder: string, fields: EditableFields): Observable<BatchEditResult> {
+    return this.http.post<BatchEditResult>(
+      '/api/exiftool/edit-batch',
+      { filenames, folder, fields },
+    );
+  }
+
+  stripMetadata(filename: string, folder: string, groups: StripGroup[]): Observable<{ ok: boolean }> {
+    return this.http.post<{ ok: boolean }>(
+      '/api/exiftool/strip',
+      { groups },
       { params: { path: this.filePath(filename, folder) } },
     );
   }

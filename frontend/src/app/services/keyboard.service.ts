@@ -42,23 +42,27 @@ export class KeyboardService {
 
         let action: PhotoAction | null = null;
 
-        if (event.key === 'ArrowRight') action = 'next';
-        else if (event.key === 'ArrowLeft') action = 'prev';
-        else if (event.key === 'ArrowUp') action = 'rowUp';
-        else if (event.key === 'ArrowDown') action = 'rowDown';
-        else if (event.key === 'Home') action = 'first';
-        else if (event.key === 'End') action = 'last';
-        else if (event.key === '+') action = 'select';
-        else if (event.key === 'Delete') action = 'dust';
-        else if (event.key === 'PageDown' && event.shiftKey) action = 'pageForward10';
-        else if (event.key === 'PageUp' && event.shiftKey) action = 'pageBackward10';
-        else if (event.key === 'PageDown') action = 'pageForward';
-        else if (event.key === 'PageUp') action = 'pageBackward';
-        else if (event.key === 'z' && event.ctrlKey) action = 'undo';
-        else if (event.key === 's' && event.ctrlKey) action = 'download';
-        else if (event.key === ' ') action = 'toggleSelection';
-        else if (event.key === 'a' && event.ctrlKey) action = 'selectAll';
-        else if (event.key === '=') action = 'selectSourceFolder';
+        if (!(event.shiftKey || event.ctrlKey || event.metaKey || event.altKey)) {
+          if (event.key === 'ArrowRight') action = 'next';
+          else if (event.key === 'ArrowLeft') action = 'prev';
+          else if (event.key === 'ArrowUp') action = 'rowUp';
+          else if (event.key === 'ArrowDown') action = 'rowDown';
+          else if (event.key === 'Home') action = 'first';
+          else if (event.key === 'End') action = 'last';
+          else if (event.key === '+') action = 'select';
+          else if (event.key === 'Delete') action = 'dust';
+          else if (event.key === 'PageDown') action = 'pageForward';
+          else if (event.key === 'PageUp') action = 'pageBackward';
+          else if (event.key === ' ') action = 'toggleSelection';
+          else if (event.key === '=') action = 'selectSourceFolder';
+        } else if (!(event.ctrlKey || event.metaKey || event.altKey)) {
+          if (event.key === 'PageDown' && event.shiftKey) action = 'pageForward10';
+          else if (event.key === 'PageUp' && event.shiftKey) action = 'pageBackward10';
+        } else if (!(event.shiftKey || event.metaKey || event.altKey)) {
+          if (event.key === 'z' && event.ctrlKey) action = 'undo';
+          else if (event.key === 's' && event.ctrlKey) action = 'download';
+          else if (event.key === 'a' && event.ctrlKey) action = 'selectAll';
+        }
 
         if (action) {
           event.preventDefault();

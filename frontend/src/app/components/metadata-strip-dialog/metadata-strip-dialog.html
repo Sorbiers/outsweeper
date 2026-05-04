@@ -1,0 +1,32 @@
+<h2 mat-dialog-title>Strip metadata — {{ filename }}</h2>
+
+<mat-dialog-content class="md-content">
+  <p class="md-warn">
+    <mat-icon>warning</mat-icon>
+    <span>Removing metadata is permanent — pixels are preserved, but tags cannot be recovered.</span>
+  </p>
+
+  <div class="md-options">
+    @for (opt of options; track opt.id) {
+      <mat-checkbox
+        [checked]="isChecked(opt.id)"
+        [disabled]="isDisabled(opt.id)"
+        (change)="toggle(opt.id, $event.checked)"
+      >
+        <span class="md-opt-label">{{ opt.label }}</span>
+        <span class="md-hint">{{ opt.hint }}</span>
+      </mat-checkbox>
+    }
+  </div>
+
+  <mat-checkbox class="md-ack" [checked]="acknowledged()" (change)="acknowledged.set($event.checked)">
+    I understand this action cannot be undone.
+  </mat-checkbox>
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button mat-button mat-dialog-close [disabled]="busy()">Cancel</button>
+  <button mat-raised-button color="warn" [disabled]="!canApply()" (click)="apply()">
+    @if (busy()) { <mat-spinner diameter="18"></mat-spinner> } @else { Strip }
+  </button>
+</mat-dialog-actions>

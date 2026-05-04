@@ -54,6 +54,26 @@
   </div>
 
   <div class="filter-section">
+    <div class="section-label">Tags</div>
+    <mat-form-field class="tags-field">
+      <mat-chip-grid #tagGrid>
+        @for (t of filters.tags; track t) {
+          <mat-chip-row (removed)="removeTag(t)">
+            #{{ t }}
+            <button matChipRemove><mat-icon>cancel</mat-icon></button>
+          </mat-chip-row>
+        }
+      </mat-chip-grid>
+      <input
+        placeholder="#hashtag — words from the Comments and tags field"
+        [matChipInputFor]="tagGrid"
+        [matChipInputSeparatorKeyCodes]="$any(chipSeparators)"
+        (matChipInputTokenEnd)="addTag($event)"
+      />
+    </mat-form-field>
+  </div>
+
+  <div class="filter-section">
     <div class="section-label">Dimensions (px)</div>
     <div class="size-row">
       <mat-form-field>

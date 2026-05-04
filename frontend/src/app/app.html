@@ -94,6 +94,7 @@
         [folder]="currentPath"
         [folderType]="folderType"
         (move)="moveCurrentPhoto($event)"
+        (metadataChanged)="onMetadataChanged()"
       ></pp-info-panel>
     </div>
   </div>
@@ -122,6 +123,11 @@
     <button mat-menu-item (click)="downloadFavorites()">
       <mat-icon>download</mat-icon> Download as .zip
     </button>
+    @if (exiftoolAvailable()) {
+      <button mat-menu-item (click)="openFavMetadata()">
+        <mat-icon>tune</mat-icon> Add metadata
+      </button>
+    }
     <mat-divider></mat-divider>
     <button mat-menu-item (click)="clearFavorites()">
       <mat-icon>heart_broken</mat-icon> Clear favorites

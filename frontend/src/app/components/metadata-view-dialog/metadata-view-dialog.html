@@ -1,0 +1,35 @@
+<h2 mat-dialog-title>Metadata — {{ filename }}</h2>
+
+<mat-dialog-content class="md-content">
+  @if (loading()) {
+    <div class="md-center"><mat-spinner diameter="36"></mat-spinner></div>
+  } @else if (error()) {
+    <p class="md-error">{{ error() }}</p>
+    <p class="md-hint">
+      Configure <code>exiftool_path</code> in <code>config.toml</code>.
+    </p>
+  } @else {
+    <mat-accordion multi>
+      @for (g of groups(); track g.name) {
+        <mat-expansion-panel>
+          <mat-expansion-panel-header>
+            <mat-panel-title>{{ g.name }}</mat-panel-title>
+            <mat-panel-description>{{ g.rows.length }} tag{{ g.rows.length === 1 ? '' : 's' }}</mat-panel-description>
+          </mat-expansion-panel-header>
+          <table class="md-table">
+            @for (row of g.rows; track row.key) {
+              <tr>
+                <td class="md-key">{{ row.key }}</td>
+                <td class="md-val">{{ row.value }}</td>
+              </tr>
+            }
+          </table>
+        </mat-expansion-panel>
+      }
+    </mat-accordion>
+  }
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button mat-button mat-dialog-close>Close</button>
+</mat-dialog-actions>

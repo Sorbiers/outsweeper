@@ -76,8 +76,8 @@ export class ImageStrip implements AfterViewInit, OnDestroy {
     this.resizeObserver?.disconnect();
   }
 
-  getThumbnailUrl(filename: string): string {
-    return this.photoService.getThumbnailUrl(filename, this.folder);
+  getThumbnailUrl(photo: PhotoListItem): string {
+    return this.photoService.getThumbnailUrl(photo.filename, this.folder, photo.modified_token);
   }
 
   onThumbClick(localIndex: number): void {

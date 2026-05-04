@@ -2,6 +2,7 @@ import sys
 import io
 import json
 import queue
+import re
 import shutil
 import time
 import threading
@@ -25,9 +26,10 @@ except ImportError:
 
 import requests as http_requests
 from flask import Flask, jsonify, request, send_from_directory, send_file, abort
-from PIL import Image
-from PIL.ExifTags import TAGS
+from PIL import Image, ImageCms
+from PIL.ExifTags import TAGS, GPSTAGS
 from PIL.PngImagePlugin import PngInfo
+from io import BytesIO
 
 EXTENSIONS     = {'.png', '.jpg', '.jpeg', '.webp'}
 THUMBNAILS_DIR = '__thumbnails'
@@ -157,6 +159,36 @@ def stat_entry(stat) -> dict:
     return {'mtime': stat.st_mtime, 'ctime': stat.st_ctime, 'size': stat.st_size}
 
 
+def mtime_token(mtime: float) -> str:
+    """8-char hex of integer mtime. Filename-safe, monotonic, deterministic."""
+    return f'{int(mtime):08x}'
+
+
+def cleanup_old_thumbnails(roots, days: int) -> None:
+    """Recursively remove __thumbnails/* files older than `days` days under each root."""
+    cutoff = time.time() - days * 86400
+    removed = 0
+    for root in roots:
+        if not root or not Path(root).is_dir():
+            continue
+        try:
+            for thumbs_dir in Path(root).rglob(THUMBNAILS_DIR):
+                if not thumbs_dir.is_dir():
+                    continue
+                for f in thumbs_dir.iterdir():
+                    if not f.is_file():
+                        continue
+                    try:
+                        if f.stat().st_mtime < cutoff:
+                            f.unlink()
+                            removed += 1
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+    print(f"[thumbs] cleanup: removed {removed} stale thumbnail(s) older than {days} day(s)", flush=True)
+
+
 def build_index(folder: Path) -> dict:
     """Fast metadata-only scan: mtime/ctime/size only. No image opens."""
     start = time.perf_counter()
@@ -165,7 +197,7 @@ def build_index(folder: Path) -> dict:
         return cache
     try:
         for f in folder.iterdir():
-            if not f.is_file() or f.suffix.lower() not in EXTENSIONS:
+            if not f.is_file() or f.suffix.lower() not in EXTENSIONS or f.name.startswith(('.', '_')):
                 continue
             try:
                 cache[f.name] = stat_entry(f.stat())
@@ -280,16 +312,162 @@ def extract_comfyui_data(filepath):
 
 
 def extract_exif(filepath):
-    """Extract EXIF data from any image file that supports it."""
+    """Extract EXIF from IFD0 + ExifIFD (no GPS — that's a separate section)."""
+    result = {}
+
+    def _add(ifd):
+        for tag_id, value in ifd.items():
+            s = str(value)
+            tag_name = TAGS.get(tag_id, str(tag_id))
+            if s.startswith(("b'ASCII", "b'UNICODE", "b'JIS")):
+                text = extract_exif_text(value)
+                result[str(tag_name)] = text
+                continue
+            if s.startswith(("b'", 'b"')):
+                continue
+            result[str(tag_name)] = s
+
+    try:
+        img       = Image.open(filepath)
+        exif_data = img.getexif()
+        _add(exif_data)                          # IFD0
+        _add(exif_data.get_ifd(0x8769))          # ExifIFD: aperture, ISO, lens, etc.
+    except Exception:
+        pass
+    return result
+
+
+def _rationals_to_decimal(dms, ref):
+    """Convert ((deg,min,sec), 'N'/'S'/'E'/'W') to decimal degrees."""
+    try:
+        deg, mn, sec = (float(x) for x in dms)
+        val = deg + mn / 60 + sec / 3600
+        if ref in ('S', 'W'):
+            val = -val
+        return round(val, 6)
+    except Exception:
+        return None
+
+
+def extract_gps(filepath):
+    """Extract GPS data: decimal lat/lon/altitude + raw tags (when present)."""
     result = {}
     try:
         img = Image.open(filepath)
-        exif_data = img.getexif()
-        for tag_id, value in exif_data.items():
-            tag_name = TAGS.get(tag_id, tag_id)
-            if isinstance(value, bytes) and len(value) > 256:
+        gps = img.getexif().get_ifd(0x8825)
+        if not gps:
+            return result
+        lat = gps.get(2); lat_ref = gps.get(1)
+        lon = gps.get(4); lon_ref = gps.get(3)
+        if lat is not None and lat_ref is not None:
+            d = _rationals_to_decimal(lat, lat_ref)
+            if d is not None:
+                result['latitude'] = str(d)
+        if lon is not None and lon_ref is not None:
+            d = _rationals_to_decimal(lon, lon_ref)
+            if d is not None:
+                result['longitude'] = str(d)
+        alt = gps.get(6)
+        if alt is not None:
+            try:
+                result['altitude'] = f'{float(alt):.1f}'
+            except Exception:
+                pass
+        for tag_id, value in gps.items():
+            s = str(value)
+            if s.startswith(("b'", 'b"')):
                 continue
-            result[str(tag_name)] = str(value)
+            name = GPSTAGS.get(tag_id, str(tag_id))
+            result.setdefault(str(name), s)
+    except Exception:
+        pass
+    return result
+
+
+_TAG_RE = re.compile(r'#([A-Za-z0-9_\-]+)')
+
+
+def _user_comment_text(filepath: Path) -> str:
+    """Read EXIF UserComment, stripping the 8-byte EXIF charset prefix if present."""
+    try:
+        ifd = Image.open(filepath).getexif().get_ifd(0x8769)
+        v   = ifd.get(0x9286)
+        if v is None:
+            return ''
+        if isinstance(v, bytes):
+            for prefix in (b'ASCII\x00\x00\x00', b'UNICODE\x00', b'JIS\x00\x00\x00\x00\x00'):
+                if v.startswith(prefix):
+                    body = v[len(prefix):]
+                    enc  = 'utf-16-be' if prefix.startswith(b'UNICODE') else 'ascii'
+                    try:
+                        return body.decode(enc, errors='ignore').rstrip('\x00').strip()
+                    except Exception:
+                        return ''
+            try:
+                return v.decode('ascii', errors='ignore').rstrip('\x00').strip()
+            except Exception:
+                return ''
+        return str(v).rstrip('\x00').strip()
+    except Exception:
+        return ''
+
+
+def extract_exif_text(v: str) -> str:
+    try:
+        if v is None:
+            return ''
+        if isinstance(v, bytes):
+            for prefix in (b'ASCII\x00\x00\x00', b'UNICODE\x00', b'JIS\x00\x00\x00\x00\x00'):
+                if v.startswith(prefix):
+                    body = v[len(prefix):]
+                    enc  = 'utf-16-be' if prefix.startswith(b'UNICODE') else 'ascii'
+                    try:
+                        return body.decode(enc, errors='ignore').rstrip('\x00').strip()
+                    except Exception:
+                        return ''
+            try:
+                return v.decode('ascii', errors='ignore').rstrip('\x00').strip()
+            except Exception:
+                return ''
+        return str(v).rstrip('\x00').strip()
+    except Exception:
+        return ''
+
+
+def extract_tags_from_comment(text: str) -> set:
+    """Return lowercase #hashtag words from a free-text comment."""
+    if not text:
+        return set()
+    return {m.lower() for m in _TAG_RE.findall(text)}
+
+
+def extract_icc(filepath):
+    """Extract a few readable ICC profile fields if an ICC profile is embedded."""
+    result = {}
+    try:
+        img = Image.open(filepath)
+        icc = img.info.get('icc_profile')
+        if not icc:
+            return result
+        profile = ImageCms.getOpenProfile(BytesIO(icc))
+        try:    result['Description']      = ImageCms.getProfileDescription(profile).strip()
+        except Exception: pass
+        try:    result['Manufacturer']     = ImageCms.getProfileManufacturer(profile).strip()
+        except Exception: pass
+        try:    result['Model']            = ImageCms.getProfileModel(profile).strip()
+        except Exception: pass
+        try:    result['Copyright']        = ImageCms.getProfileCopyright(profile).strip()
+        except Exception: pass
+        try:    result['Color Space']      = profile.profile.xcolor_space.strip()
+        except Exception: pass
+        try:    result['Connection Space'] = profile.profile.connection_space.strip()
+        except Exception: pass
+        try:    result['Version']          = str(profile.profile.version)
+        except Exception: pass
+        try:    result['Device Class']     = profile.profile.profile_id.hex() if profile.profile.profile_id else ''
+        except Exception: pass
+        # Drop empties
+        result = {k: v for k, v in result.items() if v}
     except Exception:
         pass
     return result
@@ -315,7 +493,8 @@ def create_app(root_dir, config, selected_name, dust_name,
                comfy_url='http://127.0.0.1:8188',
                lmstudio_url='http://localhost:1234/v1', comfy_output='',
                monitor_enabled=False, comfy_queue_enabled=False,
-               validation_interval=1800):
+               validation_interval=1800, thumb_cache_days=3,
+               exiftool_path='exiftool'):
     static_dir    = Path(__file__).parent / 'static'
     app           = Flask(__name__, static_folder=None)
     tools_cfg     = config.get('tools', {})
@@ -324,8 +503,13 @@ def create_app(root_dir, config, selected_name, dust_name,
 
     # In-memory only. Key: str(resolved_path); value: {filename -> {mtime, ctime, size, [width, height, exif_date]}}
     st = {
-        'folder_caches': {},
-        'comfy_output':  str(co_resolved) if co_resolved else '',
+        'folder_caches':    {},
+        'comfy_output':     str(co_resolved) if co_resolved else '',
+        'exiftool_path':    exiftool_path,
+        'thumb_cache_days': thumb_cache_days,
+        # Per-folder tag index (lazily populated on first tag filter request).
+        # { '<resolved_folder>': { filename: frozenset(tags) } }
+        'tag_index':        {},
     }
 
     def _eager_index() -> None:
@@ -349,7 +533,7 @@ def create_app(root_dir, config, selected_name, dust_name,
                 actual: dict = {}
                 try:
                     for f in folder.iterdir():
-                        if f.is_file() and f.suffix.lower() in EXTENSIONS:
+                        if f.is_file() and f.suffix.lower() in EXTENSIONS or f.name.startswith(('.', '_')):
                             try:
                                 actual[f.name] = f.stat()
                             except Exception:
@@ -369,6 +553,12 @@ def create_app(root_dir, config, selected_name, dust_name,
     threading.Thread(target=_eager_index, daemon=True).start()
     if validation_interval > 0:
         threading.Thread(target=_validation_loop, daemon=True).start()
+    if thumb_cache_days > 0:
+        threading.Thread(
+            target=cleanup_old_thumbnails,
+            args=([root_resolved, co_resolved], thumb_cache_days),
+            daemon=True,
+        ).start()
     if monitor_enabled:
         threading.Thread(target=_metrics_loop, daemon=True).start()
     if comfy_queue_enabled:
@@ -401,6 +591,106 @@ def create_app(root_dir, config, selected_name, dust_name,
         """Return existing cache for a folder, or None. Does not build."""
         return st['folder_caches'].get(str(folder_path.resolve()))
 
+    def _ensure_tag_index(folder: Path) -> dict:
+        """Build (lazily) the tag index for a folder. Returns {filename: frozenset(tags)}."""
+        key = str(folder.resolve())
+        idx = st['tag_index'].get(key)
+        if idx is None:
+            t0 = time.perf_counter()
+            idx = {}
+            try:
+                for f in folder.iterdir():
+                    if f.is_file() and f.suffix.lower() in EXTENSIONS or f.name.startswith(('.', '_')):
+                        idx[f.name] = frozenset(extract_tags_from_comment(_user_comment_text(f)))
+            except Exception:
+                pass
+            st['tag_index'][key] = idx
+            elapsed = (time.perf_counter() - t0) * 1000
+            print(f"[tag_index] built for {folder} ({len(idx)} files) in {elapsed:.1f} ms", flush=True)
+        return idx
+
+    def _invalidate_cache(file_path: Path) -> None:
+        """Refresh the cache entry for a file after metadata write. Drops tag-index entry too."""
+        cache = cache_for(file_path.parent)
+        if cache is not None:
+            try:
+                entry = cache.get(file_path.name) or {}
+                entry.update(stat_entry(file_path.stat()))
+                entry.pop('exif_date', None)
+                cache[file_path.name] = entry
+            except Exception:
+                pass
+        # Tag index for this file is now stale — drop it; next filter call rebuilds.
+        folder_key = str(file_path.parent.resolve())
+        if folder_key in st['tag_index']:
+            st['tag_index'][folder_key].pop(file_path.name, None)
+
+    # Field name → ExifTool EXIF-only tag (one tag per field, no XMP/IPTC mirror).
+    EDIT_TAG_MAP = {
+        'image_title':   'EXIF:ImageTitle',         # 0xa436
+        'artist':        'EXIF:Artist',             # 0x013b
+        'description':   'EXIF:ImageDescription',   # 0x010e
+        'document_name': 'EXIF:DocumentName',       # 0x010d
+        'copyright':     'EXIF:Copyright',          # 0x8298
+        'user_comment':  'EXIF:UserComment',        # 0x9286
+    }
+    STRIP_GROUP_MAP = {
+        'all':       ['-all='],
+        'sensitive': ['-GPS:all=', '-EXIF:SerialNumber=', '-EXIF:LensSerialNumber=',
+                      '-EXIF:OwnerName=', '-XMP:CreatorTool=', '-EXIF:Software='],
+        'icc':       ['-icc_profile:all='],
+        'exif':      ['-EXIF:all='],
+        'gps':       ['-GPS:all='],
+    }
+
+    def _exiftool_capabilities():
+        """Probe exiftool. Never raises."""
+        path = st['exiftool_path']
+        try:
+            proc = subprocess.run([path, '-ver'], capture_output=True, text=True, timeout=5)
+            if proc.returncode == 0:
+                return {'available': True, 'version': proc.stdout.strip(), 'executable': path, 'error': None}
+            return {'available': False, 'version': None, 'executable': path,
+                    'error': proc.stderr.strip() or f'exit {proc.returncode}'}
+        except FileNotFoundError:
+            return {'available': False, 'version': None, 'executable': path,
+                    'error': 'exiftool binary not found'}
+        except Exception as e:
+            return {'available': False, 'version': None, 'executable': path, 'error': str(e)}
+
+    def _exiftool_run(args, *, parse_json=False, timeout=10):
+        """Run exiftool with the given args. Returns parsed JSON or stdout."""
+        path = st['exiftool_path']
+        proc = subprocess.run([path, *args], capture_output=True, text=True, timeout=timeout)
+        if proc.returncode != 0:
+            raise RuntimeError(proc.stderr.strip() or f'exiftool exit {proc.returncode}')
+        if parse_json:
+            return json.loads(proc.stdout) if proc.stdout.strip() else []
+        return proc.stdout
+
+    def _validate_ascii_fields(fields):
+        """Validate every value is printable ASCII (0x20-0x7E). Returns error str or None."""
+        for k, v in fields.items():
+            if v is None or v == '':
+                continue
+            if not isinstance(v, str):
+                return f'field {k} must be a string'
+            if not all(0x20 <= ord(c) <= 0x7E for c in v):
+                return f'field {k} contains non-ASCII characters'
+        return None
+
+    def _build_edit_args(fields):
+        """Build exiftool args for the editable field set. Skips empty values."""
+        args = []
+        for field, value in fields.items():
+            if field not in EDIT_TAG_MAP:
+                raise ValueError(f'unknown field: {field}')
+            if value is None or value == '':
+                continue
+            tag = EDIT_TAG_MAP[field]
+            args.append(f'-{tag}={value}')
+        return args
+
     # --- API routes ---
 
     @app.route('/api/photos')
@@ -422,6 +712,7 @@ def create_app(root_dir, config, selected_name, dust_name,
         width_max   = request.args.get('width_max', '')
         height_min  = request.args.get('height_min', '')
         height_max  = request.args.get('height_max', '')
+        tags_raw    = request.args.get('tags', '')
 
         filter_types    = [t.strip() for t in types_raw.split(',') if t.strip()] if types_raw else []
         filter_size_min = int(size_min) if size_min else None
@@ -430,9 +721,14 @@ def create_app(root_dir, config, selected_name, dust_name,
         filter_w_max    = int(width_max)  if width_max  else None
         filter_h_min    = int(height_min) if height_min else None
         filter_h_max    = int(height_max) if height_max else None
+        # Strip leading '#' from each tag and lowercase, so "#summer" and "summer" both work.
+        filter_tags     = {t.lstrip('#').lower() for t in tags_raw.split(',') if t.strip()} if tags_raw else set()
         need_dims       = any(v is not None for v in (filter_w_min, filter_w_max, filter_h_min, filter_h_max))
         date_from_dt    = datetime.fromisoformat(date_from) if date_from else None
         date_to_dt      = datetime.fromisoformat(date_to + 'T23:59:59') if date_to else None
+
+        # Lazy build of tag index — only when this filter is requested.
+        tag_index = _ensure_tag_index(target) if filter_tags else None
 
         filtered = []
         for name, entry in cache.items():
@@ -450,6 +746,14 @@ def create_app(root_dir, config, selected_name, dust_name,
                         continue
             if filter_types and ext not in filter_types:
                 continue
+            if filter_tags:
+                # Lazy per-file rebuild if entry was invalidated by an edit.
+                file_tags = tag_index.get(name)
+                if file_tags is None:
+                    file_tags = frozenset(extract_tags_from_comment(_user_comment_text(target / name)))
+                    tag_index[name] = file_tags
+                if not (filter_tags & file_tags):
+                    continue
             if filter_size_min is not None and entry['size'] < filter_size_min:
                 continue
             if filter_size_max is not None and entry['size'] > filter_size_max:
@@ -494,30 +798,36 @@ def create_app(root_dir, config, selected_name, dust_name,
         page  = filtered[offset:offset + limit]
 
         photos = [{
-            'filename':   name,
-            'modified':   datetime.fromtimestamp(entry['mtime']).isoformat(),
-            'size':       entry['size'],
-            'size_human': human_size(entry['size']),
-            'width':      entry.get('width'),
-            'height':     entry.get('height'),
+            'filename':       name,
+            'modified':       datetime.fromtimestamp(entry['mtime']).isoformat(),
+            'modified_token': mtime_token(entry['mtime']),
+            'size':           entry['size'],
+            'size_human':     human_size(entry['size']),
+            'width':          entry.get('width'),
+            'height':         entry.get('height'),
         } for name, entry in page]
 
         return jsonify({'photos': photos, 'total': total, 'offset': offset, 'source_name': target.name})
 
     @app.route('/api/photo')
     def serve_photo():
+        # `modified` query param is accepted for browser cache busting and ignored here.
         file_path = resolve_path(request.args.get('path', ''))
         if not file_path.is_file():
             abort(404)
-        return send_file(file_path, max_age=3600)
+        resp = send_file(file_path, max_age=31536000)
+        resp.headers['Cache-Control'] = 'public, max-age=31536000, immutable'
+        return resp
 
     @app.route('/api/thumbnail')
     def serve_thumbnail():
+        # `modified` query param is for browser cache; on-disk cache uses the actual file mtime.
         img_path = resolve_path(request.args.get('path', ''))
         if not img_path.is_file():
             abort(404)
-        thumb_path = img_path.parent / THUMBNAILS_DIR / (img_path.name + '.jpg')
-        if not thumb_path.is_file() or thumb_path.stat().st_mtime < img_path.stat().st_mtime:
+        tok        = mtime_token(img_path.stat().st_mtime)
+        thumb_path = img_path.parent / THUMBNAILS_DIR / f'{img_path.name}.{tok}.jpg'
+        if not thumb_path.is_file():
             thumb_path.parent.mkdir(parents=True, exist_ok=True)
             try:
                 img = Image.open(img_path)
@@ -525,7 +835,9 @@ def create_app(root_dir, config, selected_name, dust_name,
                 img.convert('RGB').save(thumb_path, 'JPEG', quality=80)
             except Exception:
                 return send_file(img_path, max_age=3600)
-        return send_file(thumb_path, mimetype='image/jpeg', max_age=86400)
+        resp = send_file(thumb_path, mimetype='image/jpeg', max_age=31536000)
+        resp.headers['Cache-Control'] = 'public, max-age=31536000, immutable'
+        return resp
 
     @app.route('/api/info')
     def photo_info():
@@ -543,18 +855,23 @@ def create_app(root_dir, config, selected_name, dust_name,
             fmt = file_path.suffix.upper().lstrip('.')
         mtime_iso = datetime.fromtimestamp(entry['mtime']).isoformat()
         ctime_iso = datetime.fromtimestamp(entry['ctime']).isoformat()
+        exif_data = extract_exif(file_path) if config.get('parameters', {}).get('extract_exif', True) else {}
         return jsonify({
-            'filename':     file_path.name,
-            'modified':     mtime_iso,
-            'created':      ctime_iso if int(entry['ctime']) != int(entry['mtime']) else None,
-            'size':         entry['size'],
-            'size_human':   human_size(entry['size']),
-            'width':        entry.get('width') or 0,
-            'height':       entry.get('height') or 0,
-            'format':       fmt,
-            'comfyui':      extract_comfyui_data(file_path),
-            'exif':         extract_exif(file_path),
-            'png_metadata': extract_png_metadata(file_path),
+            'filename':       file_path.name,
+            'modified':       mtime_iso,
+            'modified_token': mtime_token(entry['mtime']),
+            'created':        ctime_iso if int(entry['ctime']) != int(entry['mtime']) else None,
+            'size':           entry['size'],
+            'size_human':     human_size(entry['size']),
+            'width':          entry.get('width') or 0,
+            'height':         entry.get('height') or 0,
+            'format':         fmt,
+            'comfyui':        extract_comfyui_data(file_path),
+            'exif':           exif_data,
+            'gps':            extract_gps(file_path) if config.get('parameters', {}).get('extract_gps', False) else {},
+            'icc':            extract_icc(file_path) if config.get('parameters', {}).get('extract_icc', False) else {},
+            'png_metadata':   extract_png_metadata(file_path) if config.get('parameters', {}).get('extract_png', False) else {},
+            'tags':           ", ".join(extract_tags_from_comment(exif_data.get('UserComment'))) if exif_data.get('UserComment') else ""
         })
 
     @app.route('/api/move', methods=['POST'])
@@ -762,6 +1079,121 @@ def create_app(root_dir, config, selected_name, dust_name,
                     cache[file_path.name] = entry
                 except Exception:
                     pass
+            return jsonify({'ok': True})
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+
+    @app.route('/api/exiftool/capabilities')
+    def exiftool_capabilities():
+        return jsonify(_exiftool_capabilities())
+
+    @app.route('/api/exiftool/metadata', methods=['GET'])
+    def exiftool_metadata():
+        file_path = resolve_path(request.args.get('path', ''))
+        if not file_path.is_file():
+            return jsonify({'error': 'not found'}), 404
+        caps = _exiftool_capabilities()
+        if not caps['available']:
+            return jsonify({'error': caps.get('error') or 'exiftool unavailable'}), 503
+        try:
+            data = _exiftool_run(['-j', '-G1', '-a', '-s', str(file_path)], parse_json=True)
+            if not data:
+                return jsonify({})
+            obj = data[0]
+            obj.pop('SourceFile', None)
+            return jsonify(obj)
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+
+    @app.route('/api/exiftool/edit', methods=['POST'])
+    def exiftool_edit():
+        file_path = resolve_path(request.args.get('path', ''))
+        if not file_path.is_file():
+            return jsonify({'error': 'not found'}), 404
+        caps = _exiftool_capabilities()
+        if not caps['available']:
+            return jsonify({'error': caps.get('error') or 'exiftool unavailable'}), 503
+        body   = request.get_json(silent=True) or {}
+        fields = body.get('fields') or {}
+        if not isinstance(fields, dict):
+            return jsonify({'error': 'fields must be an object'}), 400
+        err = _validate_ascii_fields(fields)
+        if err:
+            return jsonify({'error': err}), 400
+        try:
+            tag_args = _build_edit_args(fields)
+        except ValueError as e:
+            return jsonify({'error': str(e)}), 400
+        if not tag_args:
+            return jsonify({'ok': True})
+        try:
+            _exiftool_run(['-overwrite_original', *tag_args, str(file_path)])
+            _invalidate_cache(file_path)
+            return jsonify({'ok': True})
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+
+    @app.route('/api/exiftool/edit-batch', methods=['POST'])
+    def exiftool_edit_batch():
+        caps = _exiftool_capabilities()
+        if not caps['available']:
+            return jsonify({'error': caps.get('error') or 'exiftool unavailable'}), 503
+        body      = request.get_json(silent=True) or {}
+        filenames = body.get('filenames') or []
+        folder    = body.get('folder', '')
+        fields    = body.get('fields') or {}
+        if not isinstance(filenames, list) or not filenames:
+            return jsonify({'error': 'filenames must be a non-empty list'}), 400
+        if not isinstance(fields, dict):
+            return jsonify({'error': 'fields must be an object'}), 400
+        err = _validate_ascii_fields(fields)
+        if err:
+            return jsonify({'error': err}), 400
+        try:
+            tag_args = _build_edit_args(fields)
+        except ValueError as e:
+            return jsonify({'error': str(e)}), 400
+        if not tag_args:
+            return jsonify({'ok': True, 'count': 0, 'succeeded': [], 'errors': []})
+        succeeded, errors = [], []
+        for name in filenames:
+            try:
+                p = resolve_path(f'{folder}/{name}' if folder else name)
+                if not p.is_file():
+                    errors.append({'path': str(name), 'error': 'not found'})
+                    continue
+                _exiftool_run(['-overwrite_original', *tag_args, str(p)])
+                _invalidate_cache(p)
+                succeeded.append(str(p))
+            except Exception as e:
+                errors.append({'path': str(name), 'error': str(e)})
+        return jsonify({'ok': not errors, 'count': len(succeeded),
+                        'succeeded': succeeded, 'errors': errors})
+
+    @app.route('/api/exiftool/strip', methods=['POST'])
+    def exiftool_strip():
+        file_path = resolve_path(request.args.get('path', ''))
+        if not file_path.is_file():
+            return jsonify({'error': 'not found'}), 404
+        caps = _exiftool_capabilities()
+        if not caps['available']:
+            return jsonify({'error': caps.get('error') or 'exiftool unavailable'}), 503
+        body   = request.get_json(silent=True) or {}
+        groups = body.get('groups') or []
+        if not isinstance(groups, list) or not groups:
+            return jsonify({'error': 'groups must be a non-empty list'}), 400
+        flags = ['-overwrite_original']
+        if 'all' in groups:
+            flags += STRIP_GROUP_MAP['all']
+        else:
+            for g in groups:
+                if g not in STRIP_GROUP_MAP:
+                    return jsonify({'error': f'unknown group: {g}'}), 400
+                flags += STRIP_GROUP_MAP[g]
+        flags.append(str(file_path))
+        try:
+            _exiftool_run(flags)
+            _invalidate_cache(file_path)
             return jsonify({'ok': True})
         except Exception as e:
             return jsonify({'error': str(e)}), 500
@@ -1013,13 +1445,16 @@ def main():
     lmstudio_url        = defaults.get('lmstudio_url', 'http://localhost:1234/v1')
     comfy_output        = defaults.get('comfy_output', '')
     validation_interval = defaults.get('index_validation_interval', 1800)
+    thumb_cache_days    = defaults.get('thumb_cache_days', 3)
+    exiftool_path       = defaults.get('exiftool_path', 'exiftool')
     widgets             = config.get('widgets', {})
     monitor_enabled     = widgets.get('gpu_monitor', False)
     comfy_queue_enabled = widgets.get('comfy_queue', False)
     app = create_app(source, config, selected_name, dust_name,
                      comfy_url, lmstudio_url, comfy_output,
                      monitor_enabled, comfy_queue_enabled,
-                     validation_interval)
+                     validation_interval, thumb_cache_days,
+                     exiftool_path)
 
     import socket
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:

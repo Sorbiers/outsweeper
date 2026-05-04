@@ -88,6 +88,7 @@ export class PreviewPanel implements OnChanges, OnDestroy {
   private boundSphereMouseMove = (e: MouseEvent) => this.onSphereMouseMove(e);
   private boundSphereMouseUp = () => this.onSphereMouseUp();
   private boundSphereWheel = (e: WheelEvent) => this.onSphereWheel(e);
+  private boundKeyboard = (e: KeyboardEvent) => this.onKeyboard(e);
 
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['info']) {
@@ -102,11 +103,15 @@ export class PreviewPanel implements OnChanges, OnDestroy {
   }
 
   get imageUrl(): string | null {
-    return this.info ? this.photoService.getImageUrl(this.info.filename, this.folder) : null;
+    return this.info
+      ? this.photoService.getImageUrl(this.info.filename, this.folder, this.info.modified_token)
+      : null;
   }
 
   get thumbnailUrl(): string | null {
-    return this.info ? this.photoService.getThumbnailUrl(this.info.filename, this.folder) : null;
+    return this.info
+      ? this.photoService.getThumbnailUrl(this.info.filename, this.folder, this.info.modified_token)
+      : null;
   }
 
   setFit() {
@@ -258,6 +263,7 @@ export class PreviewPanel implements OnChanges, OnDestroy {
     canvas.addEventListener('wheel', this.boundSphereWheel, { passive: false });
     document.addEventListener('mousemove', this.boundSphereMouseMove);
     document.addEventListener('mouseup', this.boundSphereMouseUp);
+    document.addEventListener('keydown', this.boundKeyboard);
 
     // Resize handling
     this.resizeObserver = new ResizeObserver(() => {
@@ -316,6 +322,32 @@ export class PreviewPanel implements OnChanges, OnDestroy {
     this.sphereDragging = false;
   }
 
+  private onKeyboard(e: KeyboardEvent) {
+    let dx = 0;
+    let dy = 0;
+    const delta = 5;
+    if (!(!e.shiftKey || e.metaKey || e.ctrlKey || e.altKey)) {
+      if (e.key == 'ArrowRight') dx = delta;
+      else if (e.key == 'ArrowLeft') dx = -delta;
+      else if (e.key == 'ArrowUp') dy = -delta;
+      else if (e.key == 'ArrowDown') dy = delta;
+      else return;
+    } else {
+      return;
+    }
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    // Scale rotation speed by current FOV for consistent feel
+    const fovScale = (this.camera?.fov ?? SPHERE_FOV_DEFAULT) / SPHERE_FOV_DEFAULT;
+    this.sphereLon -= dx * 0.2 * fovScale;
+    this.sphereLat += dy * 0.2 * fovScale;
+    this.sphereLat = Math.max(-85, Math.min(85, this.sphereLat));
+
+    this.renderSphere();
+  }
+
   private onSphereWheel(e: WheelEvent) {
     e.preventDefault();
     if (!this.camera) return;
@@ -342,6 +374,7 @@ export class PreviewPanel implements OnChanges, OnDestroy {
     }
     document.removeEventListener('mousemove', this.boundSphereMouseMove);
     document.removeEventListener('mouseup', this.boundSphereMouseUp);
+    document.removeEventListener('keydown', this.boundKeyboard);
     if (this.sphereTexture) {
       this.sphereTexture.dispose();
       this.sphereTexture = null;

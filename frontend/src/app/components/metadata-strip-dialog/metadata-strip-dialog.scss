@@ -1,0 +1,42 @@
+.md-content {
+  min-width: 480px;
+  max-width: 640px;
+}
+
+.md-warn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: rgba(244, 67, 54, 0.08);
+  border: 1px solid rgba(244, 67, 54, 0.3);
+  border-radius: 4px;
+  color: #ef9a9a;
+  font-size: 13px;
+
+  mat-icon { color: #f44336; flex-shrink: 0; }
+}
+
+.md-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 16px 0;
+}
+
+.md-opt-label {
+  font-weight: 500;
+  margin-right: 8px;
+}
+
+.md-hint {
+  color: #888;
+  font-size: 12px;
+}
+
+.md-ack {
+  display: block;
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}

@@ -1,3 +1,5 @@
+tests/screenshots/
+tests/report/
 static/
 release/
 test_photos/

@@ -28,6 +28,7 @@ import {
 import { GpuMonitorWidget } from './components/gpu-monitor/gpu-monitor';
 import { ImageStrip } from './components/image-strip/image-strip';
 import { InfoPanel } from './components/info-panel/info-panel';
+import { MetadataEditDialog } from './components/metadata-edit-dialog/metadata-edit-dialog';
 import { PreviewPanel } from './components/preview-panel/preview-panel';
 import { SystemMetrics } from './models/metrics.model';
 import { PhotoInfo, PhotoListItem } from './models/photo.model';
@@ -86,6 +87,7 @@ export class App implements OnInit, OnDestroy {
   widgetVisible = signal(true);
   comfyQueueEnabled = signal(false);
   comfyQueueVisible = signal(true);
+  exiftoolAvailable = signal(false);
 
   // Pagination
   totalPhotos = 0;
@@ -150,6 +152,11 @@ export class App implements OnInit, OnDestroy {
       if (cfg.thumbnails_name) this.photoService.thumbnailsName = cfg.thumbnails_name;
     });
 
+    this.photoService.exiftoolCapabilities().subscribe({
+      next: caps => this.exiftoolAvailable.set(caps.available),
+      error: () => this.exiftoolAvailable.set(false),
+    });
+
     this.filterSub = this.filterSubject
       .pipe(debounceTime(300), distinctUntilChanged())
       .subscribe((text) => {
@@ -183,6 +190,7 @@ export class App implements OnInit, OnDestroy {
       widthMax: this.activeFilters.widthMax,
       heightMin: this.activeFilters.heightMin,
       heightMax: this.activeFilters.heightMax,
+      tags: this.activeFilters.tags,
     };
     // When showing favorites only, fetch the whole list and paginate client-side.
     const fetchOpts = this.showFavoritesOnly
@@ -469,6 +477,12 @@ export class App implements OnInit, OnDestroy {
     });
   }
 
+  onMetadataChanged(): void {
+    // mtime changed → reload photos list (refreshes modified_token, which busts thumb cache)
+    // and re-fetch the current photo's info.
+    this.loadPhotos();
+  }
+
   closeGpuWidget(): void {
     this.widgetVisible.set(false);
     this.photoService.setMetricsPaused(true, this.sseClientId).subscribe();
@@ -533,6 +547,7 @@ export class App implements OnInit, OnDestroy {
           widthMax: this.activeFilters.widthMax,
           heightMin: this.activeFilters.heightMin,
           heightMax: this.activeFilters.heightMax,
+          tags: this.activeFilters.tags,
         })
         .subscribe((res) => {
           const fns = res.photos.map((p) => p.filename);
@@ -571,6 +586,20 @@ export class App implements OnInit, OnDestroy {
         this.pageOffset = 0;
         this.currentIndex = 0;
         this.loadPhotos();
+      });
+  }
+
+  openFavMetadata(): void {
+    if (!this.favorites.size) return;
+    this.dialog
+      .open(MetadataEditDialog, {
+        width: '90vw',
+        maxWidth: '720px',
+        data: { mode: 'batch', filenames: [...this.favorites], folder: this.currentPath },
+      })
+      .afterClosed()
+      .subscribe((result?: { ok: boolean; refresh: boolean }) => {
+        if (result?.refresh) this.loadPhotos();
       });
   }
 }
