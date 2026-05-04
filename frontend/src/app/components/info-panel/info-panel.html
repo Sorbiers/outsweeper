@@ -110,7 +110,7 @@
           <!-- <mat-divider /> -->
           <div class="section-header">
             <h3>ComfyUI Workflow</h3>
-            @if (info.png_metadata['prompt']) {
+            @if (info.comfyui.prompt) {
               <button mat-flat-button class="generate-btn" (click)="openGenerate()">
                 <mat-icon>play_arrow</mat-icon> Generate
               </button>

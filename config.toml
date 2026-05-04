@@ -5,7 +5,7 @@ allow_dir_change = true
 extract_exif = true
 extract_gps = false
 extract_icc = false
-extract_png = false
+extract_png = true
 
 [defaults]
 selected_dir_name = "__selected"

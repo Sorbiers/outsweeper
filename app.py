@@ -236,19 +236,19 @@ def human_size(nbytes):
     return f"{nbytes:.1f} TB"
 
 
-def extract_comfyui_data(filepath):
+def extract_comfyui_data(prompt):
     """Extract ComfyUI workflow data from PNG metadata."""
     result = {'found': False}
-    if filepath.suffix.lower() != '.png':
-        return result
+    # if filepath.suffix.lower() != '.png':
+    #     return result
 
     try:
-        img = Image.open(filepath)
-        meta = img.info
-        if 'prompt' not in meta:
-            return result
+        # img = Image.open(filepath)
+        # meta = img.info
+        # if 'prompt' not in meta:
+        #     return result
 
-        prompt = json.loads(meta['prompt'])
+        prompt = json.loads(prompt)
         result['found'] = True
 
         model = None
@@ -511,6 +511,15 @@ def create_app(root_dir, config, selected_name, dust_name,
         # { '<resolved_folder>': { filename: frozenset(tags) } }
         'tag_index':        {},
     }
+    
+    @app.before_request
+    def log_request():
+        print(request.method, request.path)
+
+    @app.after_request
+    def log_response(response):
+        print(response.status)
+        return response
 
     def _eager_index() -> None:
         """Pre-build indexes for root + root/__selected + root/__dust."""
@@ -533,7 +542,7 @@ def create_app(root_dir, config, selected_name, dust_name,
                 actual: dict = {}
                 try:
                     for f in folder.iterdir():
-                        if f.is_file() and f.suffix.lower() in EXTENSIONS or f.name.startswith(('.', '_')):
+                        if f.is_file() and f.suffix.lower() in EXTENSIONS and not f.name.startswith(('.', '_')):
                             try:
                                 actual[f.name] = f.stat()
                             except Exception:
@@ -600,7 +609,7 @@ def create_app(root_dir, config, selected_name, dust_name,
             idx = {}
             try:
                 for f in folder.iterdir():
-                    if f.is_file() and f.suffix.lower() in EXTENSIONS or f.name.startswith(('.', '_')):
+                    if f.is_file() and f.suffix.lower() in EXTENSIONS and not f.name.startswith(('.', '_')):
                         idx[f.name] = frozenset(extract_tags_from_comment(_user_comment_text(f)))
             except Exception:
                 pass
@@ -856,6 +865,8 @@ def create_app(root_dir, config, selected_name, dust_name,
         mtime_iso = datetime.fromtimestamp(entry['mtime']).isoformat()
         ctime_iso = datetime.fromtimestamp(entry['ctime']).isoformat()
         exif_data = extract_exif(file_path) if config.get('parameters', {}).get('extract_exif', True) else {}
+        png_metadata = extract_png_metadata(file_path) if config.get('parameters', {}).get('extract_png', False) else None
+        comfyui =  extract_comfyui_data(png_metadata['prompt']) if png_metadata and png_metadata['prompt'] else None
         return jsonify({
             'filename':       file_path.name,
             'modified':       mtime_iso,
@@ -866,11 +877,11 @@ def create_app(root_dir, config, selected_name, dust_name,
             'width':          entry.get('width') or 0,
             'height':         entry.get('height') or 0,
             'format':         fmt,
-            'comfyui':        extract_comfyui_data(file_path),
+            'comfyui':        comfyui,
             'exif':           exif_data,
-            'gps':            extract_gps(file_path) if config.get('parameters', {}).get('extract_gps', False) else {},
-            'icc':            extract_icc(file_path) if config.get('parameters', {}).get('extract_icc', False) else {},
-            'png_metadata':   extract_png_metadata(file_path) if config.get('parameters', {}).get('extract_png', False) else {},
+            'gps':            extract_gps(file_path) if config.get('parameters', {}).get('extract_gps', False) else None,
+            'icc':            extract_icc(file_path) if config.get('parameters', {}).get('extract_icc', False) else None,
+            'png_metadata':   png_metadata,
             'tags':           ", ".join(extract_tags_from_comment(exif_data.get('UserComment'))) if exif_data.get('UserComment') else ""
         })
 
@@ -1460,10 +1471,10 @@ def main():
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         if s.connect_ex(('127.0.0.1', port)) == 0:
             print(f"Error: port {port} is already in use")
-            sys.exit(1)
+            # sys.exit(1)
 
     threading.Timer(1.0, webbrowser.open, args=[f'http://localhost:{port}']).start()
-    app.run(host='127.0.0.1', port=port, debug=False, threaded=True)
+    app.run(host='127.0.0.1', port=port, debug=True, threaded=True)
 
 
 def load_config():

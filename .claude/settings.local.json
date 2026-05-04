@@ -27,7 +27,32 @@
       "Bash(git commit:*)",
       "mcp__playwright__browser_evaluate",
       "mcp__Claude_Preview__preview_start",
-      "Bash(start:*)"
+      "Bash(start:*)",
+      "Bash(Get-ChildItem -Path \"f:\\\\photoParser\" -Recurse -Name)",
+      "PowerShell($response = Invoke-WebRequest -Uri \"http://localhost:1976/api/photos/DSC_1190.JPG/info\" -UseBasicParsing; $info = $response.Content | ConvertFrom-Json; $info.exif | ConvertTo-Json)",
+      "PowerShell($response = Invoke-WebRequest -Uri \"http://localhost:1976/api/photos/DSC_1190.JPG/info\" -UseBasicParsing; Write-Host $response.Content.Substring\\(0, 500\\))",
+      "PowerShell($response = Invoke-WebRequest -Uri \"http://localhost:1976/api/info?path=DSC_1190.JPG\" -UseBasicParsing; $info = $response.Content | ConvertFrom-Json; Write-Host \"UserComment:\" \\($info.exif.UserComment\\); Write-Host \"Keys:\" \\($info.exif.PSObject.Properties.Name -join \", \"\\))",
+      "PowerShell($body = '{\"fields\":{\"user_comment\":\"Photo from 2016 #nature #landscape #travel\"}}'; $response = Invoke-WebRequest -Uri \"http://localhost:1976/api/exiftool/edit?path=DSC_1190.JPG\" -Method POST -Body $body -ContentType \"application/json\" -UseBasicParsing; Write-Host $response.StatusCode $response.Content)",
+      "PowerShell($body = '{\"fields\":{\"user_comment\":\"City trip #urban #travel #architecture\"}}'; $response = Invoke-WebRequest -Uri \"http://localhost:1976/api/exiftool/edit?path=DSC_1193.JPG\" -Method POST -Body $body -ContentType \"application/json\" -UseBasicParsing; Write-Host $response.StatusCode $response.Content)",
+      "PowerShell($body = '{\"fields\":{\"user_comment\":\"Autumn colors #nature #autumn #landscape\"}}'; $response = Invoke-WebRequest -Uri \"http://localhost:1976/api/exiftool/edit?path=test_red.jpg\" -Method POST -Body $body -ContentType \"application/json\" -UseBasicParsing; Write-Host $response.StatusCode $response.Content)",
+      "PowerShell($response = Invoke-WebRequest -Uri \"http://localhost:1976/api/photos?tags=travel\" -UseBasicParsing; $result = $response.Content | ConvertFrom-Json; Write-Host \"Total:\" $result.total; $result.photos | Select-Object filename)",
+      "PowerShell($response = Invoke-WebRequest -Uri \"http://localhost:1976/api/photos?tags=travel\" -UseBasicParsing; $result = $response.Content | ConvertFrom-Json; $result.photos | ForEach-Object { Write-Host $_.filename })",
+      "mcp__playwright__browser_click",
+      "mcp__playwright__browser_type",
+      "PowerShell(Get-Process python -ErrorAction SilentlyContinue)",
+      "PowerShell(Get-CimInstance Win32_Process | Where-Object { $_.Name -eq \"python.exe\" } | Select-Object ProcessId, CommandLine)",
+      "PowerShell(Get-Process python)",
+      "PowerShell(Stop-Process -Force)",
+      "PowerShell(netstat -ano)",
+      "PowerShell(Start-Sleep -Seconds 3; try { \\(Invoke-WebRequest -Uri \"http://localhost:1976/api/photos\" -UseBasicParsing\\).StatusCode } catch { \"not ready\" })",
+      "PowerShell($r = Invoke-WebRequest -Uri \"http://localhost:1976/api/info?path=DSC_1169.JPG\" -UseBasicParsing; \\($r.Content | ConvertFrom-Json\\).exif.UserComment)",
+      "PowerShell(& \"f:/exiftool/exiftool.exe\" -UserComment \"f:/photoParser/test_photos/DSC_1190.JPG\")",
+      "PowerShell($r = Invoke-WebRequest -Uri \"http://localhost:1976/api/info?path=DSC_1190.JPG\" -UseBasicParsing; $info = $r.Content | ConvertFrom-Json; $info.exif | Get-Member -MemberType NoteProperty | Select-Object Name)",
+      "PowerShell(& \"f:/exiftool/exiftool.exe\" -UserComment \"f:/photoParser/test_photos/DSC_1190.JPG\" \"f:/photoParser/test_photos/DSC_1193.JPG\" \"f:/photoParser/test_photos/test_red.jpg\" \"f:/photoParser/test_photos/DSC_1169.JPG\")",
+      "PowerShell(node --version)",
+      "PowerShell(npx playwright --version 2>$null)",
+      "PowerShell(npx playwright test --version 2>$null)",
+      "PowerShell(New-Item -ItemType Directory -Path \"f:/photoParser/tests/screenshots\" -Force)"
     ]
   }
 }
