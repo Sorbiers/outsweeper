@@ -18,6 +18,8 @@ from datetime import datetime
 from pathlib import Path
 from urllib.parse import urlparse
 import uuid as _uuid
+from watchdog.observers import Observer
+from watchdog.events import FileSystemEventHandler
 
 try:
     import tomllib
@@ -497,7 +499,7 @@ def create_app(root_dir, config, selected_name, dust_name,
                comfy_url='http://127.0.0.1:8188',
                lmstudio_url='http://localhost:1234/v1', comfy_output='',
                monitor_enabled=False, comfy_queue_enabled=False,
-               validation_interval=1800, thumb_cache_days=3,
+               validation_interval=None, thumb_cache_days=3,
                exiftool_path='exiftool',
                run_comfy_command='', run_lmstudio_command=''):
     static_dir    = Path(__file__).parent / 'static'
@@ -540,19 +542,38 @@ def create_app(root_dir, config, selected_name, dust_name,
 
         return response
 
+    # Shared state for watcher coordination
+    _index_built      = threading.Event()
+    _root_build_time  = [0.0]   # seconds, set by _eager_index
+    _last_detection   = [0.0]   # timestamp of last watcher event
+    _last_rescan_done = [0.0]   # timestamp when last watcher-triggered rescan finished
+
     def _eager_index() -> None:
         """Pre-build indexes for root + root/__selected + root/__dust."""
-        for folder in (root_resolved,
-                       root_resolved / selected_name,
-                       root_resolved / dust_name):
+        t0 = time.perf_counter()
+        if root_resolved.is_dir():
+            st['folder_caches'][str(root_resolved)] = build_index(root_resolved)
+        _root_build_time[0] = time.perf_counter() - t0
+        _index_built.set()
+        for folder in (root_resolved / selected_name, root_resolved / dust_name):
             if folder.is_dir():
                 st['folder_caches'][str(folder)] = build_index(folder)
 
     def _validation_loop() -> None:
-        """Low-priority incremental cache validation. Adds new files, drops missing ones, refreshes mtime/size."""
+        """Periodic incremental scan for __selected / __dust only. Root is handled by the file watcher."""
+        if validation_interval is None:
+            _index_built.wait()
+            interval = max(200.0, min(1800.0, _root_build_time[0] * 20))
+            print(f'[index] Revalidation interval: {interval:.0f}s '
+                  f'(build: {_root_build_time[0]:.1f}s)', flush=True)
+        else:
+            interval = float(validation_interval)
+        root_key = str(root_resolved)
         while True:
-            time.sleep(validation_interval)
+            time.sleep(interval)
             for key in list(st['folder_caches'].keys()):
+                if key == root_key:
+                    continue          # watcher handles root
                 folder = Path(key)
                 if not folder.is_dir():
                     st['folder_caches'].pop(key, None)
@@ -575,11 +596,59 @@ def create_app(root_dir, config, selected_name, dust_name,
                 for name in list(cache.keys()):
                     if name not in actual:
                         cache.pop(name, None)
-                # Yield occasionally so we don't monopolise the GIL on huge libraries
                 time.sleep(0)
 
+    class _RootChangeHandler(FileSystemEventHandler):
+        """React only to image file creation/deletion directly in root (non-recursive)."""
+        def _relevant(self, event) -> bool:
+            return (
+                not event.is_directory
+                and Path(event.src_path).suffix.lower() in EXTENSIONS
+                and Path(event.src_path).parent.resolve() == root_resolved
+            )
+        def on_created(self, event):
+            if self._relevant(event):
+                _last_detection[0] = time.time()
+        def on_deleted(self, event):
+            if self._relevant(event):
+                _last_detection[0] = time.time()
+
+    def _watcher_rescan_loop() -> None:
+        """Rebuild root cache when watcher detects changes.
+        Requires: 3 s debounce since last event AND 200 s cooldown since last rescan."""
+        while True:
+            time.sleep(1)
+            now = time.time()
+            if _last_detection[0] <= _last_rescan_done[0]:
+                continue                    # no pending changes
+            if now - _last_detection[0] < 3:
+                continue                    # debounce: wait for event burst to settle
+            if now - _last_rescan_done[0] < 200:
+                continue                    # cooldown: don't hammer large folders
+            root_key = str(root_resolved)
+            old_count = len(st['folder_caches'].get(root_key, {}))
+            print(f'[watcher] rebuild start — {old_count} files known', flush=True)
+            t0 = time.perf_counter()
+            st['folder_caches'][root_key] = build_index(root_resolved)
+            elapsed = (time.perf_counter() - t0) * 1000
+            new_count = len(st['folder_caches'][root_key])
+            _last_rescan_done[0] = time.time()
+            print(f'[watcher] rebuild done — {new_count} files in {elapsed:.1f} ms'
+                  + (f' (count changed: {old_count} → {new_count})' if new_count != old_count else ''),
+                  flush=True)
+            if new_count != old_count:
+                _sse_broadcast('source_changed')
+
     threading.Thread(target=_eager_index, daemon=True).start()
-    if validation_interval > 0:
+
+    _observer = Observer()
+    _observer.schedule(_RootChangeHandler(), str(root_resolved), recursive=False)
+    _observer.daemon = True
+    _observer.start()
+    threading.Thread(target=_watcher_rescan_loop, daemon=True).start()
+
+    # Periodic revalidation for __selected / __dust (0 = disabled)
+    if validation_interval != 0:
         threading.Thread(target=_validation_loop, daemon=True).start()
     if thumb_cache_days > 0:
         threading.Thread(
@@ -1500,7 +1569,8 @@ def main():
     comfy_url              = defaults.get('comfy_url', 'http://127.0.0.1:8188')
     lmstudio_url           = defaults.get('lmstudio_url', 'http://localhost:1234/v1')
     comfy_output           = defaults.get('comfy_output', '')
-    validation_interval    = defaults.get('index_validation_interval', 1800)
+    raw_interval           = defaults.get('index_validation_interval')  # None = auto-compute
+    validation_interval    = None if raw_interval is None else int(raw_interval)
     thumb_cache_days       = defaults.get('thumb_cache_days', 3)
     exiftool_path          = defaults.get('exiftool_path', 'exiftool')
     run_comfy_command      = defaults.get('run_comfy_command', '')

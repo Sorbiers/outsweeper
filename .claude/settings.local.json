@@ -57,7 +57,9 @@
       "PowerShell(Invoke-RestMethod -Uri \"http://localhost:1976/api/config\" -Method GET)",
       "PowerShell(Start-Process -FilePath \"python\" -ArgumentList \"app.py\", \"test_folder\" -WorkingDirectory \"f:\\\\photoParser\" -WindowStyle Hidden -PassThru)",
       "PowerShell(Invoke-RestMethod -Uri \"http://localhost:1976/api/config\")",
-      "PowerShell(Stop-Process -Id 42716 -Force)"
+      "PowerShell(Stop-Process -Id 42716 -Force)",
+      "Bash(Get-ChildItem -Path \"f:\\\\photoParser\\\\frontend\\\\src\\\\app\" -Recurse -Filter \"*.ts\")",
+      "Bash(Select-Object FullName)"
     ]
   }
 }

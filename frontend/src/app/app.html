@@ -58,7 +58,8 @@
         <span class="photo-counter"
           >{{ totalPhotos > 0 ? currentIndex + 1 : 0 }} / {{ totalPhotos }}</span
         >
-        <button mat-icon-button (click)="refresh()" title="Refresh folder">
+        <button mat-icon-button (click)="refresh()" title="Refresh folder"
+                [style.color]="sourceChangedPending() ? 'orange' : null">
           <mat-icon>refresh</mat-icon>
         </button>
       </div>
@@ -155,7 +156,9 @@
   <mat-divider></mat-divider>
   <button mat-menu-item (click)="openGenerator()"><mat-icon>bolt</mat-icon> Generator</button>
   <mat-divider></mat-divider>
-  <button mat-menu-item (click)="refresh()"><mat-icon>refresh</mat-icon> Refresh</button>
+  <button mat-menu-item (click)="refresh()" [style.color]="sourceChangedPending() ? 'orange' : null">
+    <mat-icon [style.color]="sourceChangedPending() ? 'orange' : null">refresh</mat-icon> Refresh
+  </button>
   <button mat-menu-item (click)="openFolderDialog()">
     <mat-icon>drive_folder_upload</mat-icon> Folder
   </button>
