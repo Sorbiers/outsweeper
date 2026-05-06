@@ -223,3 +223,30 @@
     animation: spin-slow 2s linear infinite;
   }
 }
+
+.refresh-btn-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.refresh-badge {
+  position: absolute;
+  bottom: 2px;
+  right: -2px;
+  background: orange;
+  color: #000;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 1px 3px;
+  border-radius: 4px;
+  pointer-events: none;
+  white-space: nowrap;
+
+  &--menu {
+    position: static;
+    margin-left: 6px;
+    font-size: 11px;
+  }
+}

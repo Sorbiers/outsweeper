@@ -83,7 +83,7 @@ export class App implements OnInit, OnDestroy {
   private sseClientId = '';
 
   metrics = signal<SystemMetrics | null>(null);
-  sourceChangedPending = signal(false);
+  sourceChangedPending = signal('');
   gpuMonitorEnabled = signal(false);
   widgetVisible = signal(true);
   comfyQueueEnabled = signal(false);
@@ -140,8 +140,8 @@ export class App implements OnInit, OnDestroy {
       else if (e.data.startsWith('metrics:')) this.metrics.set(JSON.parse(e.data.slice(8)));
       else if (e.data.startsWith('comfy_queue:'))
         this.comfyQueue.status.set(JSON.parse(e.data.slice(12)));
-      else if (e.data === 'source_changed' && this.folderType === 'source')
-        this.sourceChangedPending.set(true);
+      else if (e.data.startsWith('source_changed:') && this.folderType === 'source')
+        this.sourceChangedPending.set(e.data.slice('source_changed:'.length));
     };
     this.favorites = this.favoritesSvc.load(this.currentPath);
     this.loadPhotos();
@@ -296,7 +296,7 @@ export class App implements OnInit, OnDestroy {
   }
 
   refresh(): void {
-    this.sourceChangedPending.set(false);
+    this.sourceChangedPending.set('');
     this.photoService.refresh(this.currentPath).subscribe(() => {
       this.pageOffset = 0;
       this.currentIndex = 0;
@@ -333,7 +333,7 @@ export class App implements OnInit, OnDestroy {
   switchFolder(path: string): void {
     if (path === this.currentPath) return;
     this.currentPath = path;
-    this.sourceChangedPending.set(false);
+    this.sourceChangedPending.set('');
     this.favorites = this.favoritesSvc.load(path);
     this.pageOffset = 0;
     this.currentIndex = 0;

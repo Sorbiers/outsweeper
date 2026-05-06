@@ -58,10 +58,15 @@
         <span class="photo-counter"
           >{{ totalPhotos > 0 ? currentIndex + 1 : 0 }} / {{ totalPhotos }}</span
         >
-        <button mat-icon-button (click)="refresh()" title="Refresh folder"
-                [style.color]="sourceChangedPending() ? 'orange' : null">
-          <mat-icon>refresh</mat-icon>
-        </button>
+        <div class="refresh-btn-wrap">
+          <button mat-icon-button (click)="refresh()" title="Refresh folder"
+                  [style.color]="sourceChangedPending() ? 'orange' : null">
+            <mat-icon>refresh</mat-icon>
+          </button>
+          @if (sourceChangedPending()) {
+            <span class="refresh-badge">{{ sourceChangedPending() }}</span>
+          }
+        </div>
       </div>
     </div>
 
@@ -157,7 +162,8 @@
   <button mat-menu-item (click)="openGenerator()"><mat-icon>bolt</mat-icon> Generator</button>
   <mat-divider></mat-divider>
   <button mat-menu-item (click)="refresh()" [style.color]="sourceChangedPending() ? 'orange' : null">
-    <mat-icon [style.color]="sourceChangedPending() ? 'orange' : null">refresh</mat-icon> Refresh
+    <mat-icon [style.color]="sourceChangedPending() ? 'orange' : null">refresh</mat-icon>
+    Refresh @if (sourceChangedPending()) { <span class="refresh-badge refresh-badge--menu">{{ sourceChangedPending() }}</span> }
   </button>
   <button mat-menu-item (click)="openFolderDialog()">
     <mat-icon>drive_folder_upload</mat-icon> Folder

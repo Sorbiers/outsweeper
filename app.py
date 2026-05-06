@@ -637,7 +637,7 @@ def create_app(root_dir, config, selected_name, dust_name,
                   + (f' (count changed: {old_count} → {new_count})' if new_count != old_count else ''),
                   flush=True)
             if new_count != old_count:
-                _sse_broadcast('source_changed')
+                _sse_broadcast(f'source_changed:{new_count - old_count:+d}')
 
     threading.Thread(target=_eager_index, daemon=True).start()
 
