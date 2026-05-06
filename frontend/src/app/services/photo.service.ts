@@ -188,6 +188,10 @@ export class PhotoService {
     return this.http.post('/api/lmstudio/check', { lmstudio_url: lmstudioUrl });
   }
 
+  lmPrompt(lmstudioUrl: string, prompt: string, model: string): Observable<{ description: string }> {
+    return this.http.post<{ description: string }>('/api/lmstudio/prompt', { lmstudio_url: lmstudioUrl, prompt, model });
+  }
+
   describePhoto(filename: string, folder: string, lmstudioUrl: string, prompt: string, model: string): Observable<{ description: string }> {
     return this.http.post<{ description: string }>(
       '/api/describe',

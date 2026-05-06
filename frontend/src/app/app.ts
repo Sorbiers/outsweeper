@@ -25,6 +25,7 @@ import {
   DEFAULT_FLUX_WORKFLOW,
   GenerateDialog,
 } from './components/generate-dialog/generate-dialog';
+import { LmPromptDialog } from './components/lm-prompt-dialog/lm-prompt-dialog';
 import { GpuMonitorWidget } from './components/gpu-monitor/gpu-monitor';
 import { ImageStrip } from './components/image-strip/image-strip';
 import { InfoPanel } from './components/info-panel/info-panel';
@@ -328,6 +329,20 @@ export class App implements OnInit, OnDestroy {
       width: '90vw',
       maxWidth: '800px',
     });
+  }
+
+  openLmPrompt(): void {
+    this.dialog.open(LmPromptDialog, { width: '600px', maxWidth: '95vw' })
+      .afterClosed()
+      .subscribe(result => {
+        if (result?.action === 'generate') {
+          this.dialog.open(GenerateDialog, {
+            data: { workflow: DEFAULT_FLUX_WORKFLOW, positivePromptOverride: result.prompt },
+            width: '90vw',
+            maxWidth: '800px',
+          });
+        }
+      });
   }
 
   switchFolder(path: string): void {

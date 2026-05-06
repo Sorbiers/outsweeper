@@ -1119,6 +1119,22 @@ def create_app(root_dir, config, selected_name, dust_name,
         except Exception as e:
             return jsonify({'error': str(e)}), 502
 
+    @app.route('/api/lmstudio/prompt', methods=['POST'])
+    def lmstudio_prompt():
+        data    = request.get_json()
+        lms_url = data.get('lmstudio_url', 'http://localhost:1234/v1')
+        prompt  = data.get('prompt', '')
+        model   = data.get('model', 'model-identifier')
+        try:
+            resp = http_requests.post(
+                f"{lms_url}/chat/completions",
+                json={'model': model, 'messages': [{'role': 'user', 'content': prompt}], 'temperature': 0.7},
+                timeout=60,
+            )
+            return jsonify({'description': resp.json()['choices'][0]['message']['content']})
+        except Exception as e:
+            return jsonify({'error': str(e)}), 502
+
     @app.route('/api/describe', methods=['POST'])
     def describe_photo():
         data      = request.get_json()
