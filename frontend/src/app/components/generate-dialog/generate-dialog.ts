@@ -80,7 +80,7 @@ export class GenerateDialog {
   params: WorkflowParams;
   sending = false;
   checkStatus: 'idle' | 'checking' | 'ok' | 'error' = 'idle';
-  runComfyCommand = '';
+  hasRunComfyCommand = false;
   runTriggered = false;
 
   availableLoras: string[] = [];
@@ -110,7 +110,7 @@ export class GenerateDialog {
     this.checkpointNodes = this.extractVariableNodes(this.data.workflow, 'ckpt_name');
 
     this.photoService.getConfig().subscribe(cfg => {
-      this.runComfyCommand = (cfg as any).run_comfy_command || '';
+      this.hasRunComfyCommand = !!(cfg as any).has_run_comfy_command;
       if (!this.comfyUrl) this.comfyUrl = cfg.comfy_url || '';
     });
   }

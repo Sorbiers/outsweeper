@@ -16,7 +16,7 @@
       <button mat-stroked-button (click)="checkConnection()" class="check-btn">
         <mat-icon class="check-err">error</mat-icon> Failed
       </button>
-      @if (runLmstudioCommand && !runTriggered) {
+      @if (hasRunLmstudioCommand && !runTriggered) {
         <button mat-stroked-button (click)="runService()" class="check-btn">
           <mat-icon>play_arrow</mat-icon> Run
         </button>

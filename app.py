@@ -1392,14 +1392,13 @@ def create_app(root_dir, config, selected_name, dust_name,
         return jsonify({
             'comfy_url':            comfy_url,
             'lmstudio_url':         lmstudio_url,
-            'comfy_output':         st['comfy_output'],
             'widgets':              {'gpu_monitor': monitor_enabled, 'comfy_queue': comfy_queue_enabled},
             'selected_name':        selected_name,
             'dust_name':            dust_name,
             'thumbnails_name':      THUMBNAILS_DIR,
             'root_name':            root_dir.name,
-            'run_comfy_command':    run_comfy_command,
-            'run_lmstudio_command': run_lmstudio_command,
+            'has_run_comfy_command':    bool(run_comfy_command),
+            'has_run_lmstudio_command': bool(run_lmstudio_command),
         })
 
     @app.route('/api/run-command', methods=['POST'])

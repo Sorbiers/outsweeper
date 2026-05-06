@@ -41,7 +41,7 @@ export class DescribeDialog {
   describing = false;
   description = '';
   saving = false;
-  runLmstudioCommand = '';
+  hasRunLmstudioCommand = false;
   runTriggered = false;
 
   constructor() {
@@ -57,7 +57,7 @@ export class DescribeDialog {
     }
 
     this.photoService.getConfig().subscribe(cfg => {
-      this.runLmstudioCommand = (cfg as any).run_lmstudio_command || '';
+      this.hasRunLmstudioCommand = !!(cfg as any).has_run_lmstudio_command;
     });
   }
 
