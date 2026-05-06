@@ -51,7 +51,7 @@ export class DescribeDialog {
     if (this.lmstudioUrl && this.connState.lmstudio.status === 'ok') {
       this.checkStatus = 'ok';
       this.availableModels = [...this.connState.lmstudio.models];
-      if (this.availableModels.length && !this.model) {
+      if (this.availableModels.length && !this.availableModels.includes(this.model)) {
         this.model = this.availableModels[0];
       }
     }
@@ -78,7 +78,7 @@ export class DescribeDialog {
         this.connState.lmstudio.status = 'ok';
         this.availableModels = (res.data || []).map((m: any) => m.id);
         this.connState.lmstudio.models = [...this.availableModels];
-        if (this.availableModels.length && !this.model) {
+        if (this.availableModels.length && !this.availableModels.includes(this.model)) {
           this.model = this.availableModels[0];
         }
       },
