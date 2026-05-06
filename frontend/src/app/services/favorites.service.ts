@@ -8,7 +8,7 @@ export class FavoritesService {
 
   load(folder: string): Set<string> {
     try {
-      const raw = localStorage.getItem(this.storageKey(folder));
+      const raw = sessionStorage.getItem(this.storageKey(folder));
       if (raw) return new Set(JSON.parse(raw));
     } catch {
       /* ignore */
@@ -19,8 +19,8 @@ export class FavoritesService {
   save(folder: string, favorites: Set<string>): void {
     try {
       const key = this.storageKey(folder);
-      if (favorites.size === 0) localStorage.removeItem(key);
-      else localStorage.setItem(key, JSON.stringify([...favorites]));
+      if (favorites.size === 0) sessionStorage.removeItem(key);
+      else sessionStorage.setItem(key, JSON.stringify([...favorites]));
     } catch {
       /* ignore */
     }
@@ -44,7 +44,7 @@ export class FavoritesService {
 
   clear(folder: string): void {
     try {
-      localStorage.removeItem(this.storageKey(folder));
+      sessionStorage.removeItem(this.storageKey(folder));
     } catch {
       /* ignore */
     }

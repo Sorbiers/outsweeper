@@ -583,6 +583,9 @@ export class App implements OnInit, OnDestroy {
       .afterClosed()
       .subscribe((result?: { ok: boolean }) => {
         if (!result?.ok) return;
+        if (operation === 'move') {
+          this.clearFavorites();
+        }
         this.pageOffset = 0;
         this.currentIndex = 0;
         this.loadPhotos();

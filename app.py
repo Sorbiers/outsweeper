@@ -17,15 +17,15 @@ import fnmatch
 from datetime import datetime
 from pathlib import Path
 from urllib.parse import urlparse
+import uuid as _uuid
 
 try:
     import tomllib
 except ImportError:
     import tomli as tomllib
 
-
 import requests as http_requests
-from flask import Flask, jsonify, request, send_from_directory, send_file, abort
+from flask import Flask, jsonify, request, send_from_directory, send_file, abort, g
 from PIL import Image, ImageCms
 from PIL.ExifTags import TAGS, GPSTAGS
 from PIL.PngImagePlugin import PngInfo
@@ -61,7 +61,9 @@ def _metrics_loop(interval: float = 2.0) -> None:
         pass
     while True:
         time.sleep(interval)
-        if not any(c['metrics'] for c in _sse_clients.values()):
+        with _sse_lock:
+            has_metrics = any(c['metrics'] for c in _sse_clients.values())
+        if not has_metrics:
             continue
         try:
             cpu = psutil.cpu_percent(interval=None)
@@ -117,7 +119,9 @@ def _comfy_queue_loop(comfy_url: str, interval: float = 2.0) -> None:
     done_count = 0
     while True:
         time.sleep(interval)
-        if not any(c.get('comfy_queue', True) for c in _sse_clients.values()):
+        with _sse_lock:
+            has_comfy = any(c.get('comfy_queue', True) for c in _sse_clients.values())
+        if not has_comfy:
             continue
         try:
             resp = http_requests.get(f'{comfy_url}/queue', timeout=3)
@@ -511,14 +515,28 @@ def create_app(root_dir, config, selected_name, dust_name,
         # { '<resolved_folder>': { filename: frozenset(tags) } }
         'tag_index':        {},
     }
-    
+
     @app.before_request
     def log_request():
-        print(request.method, request.path)
+        if config.get('defaults', {}).get('debug') is not True:
+            return
+        g.request_id = str(_uuid.uuid4())[:8]
+        g.start_time = time.perf_counter()
+
+        print(f"[{g.request_id}] --> {request.method} {request.path}")
 
     @app.after_request
     def log_response(response):
-        print(response.status)
+        if config.get('defaults', {}).get('debug') is not True:
+            return response
+
+        elapsed = (time.perf_counter() - g.start_time) * 1000
+
+        print(
+            f"[{g.request_id}] <-- {response.status} "
+            f"{elapsed:.1f}ms"
+        )
+
         return response
 
     def _eager_index() -> None:
@@ -1383,13 +1401,13 @@ def create_app(root_dir, config, selected_name, dust_name,
 
     @app.route('/api/events')
     def sse_events():
-        import uuid as _uuid
         from flask import Response, stream_with_context
         client_id = str(_uuid.uuid4())
         q = queue.Queue(maxsize=8)
-        with _sse_lock:
-            _sse_clients[client_id] = {'queue': q, 'metrics': True, 'comfy_queue': True}
+
         def generate():
+            with _sse_lock:
+                _sse_clients[client_id] = {'queue': q, 'metrics': True, 'comfy_queue': True}
             try:
                 yield f'data: client_id:{client_id}\n\n'
                 while True:
@@ -1401,6 +1419,7 @@ def create_app(root_dir, config, selected_name, dust_name,
             finally:
                 with _sse_lock:
                     _sse_clients.pop(client_id, None)
+
         return Response(
             stream_with_context(generate()),
             mimetype='text/event-stream',
@@ -1474,7 +1493,7 @@ def main():
             # sys.exit(1)
 
     threading.Timer(1.0, webbrowser.open, args=[f'http://localhost:{port}']).start()
-    app.run(host='127.0.0.1', port=port, debug=True, threaded=True)
+    app.run(host='127.0.0.1', port=port, debug=False, threaded=True)
 
 
 def load_config():

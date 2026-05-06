@@ -1,16 +1,16 @@
 import { Component, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { MatButtonModule } from '@angular/material/button';
 import { MAT_DIALOG_DATA, MatDialog, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
-import { MatButtonModule } from '@angular/material/button';
-import { MatIconModule } from '@angular/material/icon';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { forkJoin, of } from 'rxjs';
 import { catchError } from 'rxjs/operators';
-import { PhotoService } from '../../services/photo.service';
 import { ConnectionStateService } from '../../services/connection-state.service';
+import { PhotoService } from '../../services/photo.service';
 import { PrompterDialog } from '../prompter-dialog/prompter-dialog';
 
 export interface GenerateDialogData {
@@ -281,20 +281,21 @@ export class GenerateDialog {
 
   private saveParams(): void {
     const p = this.params;
-    if (p.steps != null) localStorage.setItem('pp_gen_steps', String(p.steps));
-    if (p.cfg != null) localStorage.setItem('pp_gen_cfg', String(p.cfg));
-    if (p.batchSize != null) localStorage.setItem('pp_gen_batchSize', String(p.batchSize));
-    if (p.width != null) localStorage.setItem('pp_gen_width', String(p.width));
-    if (p.height != null) localStorage.setItem('pp_gen_height', String(p.height));
-    if (p.samplerName) localStorage.setItem('pp_gen_samplerName', p.samplerName);
-    if (p.scheduler) localStorage.setItem('pp_gen_scheduler', p.scheduler);
-    if (p.positivePrompt) localStorage.setItem('pp_gen_positivePrompt', p.positivePrompt);
-    if (p.negativePrompt) localStorage.setItem('pp_gen_negativePrompt', p.negativePrompt);
+    if (p.steps != null) sessionStorage.setItem('pp_gen_steps', String(p.steps));
+    if (p.cfg != null) sessionStorage.setItem('pp_gen_cfg', String(p.cfg));
+    if (p.batchSize != null) sessionStorage.setItem('pp_gen_batchSize', String(p.batchSize));
+    if (p.width != null) sessionStorage.setItem('pp_gen_width', String(p.width));
+    if (p.height != null) sessionStorage.setItem('pp_gen_height', String(p.height));
+    if (p.samplerName) sessionStorage.setItem('pp_gen_samplerName', p.samplerName);
+    if (p.scheduler) sessionStorage.setItem('pp_gen_scheduler', p.scheduler);
+    if (p.positivePrompt) sessionStorage.setItem('pp_gen_positivePrompt', p.positivePrompt);
+    if (p.negativePrompt) sessionStorage.setItem('pp_gen_negativePrompt', p.negativePrompt);
   }
 
   private extractVariableNodes(workflow: Record<string, any>, inputKey: string): VariableNode[] {
     const nodes: VariableNode[] = [];
     for (const [nodeId, node] of Object.entries(workflow)) {
+      //console.log(nodeId, node);
       const inputs = node.inputs || {};
       if (inputKey in inputs) {
         nodes.push({
@@ -353,7 +354,7 @@ export class GenerateDialog {
     }
 
     // Fill empty fields from last used values
-    const ls = (k: string) => localStorage.getItem(k);
+    const ls = (k: string) => sessionStorage.getItem(k);
     if (params.steps == null)     { const v = ls('pp_gen_steps');        if (v) params.steps     = +v; }
     if (params.cfg == null)       { const v = ls('pp_gen_cfg');          if (v) params.cfg       = +v; }
     if (params.batchSize == null) { const v = ls('pp_gen_batchSize');    if (v) params.batchSize = +v; }
