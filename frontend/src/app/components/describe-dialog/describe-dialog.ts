@@ -41,6 +41,8 @@ export class DescribeDialog {
   describing = false;
   description = '';
   saving = false;
+  runLmstudioCommand = '';
+  runTriggered = false;
 
   constructor() {
     this.lmstudioUrl = this.connState.lmstudio.url || '';
@@ -54,6 +56,9 @@ export class DescribeDialog {
       }
     }
 
+    this.photoService.getConfig().subscribe(cfg => {
+      this.runLmstudioCommand = (cfg as any).run_lmstudio_command || '';
+    });
   }
 
   onUrlChange(): void {
@@ -64,6 +69,7 @@ export class DescribeDialog {
 
   checkConnection(): void {
     this.checkStatus = 'checking';
+    this.runTriggered = false;
     this.connState.lmstudio.url = this.lmstudioUrl;
     this.connState.lmstudio.status = 'checking';
     this.photoService.checkLmStudio(this.lmstudioUrl).subscribe({
@@ -130,6 +136,14 @@ export class DescribeDialog {
         const msg = err.error?.error || err.message || 'Failed to save';
         this.snackBar.open(`Error: ${msg}`, '', { duration: 5000 });
       },
+    });
+  }
+
+  runService(): void {
+    this.runTriggered = true;
+    this.photoService.runCommand('lmstudio').subscribe({
+      next: () => this.snackBar.open('Starting LM Studio...', '', { duration: 3000 }),
+      error: () => { this.runTriggered = false; this.snackBar.open('Failed to run command', '', { duration: 3000 }); },
     });
   }
 

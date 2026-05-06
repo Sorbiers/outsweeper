@@ -52,7 +52,12 @@
       "PowerShell(node --version)",
       "PowerShell(npx playwright --version 2>$null)",
       "PowerShell(npx playwright test --version 2>$null)",
-      "PowerShell(New-Item -ItemType Directory -Path \"f:/photoParser/tests/screenshots\" -Force)"
+      "PowerShell(New-Item -ItemType Directory -Path \"f:/photoParser/tests/screenshots\" -Force)",
+      "Bash(npx tsc *)",
+      "PowerShell(Invoke-RestMethod -Uri \"http://localhost:1976/api/config\" -Method GET)",
+      "PowerShell(Start-Process -FilePath \"python\" -ArgumentList \"app.py\", \"test_folder\" -WorkingDirectory \"f:\\\\photoParser\" -WindowStyle Hidden -PassThru)",
+      "PowerShell(Invoke-RestMethod -Uri \"http://localhost:1976/api/config\")",
+      "PowerShell(Stop-Process -Id 42716 -Force)"
     ]
   }
 }

@@ -498,7 +498,8 @@ def create_app(root_dir, config, selected_name, dust_name,
                lmstudio_url='http://localhost:1234/v1', comfy_output='',
                monitor_enabled=False, comfy_queue_enabled=False,
                validation_interval=1800, thumb_cache_days=3,
-               exiftool_path='exiftool'):
+               exiftool_path='exiftool',
+               run_comfy_command='', run_lmstudio_command=''):
     static_dir    = Path(__file__).parent / 'static'
     app           = Flask(__name__, static_folder=None)
     tools_cfg     = config.get('tools', {})
@@ -1389,15 +1390,41 @@ def create_app(root_dir, config, selected_name, dust_name,
     @app.route('/api/config')
     def api_config():
         return jsonify({
-            'comfy_url':       comfy_url,
-            'lmstudio_url':    lmstudio_url,
-            'comfy_output':    st['comfy_output'],
-            'widgets':         {'gpu_monitor': monitor_enabled, 'comfy_queue': comfy_queue_enabled},
-            'selected_name':   selected_name,
-            'dust_name':       dust_name,
-            'thumbnails_name': THUMBNAILS_DIR,
-            'root_name':       root_dir.name,
+            'comfy_url':            comfy_url,
+            'lmstudio_url':         lmstudio_url,
+            'comfy_output':         st['comfy_output'],
+            'widgets':              {'gpu_monitor': monitor_enabled, 'comfy_queue': comfy_queue_enabled},
+            'selected_name':        selected_name,
+            'dust_name':            dust_name,
+            'thumbnails_name':      THUMBNAILS_DIR,
+            'root_name':            root_dir.name,
+            'run_comfy_command':    run_comfy_command,
+            'run_lmstudio_command': run_lmstudio_command,
         })
+
+    @app.route('/api/run-command', methods=['POST'])
+    def run_command():
+        data = request.get_json() or {}
+        service = data.get('service')
+        if service == 'comfy':
+            cmd = run_comfy_command
+        elif service == 'lmstudio':
+            cmd = run_lmstudio_command
+        else:
+            return jsonify({'error': 'unknown service'}), 400
+        if not cmd:
+            return jsonify({'error': 'no command configured'}), 400
+        try:
+            cmd_path = Path(cmd)
+            cwd = str(cmd_path.parent) if cmd_path.parent.is_dir() else None
+            subprocess.Popen(
+                ['cmd', '/c', cmd],
+                cwd=cwd,
+                creationflags=subprocess.CREATE_NEW_CONSOLE,
+            )
+            return jsonify({'ok': True})
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
 
     @app.route('/api/events')
     def sse_events():
@@ -1471,20 +1498,22 @@ def main():
     selected_name       = defaults.get('selected_dir_name', '__selected')
     dust_name           = defaults.get('dust_dir_name',     '__dust')
     port                = defaults.get('port', 1976)
-    comfy_url           = defaults.get('comfy_url', 'http://127.0.0.1:8188')
-    lmstudio_url        = defaults.get('lmstudio_url', 'http://localhost:1234/v1')
-    comfy_output        = defaults.get('comfy_output', '')
-    validation_interval = defaults.get('index_validation_interval', 1800)
-    thumb_cache_days    = defaults.get('thumb_cache_days', 3)
-    exiftool_path       = defaults.get('exiftool_path', 'exiftool')
-    widgets             = config.get('widgets', {})
-    monitor_enabled     = widgets.get('gpu_monitor', False)
-    comfy_queue_enabled = widgets.get('comfy_queue', False)
+    comfy_url              = defaults.get('comfy_url', 'http://127.0.0.1:8188')
+    lmstudio_url           = defaults.get('lmstudio_url', 'http://localhost:1234/v1')
+    comfy_output           = defaults.get('comfy_output', '')
+    validation_interval    = defaults.get('index_validation_interval', 1800)
+    thumb_cache_days       = defaults.get('thumb_cache_days', 3)
+    exiftool_path          = defaults.get('exiftool_path', 'exiftool')
+    run_comfy_command      = defaults.get('run_comfy_command', '')
+    run_lmstudio_command   = defaults.get('run_lmstudio_command', '')
+    widgets                = config.get('widgets', {})
+    monitor_enabled        = widgets.get('gpu_monitor', False)
+    comfy_queue_enabled    = widgets.get('comfy_queue', False)
     app = create_app(source, config, selected_name, dust_name,
                      comfy_url, lmstudio_url, comfy_output,
                      monitor_enabled, comfy_queue_enabled,
                      validation_interval, thumb_cache_days,
-                     exiftool_path)
+                     exiftool_path, run_comfy_command, run_lmstudio_command)
 
     import socket
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:

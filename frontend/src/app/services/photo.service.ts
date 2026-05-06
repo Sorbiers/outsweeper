@@ -204,6 +204,10 @@ export class PhotoService {
     );
   }
 
+  runCommand(service: 'comfy' | 'lmstudio'): Observable<{ ok: boolean }> {
+    return this.http.post<{ ok: boolean }>('/api/run-command', { service });
+  }
+
   locate(filename: string, folder: string): Observable<{ ok: boolean }> {
     return this.http.post<{ ok: boolean }>(
       '/api/locate', {},

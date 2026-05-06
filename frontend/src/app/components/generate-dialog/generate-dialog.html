@@ -16,6 +16,11 @@
       <button mat-stroked-button (click)="checkConnection()" class="check-btn">
         <mat-icon class="check-err">error</mat-icon> Failed
       </button>
+      @if (runComfyCommand && !runTriggered) {
+        <button mat-stroked-button (click)="runService()" class="check-btn">
+          <mat-icon>play_arrow</mat-icon> Run
+        </button>
+      }
     } @else {
       <button mat-stroked-button (click)="checkConnection()" class="check-btn">Check</button>
     }
@@ -53,12 +58,12 @@
                 }
               </mat-select>
             </mat-form-field>
-            <!-- <mat-form-field class="lora-strength-field">
+            <mat-form-field class="lora-strength-field">
               <mat-label>Str Model</mat-label>
               <input
                 matInput
                 type="number"
-                [(ngModel)]="lora.strengthModel"
+                [(ngModel)]="node.strengthModel"
                 step="0.1"
                 min="0"
                 max="2"
@@ -69,12 +74,12 @@
               <input
                 matInput
                 type="number"
-                [(ngModel)]="lora.strengthClip"
+                [(ngModel)]="node.strengthClip"
                 step="0.1"
                 min="0"
                 max="2"
               />
-            </mat-form-field> -->
+            </mat-form-field>
 
             <button
               mat-icon-button

@@ -50,6 +50,8 @@ interface VariableNode {
   selected: string[];
   inputKey: string;
   removed?: boolean;
+  strengthModel?: number;
+  strengthClip?: number;
 }
 
 interface ManualLora {
@@ -78,6 +80,8 @@ export class GenerateDialog {
   params: WorkflowParams;
   sending = false;
   checkStatus: 'idle' | 'checking' | 'ok' | 'error' = 'idle';
+  runComfyCommand = '';
+  runTriggered = false;
 
   availableLoras: string[] = [];
   loraNodes: VariableNode[] = [];
@@ -105,6 +109,10 @@ export class GenerateDialog {
     this.loraNodes = this.extractVariableNodes(this.data.workflow, 'lora_name');
     this.checkpointNodes = this.extractVariableNodes(this.data.workflow, 'ckpt_name');
 
+    this.photoService.getConfig().subscribe(cfg => {
+      this.runComfyCommand = (cfg as any).run_comfy_command || '';
+      if (!this.comfyUrl) this.comfyUrl = cfg.comfy_url || '';
+    });
   }
 
   onUrlChange(): void {
@@ -115,6 +123,7 @@ export class GenerateDialog {
 
   checkConnection(): void {
     this.checkStatus = 'checking';
+    this.runTriggered = false;
     this.connState.comfy.url = this.comfyUrl;
     this.connState.comfy.status = 'checking';
     this.photoService.checkComfy(this.comfyUrl).subscribe({
@@ -164,6 +173,14 @@ export class GenerateDialog {
     a.download = filename;
     a.click();
     URL.revokeObjectURL(url);
+  }
+
+  runService(): void {
+    this.runTriggered = true;
+    this.photoService.runCommand('comfy').subscribe({
+      next: () => this.snackBar.open('Starting ComfyUI...', '', { duration: 3000 }),
+      error: () => { this.runTriggered = false; this.snackBar.open('Failed to run command', '', { duration: 3000 }); },
+    });
   }
 
   addLora(): void {
@@ -295,15 +312,19 @@ export class GenerateDialog {
   private extractVariableNodes(workflow: Record<string, any>, inputKey: string): VariableNode[] {
     const nodes: VariableNode[] = [];
     for (const [nodeId, node] of Object.entries(workflow)) {
-      //console.log(nodeId, node);
       const inputs = node.inputs || {};
       if (inputKey in inputs) {
-        nodes.push({
+        const entry: VariableNode = {
           nodeId,
           originalName: inputs[inputKey],
           selected: inputs[inputKey] ? [inputs[inputKey]] : [],
           inputKey,
-        });
+        };
+        if (inputKey === 'lora_name') {
+          entry.strengthModel = inputs['strength_model'] ?? 1.0;
+          entry.strengthClip  = inputs['strength_clip']  ?? 1.0;
+        }
+        nodes.push(entry);
       }
     }
     return nodes;
@@ -405,8 +426,13 @@ export class GenerateDialog {
       }
 
       const loraNode = this.loraNodes.find(n => n.nodeId === nodeId);
-      if (loraNode?.removed && inputs) {
-        inputs['lora_name'] = '';
+      if (loraNode && inputs) {
+        if (loraNode.removed) {
+          inputs['lora_name'] = '';
+        } else {
+          if (loraNode.strengthModel != null) inputs['strength_model'] = loraNode.strengthModel;
+          if (loraNode.strengthClip  != null) inputs['strength_clip']  = loraNode.strengthClip;
+        }
       }
     }
 
