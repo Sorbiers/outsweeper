@@ -57,6 +57,24 @@
     </button>
   </div>
 
+  <div class="field-row">
+    <mat-form-field class="field-select">
+      <mat-label>Camera</mat-label>
+      <mat-select [(ngModel)]="camera" [compareWith]="compareCamera">
+        <mat-option [value]="null">— None —</mat-option>
+        @for (item of cameraList; track item.prompt) {
+          <mat-option [value]="item">
+            <span class="camera-name">{{ item.name }}</span>
+            <span class="camera-desc">{{ item.description }}</span>
+          </mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+    <button mat-icon-button (click)="randomizeCamera()" title="Randomize">
+      <mat-icon>casino</mat-icon>
+    </button>
+  </div>
+
   <button mat-stroked-button (click)="randomizeAll()" class="randomize-all">
     <mat-icon>casino</mat-icon> Randomize All
   </button>
