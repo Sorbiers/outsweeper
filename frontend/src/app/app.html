@@ -3,6 +3,23 @@
     <!-- Toolbar -->
     <div class="strip-toolbar">
       <div class="strip-toolbar-section">
+        <div
+          class="app-name"
+          (click)="openAboutDialog()"
+          matTooltip="About OutSweeper"
+          matTooltipShowDelay="600"
+        >
+          OutSweeper
+        </div>
+        <!-- <button
+          class="logo-btn"
+          (click)="openAboutDialog()"
+          matTooltip="About OutSweeper"
+          matTooltipShowDelay="600"
+        >
+          <img src="/logo.svg" class="logo-img" alt="OutSweeper" />
+        </button> -->
+
         <div class="strip-toolbar-filter">
           <input
             type="text"
@@ -34,7 +51,7 @@
         </div>
       </div>
 
-      <div class="strip-toolbar-section strip-toolbar-folder" >
+      <div class="strip-toolbar-section strip-toolbar-folder">
         <div class="folder" matTooltip="Change folder (=)" matTooltipShowDelay="600">
           <mat-icon>folder</mat-icon>
           <span class="folder-name" (click)="openFolderDialog()" title="Change folder">
@@ -59,8 +76,12 @@
           >{{ totalPhotos > 0 ? currentIndex + 1 : 0 }} / {{ totalPhotos }}</span
         >
         <div class="refresh-btn-wrap">
-          <button mat-icon-button (click)="refresh()" title="Refresh folder"
-                  [style.color]="sourceChangedPending() ? 'orange' : null">
+          <button
+            mat-icon-button
+            (click)="refresh()"
+            title="Refresh folder"
+            [style.color]="sourceChangedPending() ? 'orange' : null"
+          >
             <mat-icon>refresh</mat-icon>
           </button>
           @if (sourceChangedPending()) {
@@ -162,9 +183,16 @@
   <button mat-menu-item (click)="openGenerator()"><mat-icon>bolt</mat-icon> Generator</button>
   <button mat-menu-item (click)="openLmPrompt()"><mat-icon>psychology</mat-icon> LM Prompt</button>
   <mat-divider></mat-divider>
-  <button mat-menu-item (click)="refresh()" [style.color]="sourceChangedPending() ? 'orange' : null">
+  <button
+    mat-menu-item
+    (click)="refresh()"
+    [style.color]="sourceChangedPending() ? 'orange' : null"
+  >
     <mat-icon [style.color]="sourceChangedPending() ? 'orange' : null">refresh</mat-icon>
-    Refresh @if (sourceChangedPending()) { <span class="refresh-badge refresh-badge--menu">{{ sourceChangedPending() }}</span> }
+    Refresh
+    @if (sourceChangedPending()) {
+      <span class="refresh-badge refresh-badge--menu">{{ sourceChangedPending() }}</span>
+    }
   </button>
   <button mat-menu-item (click)="openFolderDialog()">
     <mat-icon>drive_folder_upload</mat-icon> Folder
@@ -172,21 +200,57 @@
 </mat-menu>
 
 <mat-menu #sortMenu="matMenu">
-  <button mat-menu-item (click)="setSort('name', true)" [class.pp-menu-active]="sortBy === 'name' && sortAsc">
+  <button
+    mat-menu-item
+    (click)="setSort('name', true)"
+    [class.pp-menu-active]="sortBy === 'name' && sortAsc"
+  >
     <mat-icon>sort_by_alpha</mat-icon>
-    <span class="pp-menu-row">Name A→Z @if (sortBy === 'name' && sortAsc) { <mat-icon class="pp-menu-check">check</mat-icon> }</span>
+    <span class="pp-menu-row"
+      >Name A→Z
+      @if (sortBy === 'name' && sortAsc) {
+        <mat-icon class="pp-menu-check">check</mat-icon>
+      }
+    </span>
   </button>
-  <button mat-menu-item (click)="setSort('name', false)" [class.pp-menu-active]="sortBy === 'name' && !sortAsc">
+  <button
+    mat-menu-item
+    (click)="setSort('name', false)"
+    [class.pp-menu-active]="sortBy === 'name' && !sortAsc"
+  >
     <mat-icon>sort_by_alpha</mat-icon>
-    <span class="pp-menu-row">Name Z→A @if (sortBy === 'name' && !sortAsc) { <mat-icon class="pp-menu-check">check</mat-icon> }</span>
+    <span class="pp-menu-row"
+      >Name Z→A
+      @if (sortBy === 'name' && !sortAsc) {
+        <mat-icon class="pp-menu-check">check</mat-icon>
+      }
+    </span>
   </button>
-  <button mat-menu-item (click)="setSort('modified', false)" [class.pp-menu-active]="sortBy === 'modified' && !sortAsc">
+  <button
+    mat-menu-item
+    (click)="setSort('modified', false)"
+    [class.pp-menu-active]="sortBy === 'modified' && !sortAsc"
+  >
     <mat-icon>schedule</mat-icon>
-    <span class="pp-menu-row">Newest first @if (sortBy === 'modified' && !sortAsc) { <mat-icon class="pp-menu-check">check</mat-icon> }</span>
+    <span class="pp-menu-row"
+      >Newest first
+      @if (sortBy === 'modified' && !sortAsc) {
+        <mat-icon class="pp-menu-check">check</mat-icon>
+      }
+    </span>
   </button>
-  <button mat-menu-item (click)="setSort('modified', true)" [class.pp-menu-active]="sortBy === 'modified' && sortAsc">
+  <button
+    mat-menu-item
+    (click)="setSort('modified', true)"
+    [class.pp-menu-active]="sortBy === 'modified' && sortAsc"
+  >
     <mat-icon>schedule</mat-icon>
-    <span class="pp-menu-row">Oldest first @if (sortBy === 'modified' && sortAsc) { <mat-icon class="pp-menu-check">check</mat-icon> }</span>
+    <span class="pp-menu-row"
+      >Oldest first
+      @if (sortBy === 'modified' && sortAsc) {
+        <mat-icon class="pp-menu-check">check</mat-icon>
+      }
+    </span>
   </button>
 </mat-menu>
 
@@ -194,13 +258,27 @@
   @if (gpuMonitorEnabled()) {
     <button mat-menu-item (click)="toggleGpuWidget()" [class.pp-menu-active]="widgetVisible()">
       <mat-icon>monitor</mat-icon>
-      <span class="pp-menu-row">GPU Monitor @if (widgetVisible()) { <mat-icon class="pp-menu-check">check</mat-icon> }</span>
+      <span class="pp-menu-row"
+        >GPU Monitor
+        @if (widgetVisible()) {
+          <mat-icon class="pp-menu-check">check</mat-icon>
+        }
+      </span>
     </button>
   }
   @if (comfyQueueEnabled()) {
-    <button mat-menu-item (click)="toggleComfyQueueWidget()" [class.pp-menu-active]="comfyQueueVisible()">
+    <button
+      mat-menu-item
+      (click)="toggleComfyQueueWidget()"
+      [class.pp-menu-active]="comfyQueueVisible()"
+    >
       <mat-icon>queue</mat-icon>
-      <span class="pp-menu-row">ComfyUI Queue @if (comfyQueueVisible()) { <mat-icon class="pp-menu-check">check</mat-icon> }</span>
+      <span class="pp-menu-row"
+        >ComfyUI Queue
+        @if (comfyQueueVisible()) {
+          <mat-icon class="pp-menu-check">check</mat-icon>
+        }
+      </span>
     </button>
   }
 </mat-menu>

@@ -10,6 +10,7 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { Subject } from 'rxjs';
 import { debounceTime, distinctUntilChanged, finalize } from 'rxjs/operators';
+import { AboutDialog } from './components/about-dialog/about-dialog';
 import { BatchDialog } from './components/batch-dialog/batch-dialog';
 import { ComfyQueueWidget } from './components/comfy-queue/comfy-queue';
 import {
@@ -26,12 +27,13 @@ import {
   DEFAULT_FLUX_WORKFLOW,
   GenerateDialog,
 } from './components/generate-dialog/generate-dialog';
-import { LmPromptDialog } from './components/lm-prompt-dialog/lm-prompt-dialog';
 import { GpuMonitorWidget } from './components/gpu-monitor/gpu-monitor';
 import { ImageStrip } from './components/image-strip/image-strip';
 import { InfoPanel } from './components/info-panel/info-panel';
+import { LmPromptDialog } from './components/lm-prompt-dialog/lm-prompt-dialog';
 import { MetadataEditDialog } from './components/metadata-edit-dialog/metadata-edit-dialog';
 import { PreviewPanel } from './components/preview-panel/preview-panel';
+import { SPECIAL_FOLDERS, STORAGE_KEYS } from './constants';
 import { SystemMetrics } from './models/metrics.model';
 import { PhotoInfo, PhotoListItem } from './models/photo.model';
 import { ComfyQueueService } from './services/comfy-queue.service';
@@ -39,7 +41,6 @@ import { ConnectionStateService } from './services/connection-state.service';
 import { FavoritesService } from './services/favorites.service';
 import { KeyboardService, PhotoAction } from './services/keyboard.service';
 import { PhotoService } from './services/photo.service';
-import { SPECIAL_FOLDERS, STORAGE_KEYS } from './constants';
 
 @Component({
   selector: 'pp-root',
@@ -328,6 +329,10 @@ export class App implements OnInit, OnDestroy {
       width: '90vw',
       maxWidth: '800px',
     });
+  }
+
+  openAboutDialog(): void {
+    this.dialog.open(AboutDialog, { width: '900px', maxWidth: '95vw' });
   }
 
   openLmPrompt(): void {

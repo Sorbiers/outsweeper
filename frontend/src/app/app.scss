@@ -34,6 +34,29 @@
   box-sizing: border-box;
   height: 48px;
 
+  .logo-btn {
+    height: 42px;
+    width: 42p;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+
+    img {
+      height: 42px;
+      width: 42px;
+    }
+  }
+
+  .app-name {
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    color: rgb(34 179 207);
+    position: relative;
+    left: -8px;
+    cursor: pointer;
+  }
+
   .strip-toolbar-section {
     display: flex;
     align-items: center;
