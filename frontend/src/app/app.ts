@@ -1,4 +1,5 @@
-import { Component, inject, OnDestroy, OnInit, signal } from '@angular/core';
+import { Component, DestroyRef, inject, OnDestroy, OnInit, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatFabButton, MatIconButton } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
 import { MatDividerModule } from '@angular/material/divider';
@@ -7,7 +8,7 @@ import { MatMenuModule } from '@angular/material/menu';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { Subject, Subscription } from 'rxjs';
+import { Subject } from 'rxjs';
 import { debounceTime, distinctUntilChanged, finalize } from 'rxjs/operators';
 import { BatchDialog } from './components/batch-dialog/batch-dialog';
 import { ComfyQueueWidget } from './components/comfy-queue/comfy-queue';
@@ -68,6 +69,7 @@ export class App implements OnInit, OnDestroy {
   private dialog = inject(MatDialog);
   private connState = inject(ConnectionStateService);
   private comfyQueue = inject(ComfyQueueService);
+  private destroyRef = inject(DestroyRef);
 
   photos: PhotoListItem[] = [];
   currentIndex = 0;
@@ -79,8 +81,6 @@ export class App implements OnInit, OnDestroy {
   sortBy: 'name' | 'modified' = 'name';
   sortAsc = true;
   loading = false;
-  private sub!: Subscription;
-  private filterSub!: Subscription;
   private eventSource: EventSource | null = null;
   private sseClientId = '';
 
@@ -135,7 +135,7 @@ export class App implements OnInit, OnDestroy {
     if (savedAsc !== null) this.sortAsc = savedAsc === 'true';
 
     this.keyboard.init();
-    this.sub = this.keyboard.action$.subscribe((action) => this.handleAction(action));
+    this.keyboard.action$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((action) => this.handleAction(action));
     this.eventSource = new EventSource('/api/events');
     this.eventSource.onmessage = (e) => {
       if (e.data.startsWith('client_id:')) this.sseClientId = e.data.slice(10);
@@ -162,8 +162,8 @@ export class App implements OnInit, OnDestroy {
       error: () => this.exiftoolAvailable.set(false),
     });
 
-    this.filterSub = this.filterSubject
-      .pipe(debounceTime(300), distinctUntilChanged())
+    this.filterSubject
+      .pipe(debounceTime(300), distinctUntilChanged(), takeUntilDestroyed(this.destroyRef))
       .subscribe((text) => {
         this.filterText = text;
         this.pageOffset = 0;
@@ -173,8 +173,6 @@ export class App implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
-    this.sub?.unsubscribe();
-    this.filterSub?.unsubscribe();
     this.eventSource?.close();
   }
 

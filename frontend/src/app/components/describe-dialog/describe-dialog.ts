@@ -13,7 +13,7 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { Clipboard } from '@angular/cdk/clipboard';
 import { PhotoService } from '../../services/photo.service';
 import { ConnectionStateService } from '../../services/connection-state.service';
-import { STORAGE_KEYS } from '../../constants';
+import { LmStudioConnectionService } from '../../services/lmstudio-connection.service';
 
 export interface DescribeDialogData {
   filename: string;
@@ -33,66 +33,21 @@ export class DescribeDialog {
   private snackBar = inject(MatSnackBar);
   private clipboard = inject(Clipboard);
   private connState = inject(ConnectionStateService);
+  lms = inject(LmStudioConnectionService);
 
-  lmstudioUrl = '';
-  model = localStorage.getItem(STORAGE_KEYS.LMS_MODEL) || '';
   prompt: string;
-  availableModels: string[] = [];
-  checkStatus: 'idle' | 'checking' | 'ok' | 'error' = 'idle';
   describing = false;
   description = '';
   saving = false;
-  hasRunLmstudioCommand = false;
-  runTriggered = false;
 
   constructor() {
-    this.lmstudioUrl = this.connState.lmstudio.url || '';
+    this.lms.init();
     this.prompt = this.connState.lastDescribePrompt;
-
-    if (this.lmstudioUrl && this.connState.lmstudio.status === 'ok') {
-      this.checkStatus = 'ok';
-      this.availableModels = [...this.connState.lmstudio.models];
-      if (this.availableModels.length && !this.availableModels.includes(this.model)) {
-        this.model = this.availableModels[0];
-      }
-    }
-
-    this.photoService.getConfig().subscribe(cfg => {
-      this.hasRunLmstudioCommand = !!cfg.has_run_lmstudio_command;
-    });
-  }
-
-  onUrlChange(): void {
-    if (this.lmstudioUrl !== this.connState.lmstudio.url) {
-      this.checkStatus = 'idle';
-    }
-  }
-
-  checkConnection(): void {
-    this.checkStatus = 'checking';
-    this.runTriggered = false;
-    this.connState.lmstudio.url = this.lmstudioUrl;
-    this.connState.lmstudio.status = 'checking';
-    this.photoService.checkLmStudio(this.lmstudioUrl).subscribe({
-      next: (res) => {
-        this.checkStatus = 'ok';
-        this.connState.lmstudio.status = 'ok';
-        this.availableModels = (res.data || []).map((m: any) => m.id);
-        this.connState.lmstudio.models = [...this.availableModels];
-        if (this.availableModels.length && !this.availableModels.includes(this.model)) {
-          this.model = this.availableModels[0];
-        }
-      },
-      error: () => {
-        this.checkStatus = 'error';
-        this.connState.lmstudio.status = 'error';
-      },
-    });
   }
 
   describe(): void {
-    this.connState.lmstudio.url = this.lmstudioUrl;
-    if (this.model) localStorage.setItem(STORAGE_KEYS.LMS_MODEL, this.model);
+    this.connState.lmstudio.url = this.lms.lmstudioUrl;
+    this.lms.saveModel();
     this.connState.lastDescribePrompt = this.prompt;
     this.describing = true;
     this.description = '';
@@ -106,7 +61,7 @@ export class DescribeDialog {
   private _doDescribe(): void {
     this.photoService.describePhoto(
       this.data.filename, this.data.folder,
-      this.lmstudioUrl, this.prompt, this.model
+      this.lms.lmstudioUrl, this.prompt, this.lms.model,
     ).subscribe({
       next: (res) => {
         this.describing = false;
@@ -137,14 +92,6 @@ export class DescribeDialog {
         const msg = err.error?.error || err.message || 'Failed to save';
         this.snackBar.open(`Error: ${msg}`, '', { duration: 5000 });
       },
-    });
-  }
-
-  runService(): void {
-    this.runTriggered = true;
-    this.photoService.runCommand('lmstudio').subscribe({
-      next: () => this.snackBar.open('Starting LM Studio...', '', { duration: 3000 }),
-      error: () => { this.runTriggered = false; this.snackBar.open('Failed to run command', '', { duration: 3000 }); },
     });
   }
 

@@ -4,33 +4,33 @@
   <div class="url-row">
     <mat-form-field class="url-field">
       <mat-label>LM Studio URL</mat-label>
-      <input matInput [(ngModel)]="lmstudioUrl" (ngModelChange)="onUrlChange()">
+      <input matInput [(ngModel)]="lms.lmstudioUrl" (ngModelChange)="lms.onUrlChange()">
     </mat-form-field>
-    @if (checkStatus === 'checking') {
+    @if (lms.checkStatus === 'checking') {
       <button mat-stroked-button disabled class="check-btn">Checking...</button>
-    } @else if (checkStatus === 'ok') {
-      <button mat-stroked-button (click)="checkConnection()" class="check-btn">
+    } @else if (lms.checkStatus === 'ok') {
+      <button mat-stroked-button (click)="lms.checkConnection()" class="check-btn">
         <mat-icon class="check-ok">check_circle</mat-icon> OK
       </button>
-    } @else if (checkStatus === 'error') {
-      <button mat-stroked-button (click)="checkConnection()" class="check-btn">
+    } @else if (lms.checkStatus === 'error') {
+      <button mat-stroked-button (click)="lms.checkConnection()" class="check-btn">
         <mat-icon class="check-err">error</mat-icon> Failed
       </button>
-      @if (hasRunLmstudioCommand && !runTriggered) {
-        <button mat-stroked-button (click)="runService()" class="check-btn">
+      @if (lms.hasRunCommand && !lms.runTriggered) {
+        <button mat-stroked-button (click)="lms.runService()" class="check-btn">
           <mat-icon>play_arrow</mat-icon> Run
         </button>
       }
     } @else {
-      <button mat-stroked-button (click)="checkConnection()" class="check-btn">Check</button>
+      <button mat-stroked-button (click)="lms.checkConnection()" class="check-btn">Check</button>
     }
   </div>
 
-  @if (availableModels.length) {
+  @if (lms.availableModels.length) {
     <mat-form-field class="full-width">
       <mat-label>Model</mat-label>
-      <mat-select [(ngModel)]="model">
-        @for (m of availableModels; track m) {
+      <mat-select [(ngModel)]="lms.model">
+        @for (m of lms.availableModels; track m) {
           <mat-option [value]="m">{{ m }}</mat-option>
         }
       </mat-select>
