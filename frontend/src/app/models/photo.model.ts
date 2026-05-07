@@ -15,7 +15,7 @@ export interface PhotoInfo extends PhotoListItem {
   width: number;
   height: number;
   format: string;
-  comfyui: ComfyUIData;
+  comfyui: ComfyUIData | null;
   exif: Record<string, string>;
   png_metadata: Record<string, string>;
   gps?: Record<string, string>;

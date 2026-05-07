@@ -1604,7 +1604,7 @@ def main():
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         if s.connect_ex(('127.0.0.1', port)) == 0:
             print(f"Error: port {port} is already in use")
-            # sys.exit(1)
+            sys.exit(1)
 
     threading.Timer(1.0, webbrowser.open, args=[f'http://localhost:{port}']).start()
     app.run(host='127.0.0.1', port=port, debug=False, threaded=True)

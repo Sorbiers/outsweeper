@@ -104,95 +104,97 @@
       </mat-card-content>
     </mat-card>
 
-    @if (info.comfyui.found) {
-      <mat-card class="info-card">
-        <mat-card-content>
-          <!-- <mat-divider /> -->
-          <div class="section-header">
-            <h3>ComfyUI Workflow</h3>
-            @if (info.comfyui.prompt) {
-              <button mat-flat-button class="generate-btn" (click)="openGenerate()">
-                <mat-icon>play_arrow</mat-icon> Generate
-              </button>
-            }
-          </div>
-          <div class="meta-grid">
-            @if (info.comfyui.model) {
-              <div class="meta-item wide">
-                <span class="label">Model</span>
-                <span class="value">{{ info.comfyui.model }}</span>
-              </div>
-            }
-            @if (info.comfyui.steps) {
-              <div class="meta-item">
-                <span class="label">Steps</span>
-                <span class="value">{{ info.comfyui.steps }}</span>
-              </div>
-            }
-            @if (info.comfyui.cfg) {
-              <div class="meta-item">
-                <span class="label">CFG</span>
-                <span class="value">{{ info.comfyui.cfg }}</span>
-              </div>
-            }
-            @if (info.comfyui.seed != null) {
-              <div class="meta-item">
-                <span class="label">Seed</span>
-                <span class="value">{{ info.comfyui.seed }}</span>
-              </div>
-            }
-            @if (info.comfyui.sampler) {
-              <div class="meta-item">
-                <span class="label">Sampler</span>
-                <span class="value">{{ info.comfyui.sampler }}</span>
-              </div>
-            }
-            @if (info.comfyui.scheduler) {
-              <div class="meta-item">
-                <span class="label">Scheduler</span>
-                <span class="value">{{ info.comfyui.scheduler }}</span>
-              </div>
-            }
-            @if (info.comfyui.batch_size) {
-              <div class="meta-item">
-                <span class="label">Batch Size</span>
-                <span class="value">{{ info.comfyui.batch_size }}</span>
-              </div>
-            }
-          </div>
-
-          @if (info.comfyui.loras?.length) {
-            <h4>LoRAs</h4>
-            <mat-chip-set>
-              @for (lora of info.comfyui.loras; track lora.name) {
-                <mat-chip>{{ lora.name }} ({{ lora.strength_model }})</mat-chip>
-              }
-            </mat-chip-set>
-          }
-
-          @if (info.comfyui.prompt) {
-            <div class="prompt-title">
-              <h4>Prompt</h4>
-              @if (copyDoneIconActive()) {
-                <mat-icon color="primary">check</mat-icon>
-              } @else {
-                <mat-icon
-                  class="copy-button"
-                  [cdkCopyToClipboard]="info.comfyui.prompt"
-                  (cdkCopyToClipboardCopied)="onCopySuccess()"
-                  >content_copy</mat-icon
-                >
+    @if (info.comfyui; as comfyui) {
+      @if (comfyui.found) {
+        <mat-card class="info-card">
+          <mat-card-content>
+            <!-- <mat-divider /> -->
+            <div class="section-header">
+              <h3>ComfyUI Workflow</h3>
+              @if (comfyui.prompt) {
+                <button mat-flat-button class="generate-btn" (click)="openGenerate()">
+                  <mat-icon>play_arrow</mat-icon> Generate
+                </button>
               }
             </div>
-            <div class="prompt-text">{{ info.comfyui.prompt }}</div>
-          }
+            <div class="meta-grid">
+              @if (comfyui.model) {
+                <div class="meta-item wide">
+                  <span class="label">Model</span>
+                  <span class="value">{{ comfyui.model }}</span>
+                </div>
+              }
+              @if (comfyui.steps) {
+                <div class="meta-item">
+                  <span class="label">Steps</span>
+                  <span class="value">{{ comfyui.steps }}</span>
+                </div>
+              }
+              @if (comfyui.cfg) {
+                <div class="meta-item">
+                  <span class="label">CFG</span>
+                  <span class="value">{{ comfyui.cfg }}</span>
+                </div>
+              }
+              @if (comfyui.seed != null) {
+                <div class="meta-item">
+                  <span class="label">Seed</span>
+                  <span class="value">{{ comfyui.seed }}</span>
+                </div>
+              }
+              @if (comfyui.sampler) {
+                <div class="meta-item">
+                  <span class="label">Sampler</span>
+                  <span class="value">{{ comfyui.sampler }}</span>
+                </div>
+              }
+              @if (comfyui.scheduler) {
+                <div class="meta-item">
+                  <span class="label">Scheduler</span>
+                  <span class="value">{{ comfyui.scheduler }}</span>
+                </div>
+              }
+              @if (comfyui.batch_size) {
+                <div class="meta-item">
+                  <span class="label">Batch Size</span>
+                  <span class="value">{{ comfyui.batch_size }}</span>
+                </div>
+              }
+            </div>
 
-          @if (info.comfyui.negative_prompt) {
-            <h4>Negative Prompt</h4>
-            <div class="prompt-text negative">{{ info.comfyui.negative_prompt }}</div>
-          }
-        </mat-card-content>
-      </mat-card>
+            @if (comfyui.loras?.length) {
+              <h4>LoRAs</h4>
+              <mat-chip-set>
+                @for (lora of comfyui.loras!; track lora.name) {
+                  <mat-chip>{{ lora.name }} ({{ lora.strength_model }})</mat-chip>
+                }
+              </mat-chip-set>
+            }
+
+            @if (comfyui.prompt) {
+              <div class="prompt-title">
+                <h4>Prompt</h4>
+                @if (copyDoneIconActive()) {
+                  <mat-icon color="primary">check</mat-icon>
+                } @else {
+                  <mat-icon
+                    class="copy-button"
+                    [cdkCopyToClipboard]="comfyui.prompt"
+                    (cdkCopyToClipboardCopied)="onCopySuccess()"
+                    >content_copy</mat-icon
+                  >
+                }
+              </div>
+              <div class="prompt-text">{{ comfyui.prompt }}</div>
+            }
+
+            @if (comfyui.negative_prompt) {
+              <h4>Negative Prompt</h4>
+              <div class="prompt-text negative">{{ comfyui.negative_prompt }}</div>
+            }
+          </mat-card-content>
+        </mat-card>
+      }
     }
 
     @if (info.exif && (info.exif | keyvalue)?.length) {
