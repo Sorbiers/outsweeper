@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import base64
 import collections
 import fnmatch
@@ -18,6 +20,7 @@ import webbrowser
 import zipfile
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 from urllib.parse import urlparse
 
 try:
@@ -118,8 +121,8 @@ def _metrics_loop(interval: float = 2.0) -> None:
             _sse_broadcast('metrics:' + json.dumps(
                 {'cpu': cpu, 'ram': ram, 'gpu': gpu, 'temp': temp, 'vram': vram}
             ), flag='metrics')
-        except Exception:
-            pass
+        except Exception as e:
+            print(f'[warn] metrics: {e}', flush=True)
 
 
 _COMFY_PROGRESS: dict = {}
@@ -146,8 +149,8 @@ def _comfy_ws_loop(comfy_url: str) -> None:
                 except Exception:
                     pass
             websocket.WebSocketApp(ws_url, on_message=on_message).run_forever()
-        except Exception:
-            pass
+        except Exception as e:
+            print(f'[warn] comfy ws: {e}', flush=True)
         time.sleep(5)
 
 
@@ -174,11 +177,11 @@ def _comfy_queue_loop(comfy_url: str, interval: float = 2.0) -> None:
                 'done': done_count,
                 'progress': _COMFY_PROGRESS if running_items else None,
             }), flag='comfy_queue')
-        except Exception:
-            pass
+        except Exception as e:
+            print(f'[warn] comfy queue: {e}', flush=True)
 
 
-def get_exif_date(filepath: Path):
+def get_exif_date(filepath: Path) -> str | None:
     """Return ISO datetime string from EXIF DateTimeOriginal/DateTime, or None."""
     try:
         img = Image.open(filepath)
@@ -195,7 +198,7 @@ def get_exif_date(filepath: Path):
     return None
 
 
-def stat_entry(stat) -> dict:
+def stat_entry(stat: os.stat_result) -> dict[str, Any]:
     """Lightweight cache record from a stat result."""
     return {'mtime': stat.st_mtime, 'ctime': stat.st_ctime, 'size': stat.st_size}
 
@@ -205,7 +208,7 @@ def mtime_token(mtime: float) -> str:
     return f'{int(mtime):08x}'
 
 
-def cleanup_old_thumbnails(roots, days: int) -> None:
+def cleanup_old_thumbnails(roots: list[Path], days: int) -> None:
     """Recursively remove __thumbnails/* files older than `days` days under each root."""
     cutoff = time.time() - days * 86400
     removed = 0
@@ -269,7 +272,7 @@ def ensure_exif_date(folder: Path, name: str, entry: dict) -> None:
     entry['exif_date'] = get_exif_date(folder / name)
 
 
-def human_size(nbytes):
+def human_size(nbytes: int | float) -> str:
     for unit in ('B', 'KB', 'MB', 'GB'):
         if nbytes < 1024:
             return f"{nbytes:.1f} {unit}"
@@ -277,7 +280,7 @@ def human_size(nbytes):
     return f"{nbytes:.1f} TB"
 
 
-def extract_comfyui_data(prompt):
+def extract_comfyui_data(prompt: str) -> dict[str, Any]:
     """Extract ComfyUI workflow data from PNG metadata."""
     result = {'found': False}
     try:
@@ -344,7 +347,7 @@ def extract_comfyui_data(prompt):
     return result
 
 
-def extract_exif(filepath):
+def extract_exif(filepath: Path) -> dict[str, str]:
     """Extract EXIF from IFD0 + ExifIFD (no GPS — that's a separate section)."""
     result = {}
 
@@ -370,7 +373,7 @@ def extract_exif(filepath):
     return result
 
 
-def _rationals_to_decimal(dms, ref):
+def _rationals_to_decimal(dms: tuple, ref: str) -> float | None:
     """Convert ((deg,min,sec), 'N'/'S'/'E'/'W') to decimal degrees."""
     try:
         deg, mn, sec = (float(x) for x in dms)
@@ -382,7 +385,7 @@ def _rationals_to_decimal(dms, ref):
         return None
 
 
-def extract_gps(filepath):
+def extract_gps(filepath: Path) -> dict[str, str]:
     """Extract GPS data: decimal lat/lon/altitude + raw tags (when present)."""
     result = {}
     try:
@@ -467,14 +470,14 @@ def extract_exif_text(v: str) -> str:
         return ''
 
 
-def extract_tags_from_comment(text: str) -> set:
+def extract_tags_from_comment(text: str) -> set[str]:
     """Return lowercase #hashtag words from a free-text comment."""
     if not text:
         return set()
     return {m.lower() for m in _TAG_RE.findall(text)}
 
 
-def extract_icc(filepath):
+def extract_icc(filepath: Path) -> dict[str, Any]:
     """Extract a few readable ICC profile fields if an ICC profile is embedded."""
     result = {}
     try:
@@ -482,7 +485,7 @@ def extract_icc(filepath):
         icc = img.info.get('icc_profile')
         if not icc:
             return result
-        profile = ImageCms.getOpenProfile(BytesIO(icc))
+        profile = ImageCms.getOpenProfile(io.BytesIO(icc))
         try:    result['Description']      = ImageCms.getProfileDescription(profile).strip()
         except Exception: pass
         try:    result['Manufacturer']     = ImageCms.getProfileManufacturer(profile).strip()
@@ -506,7 +509,7 @@ def extract_icc(filepath):
     return result
 
 
-def extract_png_metadata(filepath):
+def extract_png_metadata(filepath: Path) -> dict[str, str]:
     """Extract all PNG text chunks (tEXt/iTXt/zTXt) from a PNG file."""
     result = {}
     if filepath.suffix.lower() != '.png':
@@ -522,13 +525,22 @@ def extract_png_metadata(filepath):
     return result
 
 
-def create_app(root_dir, config, selected_name, dust_name,
-               comfy_url='http://127.0.0.1:8188',
-               lmstudio_url='http://localhost:1234/v1', comfy_output='',
-               monitor_enabled=False, comfy_queue_enabled=False,
-               validation_interval=None, thumb_cache_days=3,
-               exiftool_path='exiftool',
-               run_comfy_command='', run_lmstudio_command=''):
+def create_app(
+    root_dir: str | Path,
+    config: dict[str, Any],
+    selected_name: str,
+    dust_name: str,
+    comfy_url: str = 'http://127.0.0.1:8188',
+    lmstudio_url: str = 'http://localhost:1234/v1',
+    comfy_output: str = '',
+    monitor_enabled: bool = False,
+    comfy_queue_enabled: bool = False,
+    validation_interval: int | None = None,
+    thumb_cache_days: int = 3,
+    exiftool_path: str = 'exiftool',
+    run_comfy_command: str = '',
+    run_lmstudio_command: str = '',
+) -> Flask:
     static_dir    = Path(__file__).parent / 'static'
     app           = Flask(__name__, static_folder=None)
     tools_cfg     = config.get('tools', {})
@@ -545,6 +557,12 @@ def create_app(root_dir, config, selected_name, dust_name,
         # { '<resolved_folder>': { filename: frozenset(tags) } }
         'tag_index':        {},
     }
+
+    @app.errorhandler(400)
+    @app.errorhandler(403)
+    @app.errorhandler(404)
+    def json_http_error(e):
+        return jsonify({'error': getattr(e, 'description', str(e))}), e.code
 
     @app.before_request
     def log_request():
@@ -767,7 +785,7 @@ def create_app(root_dir, config, selected_name, dust_name,
         'gps':       ['-GPS:all='],
     }
 
-    def _exiftool_capabilities():
+    def _exiftool_capabilities() -> dict[str, Any]:
         """Probe exiftool. Never raises."""
         path = st['exiftool_path']
         try:
@@ -782,7 +800,7 @@ def create_app(root_dir, config, selected_name, dust_name,
         except Exception as e:
             return {'available': False, 'version': None, 'executable': path, 'error': str(e)}
 
-    def _exiftool_run(args, *, parse_json=False, timeout=EXIFTOOL_RUN_TIMEOUT):
+    def _exiftool_run(args: list[str], *, parse_json: bool = False, timeout: int = EXIFTOOL_RUN_TIMEOUT) -> list | str:
         """Run exiftool with the given args. Returns parsed JSON or stdout."""
         path = st['exiftool_path']
         proc = subprocess.run([path, *args], capture_output=True, text=True, timeout=timeout)
@@ -792,7 +810,7 @@ def create_app(root_dir, config, selected_name, dust_name,
             return json.loads(proc.stdout) if proc.stdout.strip() else []
         return proc.stdout
 
-    def _validate_ascii_fields(fields):
+    def _validate_ascii_fields(fields: dict[str, str]) -> str | None:
         """Validate every value is printable ASCII (0x20-0x7E). Returns error str or None."""
         for k, v in fields.items():
             if v is None or v == '':
@@ -803,7 +821,7 @@ def create_app(root_dir, config, selected_name, dust_name,
                 return f'field {k} contains non-ASCII characters'
         return None
 
-    def _build_edit_args(fields):
+    def _build_edit_args(fields: dict[str, str]) -> list[str]:
         """Build exiftool args for the editable field set. Skips empty values."""
         args = []
         for field, value in fields.items():
@@ -938,7 +956,7 @@ def create_app(root_dir, config, selected_name, dust_name,
         # `modified` query param is accepted for browser cache busting and ignored here.
         file_path = resolve_path(request.args.get('path', ''))
         if not file_path.is_file():
-            abort(404)
+            return jsonify({'error': 'Not found'}), 404
         resp = send_file(file_path, max_age=31536000)
         resp.headers['Cache-Control'] = 'public, max-age=31536000, immutable'
         return resp
@@ -948,7 +966,7 @@ def create_app(root_dir, config, selected_name, dust_name,
         # `modified` query param is for browser cache; on-disk cache uses the actual file mtime.
         img_path = resolve_path(request.args.get('path', ''))
         if not img_path.is_file():
-            abort(404)
+            return jsonify({'error': 'Not found'}), 404
         tok        = mtime_token(img_path.stat().st_mtime)
         thumb_path = img_path.parent / THUMBNAILS_DIR / f'{img_path.name}.{tok}.jpg'
         if not thumb_path.is_file():
@@ -1588,7 +1606,7 @@ def create_app(root_dir, config, selected_name, dust_name,
     return app
 
 
-def main():
+def main() -> None:
     config = load_config()
     defaults = config.get('defaults', {})
 
@@ -1638,7 +1656,7 @@ def main():
     app.run(host='127.0.0.1', port=port, debug=False, threaded=True)
 
 
-def load_config():
+def load_config() -> dict[str, Any]:
     config_path = Path(__file__).parent / 'config.toml'
     if config_path.is_file():
         with open(config_path, 'rb') as f:
