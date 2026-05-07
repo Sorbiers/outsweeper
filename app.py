@@ -1,50 +1,85 @@
-import sys
+import base64
+import collections
+import fnmatch
 import io
 import json
+import mimetypes
+import os
 import queue
 import re
-import shutil
-import time
-import threading
-import webbrowser
-import subprocess
 import shlex
+import shutil
+import subprocess
+import sys
+import threading
+import time
+import uuid as _uuid
+import webbrowser
 import zipfile
-import psutil
-import base64
-import mimetypes
-import fnmatch
 from datetime import datetime
 from pathlib import Path
 from urllib.parse import urlparse
-import uuid as _uuid
-from watchdog.observers import Observer
-from watchdog.events import FileSystemEventHandler
 
 try:
     import tomllib
 except ImportError:
-    import tomli as tomllib
+    import tomli as tomllib  # type: ignore[no-redef]
 
+import psutil
 import requests as http_requests
-from flask import Flask, jsonify, request, send_from_directory, send_file, abort, g
+from watchdog.events import FileSystemEventHandler
+from watchdog.observers import Observer
+from flask import Flask, Response, abort, g, jsonify, request, send_file, send_from_directory, stream_with_context
 from PIL import Image, ImageCms
-from PIL.ExifTags import TAGS, GPSTAGS
+from PIL.ExifTags import GPSTAGS, TAGS
 from PIL.PngImagePlugin import PngInfo
-from io import BytesIO
 
 EXTENSIONS     = {'.png', '.jpg', '.jpeg', '.webp'}
 THUMBNAILS_DIR = '__thumbnails'
-undo_stack     = []
+
+# --- Image processing ---
+THUMBNAIL_SIZE    = (300, 300)
+THUMBNAIL_QUALITY = 80
+
+# --- Timeouts (seconds) ---
+EXIFTOOL_CHECK_TIMEOUT   = 5
+EXIFTOOL_RUN_TIMEOUT     = 10
+LMS_CHECK_TIMEOUT        = 5
+LMS_COMPLETION_TIMEOUT   = 60
+VISION_COMPLETION_TIMEOUT = 120
+SSE_QUEUE_TIMEOUT        = 25
+
+# --- File watcher ---
+WATCHER_DEBOUNCE_SECS = 3
+WATCHER_COOLDOWN_SECS = 200
+WATCHER_POLL_SECS     = 1
+
+# --- LM Studio generation ---
+LMS_TEXT_TEMPERATURE   = 0.7
+LMS_VISION_TEMPERATURE = 0.2
+
+# --- EXIF tag IDs ---
+_EXIF_TAG_DATE_ORIGINAL  = 0x9003
+_EXIF_TAG_DATE_MODIFY    = 0x0132
+_EXIF_TAG_DATE_DIGITIZED = 0x9004
+_EXIF_TAG_USER_COMMENT   = 0x9286
+_EXIF_TAG_IMAGE_DESC     = 0x010E
+_EXIF_IFD_POINTER        = 0x8769
+_EXIF_GPS_POINTER        = 0x8825
+EXIF_DATETIME_FORMAT     = '%Y:%m:%d %H:%M:%S'
+
+# --- Mutable globals ---
+UNDO_STACK: collections.deque = collections.deque(maxlen=50)
+_UNDO_LOCK = threading.Lock()
 
 # SSE client registry (used for metrics + comfy queue widgets only)
-_sse_clients: dict = {}
-_sse_lock = threading.Lock()
+_SSE_CLIENTS: dict = {}
+_SSE_LOCK = threading.Lock()
 
 
 def _sse_broadcast(msg: str, *, flag: str | None = None) -> None:
-    with _sse_lock:
-        for client in list(_sse_clients.values()):
+    with _SSE_LOCK:
+        for client in list(_SSE_CLIENTS.values()):
             if flag and not client.get(flag, True):
                 continue
             try:
@@ -63,8 +98,8 @@ def _metrics_loop(interval: float = 2.0) -> None:
         pass
     while True:
         time.sleep(interval)
-        with _sse_lock:
-            has_metrics = any(c['metrics'] for c in _sse_clients.values())
+        with _SSE_LOCK:
+            has_metrics = any(c['metrics'] for c in _SSE_CLIENTS.values())
         if not has_metrics:
             continue
         try:
@@ -87,7 +122,7 @@ def _metrics_loop(interval: float = 2.0) -> None:
             pass
 
 
-_comfy_progress: dict = {}
+_COMFY_PROGRESS: dict = {}
 
 
 def _comfy_ws_loop(comfy_url: str) -> None:
@@ -99,15 +134,15 @@ def _comfy_ws_loop(comfy_url: str) -> None:
     while True:
         try:
             def on_message(ws, message):
-                global _comfy_progress
+                global _COMFY_PROGRESS  # noqa: PLW0603
                 try:
                     msg = json.loads(message)
                     if msg['type'] == 'progress':
-                        _comfy_progress = {'value': msg['data']['value'], 'max': msg['data']['max']}
+                        _COMFY_PROGRESS = {'value': msg['data']['value'], 'max': msg['data']['max']}
                     elif msg['type'] == 'execution_complete':
-                        _comfy_progress = {}
+                        _COMFY_PROGRESS = {}
                     elif msg['type'] == 'executing' and msg.get('data', {}).get('node') is None:
-                        _comfy_progress = {}
+                        _COMFY_PROGRESS = {}
                 except Exception:
                     pass
             websocket.WebSocketApp(ws_url, on_message=on_message).run_forever()
@@ -121,8 +156,8 @@ def _comfy_queue_loop(comfy_url: str, interval: float = 2.0) -> None:
     done_count = 0
     while True:
         time.sleep(interval)
-        with _sse_lock:
-            has_comfy = any(c.get('comfy_queue', True) for c in _sse_clients.values())
+        with _SSE_LOCK:
+            has_comfy = any(c.get('comfy_queue', True) for c in _SSE_CLIENTS.values())
         if not has_comfy:
             continue
         try:
@@ -137,7 +172,7 @@ def _comfy_queue_loop(comfy_url: str, interval: float = 2.0) -> None:
                 'running': len(running_items),
                 'pending': len(pending_items),
                 'done': done_count,
-                'progress': _comfy_progress if running_items else None,
+                'progress': _COMFY_PROGRESS if running_items else None,
             }), flag='comfy_queue')
         except Exception:
             pass
@@ -148,11 +183,11 @@ def get_exif_date(filepath: Path):
     try:
         img = Image.open(filepath)
         exif_data = img.getexif()
-        for tag_id in (0x9003, 0x0132, 0x9004):
+        for tag_id in (_EXIF_TAG_DATE_ORIGINAL, _EXIF_TAG_DATE_MODIFY, _EXIF_TAG_DATE_DIGITIZED):
             val = exif_data.get(tag_id)
             if val and isinstance(val, str):
                 try:
-                    return datetime.strptime(val, '%Y:%m:%d %H:%M:%S').isoformat()
+                    return datetime.strptime(val, EXIF_DATETIME_FORMAT).isoformat()
                 except ValueError:
                     pass
     except Exception:
@@ -245,15 +280,7 @@ def human_size(nbytes):
 def extract_comfyui_data(prompt):
     """Extract ComfyUI workflow data from PNG metadata."""
     result = {'found': False}
-    # if filepath.suffix.lower() != '.png':
-    #     return result
-
     try:
-        # img = Image.open(filepath)
-        # meta = img.info
-        # if 'prompt' not in meta:
-        #     return result
-
         prompt = json.loads(prompt)
         result['found'] = True
 
@@ -337,7 +364,7 @@ def extract_exif(filepath):
         img       = Image.open(filepath)
         exif_data = img.getexif()
         _add(exif_data)                          # IFD0
-        _add(exif_data.get_ifd(0x8769))          # ExifIFD: aperture, ISO, lens, etc.
+        _add(exif_data.get_ifd(_EXIF_IFD_POINTER))  # ExifIFD: aperture, ISO, lens, etc.
     except Exception:
         pass
     return result
@@ -360,7 +387,7 @@ def extract_gps(filepath):
     result = {}
     try:
         img = Image.open(filepath)
-        gps = img.getexif().get_ifd(0x8825)
+        gps = img.getexif().get_ifd(_EXIF_GPS_POINTER)
         if not gps:
             return result
         lat = gps.get(2); lat_ref = gps.get(1)
@@ -396,8 +423,8 @@ _TAG_RE = re.compile(r'#([A-Za-z0-9_\-]+)')
 def _user_comment_text(filepath: Path) -> str:
     """Read EXIF UserComment, stripping the 8-byte EXIF charset prefix if present."""
     try:
-        ifd = Image.open(filepath).getexif().get_ifd(0x8769)
-        v   = ifd.get(0x9286)
+        ifd = Image.open(filepath).getexif().get_ifd(_EXIF_IFD_POINTER)
+        v   = ifd.get(_EXIF_TAG_USER_COMMENT)
         if v is None:
             return ''
         if isinstance(v, bytes):
@@ -617,13 +644,13 @@ def create_app(root_dir, config, selected_name, dust_name,
         """Rebuild root cache when watcher detects changes.
         Requires: 3 s debounce since last event AND 200 s cooldown since last rescan."""
         while True:
-            time.sleep(1)
+            time.sleep(WATCHER_POLL_SECS)
             now = time.time()
             if _last_detection[0] <= _last_rescan_done[0]:
                 continue                    # no pending changes
-            if now - _last_detection[0] < 3:
+            if now - _last_detection[0] < WATCHER_DEBOUNCE_SECS:
                 continue                    # debounce: wait for event burst to settle
-            if now - _last_rescan_done[0] < 200:
+            if now - _last_rescan_done[0] < WATCHER_COOLDOWN_SECS:
                 continue                    # cooldown: don't hammer large folders
             root_key = str(root_resolved)
             old_count = len(st['folder_caches'].get(root_key, {}))
@@ -744,7 +771,7 @@ def create_app(root_dir, config, selected_name, dust_name,
         """Probe exiftool. Never raises."""
         path = st['exiftool_path']
         try:
-            proc = subprocess.run([path, '-ver'], capture_output=True, text=True, timeout=5)
+            proc = subprocess.run([path, '-ver'], capture_output=True, text=True, timeout=EXIFTOOL_CHECK_TIMEOUT)
             if proc.returncode == 0:
                 return {'available': True, 'version': proc.stdout.strip(), 'executable': path, 'error': None}
             return {'available': False, 'version': None, 'executable': path,
@@ -755,7 +782,7 @@ def create_app(root_dir, config, selected_name, dust_name,
         except Exception as e:
             return {'available': False, 'version': None, 'executable': path, 'error': str(e)}
 
-    def _exiftool_run(args, *, parse_json=False, timeout=10):
+    def _exiftool_run(args, *, parse_json=False, timeout=EXIFTOOL_RUN_TIMEOUT):
         """Run exiftool with the given args. Returns parsed JSON or stdout."""
         path = st['exiftool_path']
         proc = subprocess.run([path, *args], capture_output=True, text=True, timeout=timeout)
@@ -928,8 +955,8 @@ def create_app(root_dir, config, selected_name, dust_name,
             thumb_path.parent.mkdir(parents=True, exist_ok=True)
             try:
                 img = Image.open(img_path)
-                img.thumbnail((300, 300))
-                img.convert('RGB').save(thumb_path, 'JPEG', quality=80)
+                img.thumbnail(THUMBNAIL_SIZE)
+                img.convert('RGB').save(thumb_path, 'JPEG', quality=THUMBNAIL_QUALITY)
             except Exception:
                 return send_file(img_path, max_age=3600)
         resp = send_file(thumb_path, mimetype='image/jpeg', max_age=31536000)
@@ -991,14 +1018,16 @@ def create_app(root_dir, config, selected_name, dust_name,
                 dst_cache[src_path.name] = stat_entry(dest_path.stat())
             except Exception:
                 pass
-        undo_stack.append({'filename': src_path.name, 'from': str(src_path), 'to': str(dest_path)})
+        with _UNDO_LOCK:
+            UNDO_STACK.append({'filename': src_path.name, 'from': str(src_path), 'to': str(dest_path)})
         return jsonify({'ok': True, 'filename': src_path.name})
 
     @app.route('/api/undo', methods=['POST'])
     def undo():
-        if not undo_stack:
-            return jsonify({'ok': False, 'error': 'nothing to undo'}), 400
-        entry     = undo_stack.pop()
+        with _UNDO_LOCK:
+            if not UNDO_STACK:
+                return jsonify({'ok': False, 'error': 'nothing to undo'}), 400
+            entry = UNDO_STACK.pop()
         to_path   = Path(entry['to'])
         from_path = Path(entry['from'])
         if not to_path.is_file():
@@ -1094,7 +1123,7 @@ def create_app(root_dir, config, selected_name, dust_name,
         parsed = urlparse(lmstudio_url)
         base = f"{parsed.scheme}://{parsed.netloc}"
         try:
-            resp = http_requests.get(f"{base}/api/v1/models", timeout=5)
+            resp = http_requests.get(f"{base}/api/v1/models", timeout=LMS_CHECK_TIMEOUT)
             models = resp.json().get('models', [])
             for model in models:
                 for instance in model.get('loaded_instances', []):
@@ -1103,7 +1132,7 @@ def create_app(root_dir, config, selected_name, dust_name,
                         http_requests.post(
                             f"{base}/api/v1/models/unload",
                             json={"instance_id": instance_id},
-                            timeout=5,
+                            timeout=LMS_CHECK_TIMEOUT,
                         )
         except Exception:
             pass
@@ -1114,7 +1143,7 @@ def create_app(root_dir, config, selected_name, dust_name,
         data = request.get_json()
         lmstudio_url = data.get('lmstudio_url', 'http://localhost:1234/v1')
         try:
-            resp = http_requests.get(f"{lmstudio_url}/models", timeout=5)
+            resp = http_requests.get(f"{lmstudio_url}/models", timeout=LMS_CHECK_TIMEOUT)
             return jsonify(resp.json()), resp.status_code
         except Exception as e:
             return jsonify({'error': str(e)}), 502
@@ -1128,8 +1157,8 @@ def create_app(root_dir, config, selected_name, dust_name,
         try:
             resp = http_requests.post(
                 f"{lms_url}/chat/completions",
-                json={'model': model, 'messages': [{'role': 'user', 'content': prompt}], 'temperature': 0.7},
-                timeout=60,
+                json={'model': model, 'messages': [{'role': 'user', 'content': prompt}], 'temperature': LMS_TEXT_TEMPERATURE},
+                timeout=LMS_COMPLETION_TIMEOUT,
             )
             return jsonify({'description': resp.json()['choices'][0]['message']['content']})
         except Exception as e:
@@ -1154,8 +1183,8 @@ def create_app(root_dir, config, selected_name, dust_name,
                 json={'model': model, 'messages': [{'role': 'user', 'content': [
                     {'type': 'text', 'text': prompt},
                     {'type': 'image_url', 'image_url': {'url': f'data:{mt};base64,{b64}'}},
-                ]}], 'temperature': 0.2},
-                timeout=120,
+                ]}], 'temperature': LMS_VISION_TEMPERATURE},
+                timeout=VISION_COMPLETION_TIMEOUT,
             )
             return jsonify({'description': resp.json()['choices'][0]['message']['content']})
         except Exception as e:
@@ -1181,7 +1210,7 @@ def create_app(root_dir, config, selected_name, dust_name,
                 img.save(file_path, pnginfo=info)
             elif ext in ('.jpg', '.jpeg', '.webp'):
                 exif = img.getexif()
-                exif[0x010E] = description
+                exif[_EXIF_TAG_IMAGE_DESC] = description
                 img.save(file_path, quality=98, exif=exif.tobytes())
             else:
                 return jsonify({'error': f'Unsupported format: {ext}'}), 400
@@ -1452,18 +1481,18 @@ def create_app(root_dir, config, selected_name, dust_name,
     def metrics_pause():
         client_id = request.json.get('client_id', '')
         paused = request.json.get('paused', True)
-        with _sse_lock:
-            if client_id in _sse_clients:
-                _sse_clients[client_id]['metrics'] = not paused
+        with _SSE_LOCK:
+            if client_id in _SSE_CLIENTS:
+                _SSE_CLIENTS[client_id]['metrics'] = not paused
         return jsonify({'ok': True})
 
     @app.route('/api/comfy-queue/pause', methods=['POST'])
     def comfy_queue_pause():
         client_id = request.json.get('client_id', '')
         paused = request.json.get('paused', True)
-        with _sse_lock:
-            if client_id in _sse_clients:
-                _sse_clients[client_id]['comfy_queue'] = not paused
+        with _SSE_LOCK:
+            if client_id in _SSE_CLIENTS:
+                _SSE_CLIENTS[client_id]['comfy_queue'] = not paused
         return jsonify({'ok': True})
 
     @app.route('/api/refresh', methods=['POST'])
@@ -1512,24 +1541,23 @@ def create_app(root_dir, config, selected_name, dust_name,
 
     @app.route('/api/events')
     def sse_events():
-        from flask import Response, stream_with_context
         client_id = str(_uuid.uuid4())
         q = queue.Queue(maxsize=8)
 
         def generate():
-            with _sse_lock:
-                _sse_clients[client_id] = {'queue': q, 'metrics': True, 'comfy_queue': True}
+            with _SSE_LOCK:
+                _SSE_CLIENTS[client_id] = {'queue': q, 'metrics': True, 'comfy_queue': True}
             try:
                 yield f'data: client_id:{client_id}\n\n'
                 while True:
                     try:
-                        msg = q.get(timeout=25)
+                        msg = q.get(timeout=SSE_QUEUE_TIMEOUT)
                         yield f'data: {msg}\n\n'
                     except queue.Empty:
                         yield ': heartbeat\n\n'
             finally:
-                with _sse_lock:
-                    _sse_clients.pop(client_id, None)
+                with _SSE_LOCK:
+                    _SSE_CLIENTS.pop(client_id, None)
 
         return Response(
             stream_with_context(generate()),

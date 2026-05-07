@@ -1,4 +1,5 @@
 import { Component, HostBinding, Input, Output, EventEmitter, OnInit, OnDestroy } from '@angular/core';
+import { STORAGE_KEYS } from '../../constants';
 import { DecimalPipe, NgClass } from '@angular/common';
 import { SystemMetrics } from '../../models/metrics.model';
 
@@ -26,7 +27,7 @@ export class GpuMonitorWidget implements OnInit, OnDestroy {
   private boundUp   = ()              => this.onMouseUp();
 
   ngOnInit(): void {
-    const saved = localStorage.getItem('pp_widget_pos');
+    const saved = localStorage.getItem(STORAGE_KEYS.WIDGET_POS);
     if (saved) {
       try {
         const p = JSON.parse(saved);
@@ -62,7 +63,7 @@ export class GpuMonitorWidget implements OnInit, OnDestroy {
   private onMouseUp(): void {
     document.removeEventListener('mousemove', this.boundMove);
     document.removeEventListener('mouseup', this.boundUp);
-    localStorage.setItem('pp_widget_pos', JSON.stringify({ x: this.x, y: this.y }));
+    localStorage.setItem(STORAGE_KEYS.WIDGET_POS, JSON.stringify({ x: this.x, y: this.y }));
   }
 
   cls(pct: number | null): string {

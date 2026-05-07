@@ -7,6 +7,7 @@ import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatDividerModule } from '@angular/material/divider';
 import { PhotoService } from '../../services/photo.service';
+import { SPECIAL_FOLDERS } from '../../constants';
 
 export interface BatchDialogData {
   operation: 'copy' | 'move';
@@ -32,12 +33,12 @@ export class BatchDialog implements OnInit {
   phase: 'select' | 'progress' | 'done' = 'select';
   folders: string[]              = [];
   rootName                       = '';
-  selectedFolder                 = '__selected';  // default to Selected folder
+  selectedFolder: string         = SPECIAL_FOLDERS.SELECTED;
   selectedComfyOutput            = false;
   comfyOutputPath: string | null = null;
   comfyOutputName: string | null = null;
-  selectedName                   = '__selected';
-  dustName                       = '__dust';
+  selectedName: string           = SPECIAL_FOLDERS.SELECTED;
+  dustName: string               = SPECIAL_FOLDERS.DUST;
   zipFiles      = false;
   loading       = true;
   notAllowed    = false;
@@ -50,8 +51,8 @@ export class BatchDialog implements OnInit {
         this.folders         = ['', ...res.folders];
         this.comfyOutputPath = res.comfy_output;
         this.comfyOutputName = res.comfy_output_name;
-        this.selectedName    = res.selected_name ?? '__selected';
-        this.dustName        = res.dust_name ?? '__dust';
+        this.selectedName    = res.selected_name ?? SPECIAL_FOLDERS.SELECTED;
+        this.dustName        = res.dust_name ?? SPECIAL_FOLDERS.DUST;
         this.loading         = false;
       },
       error: err => {

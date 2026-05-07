@@ -1,16 +1,18 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
+import { SPECIAL_FOLDERS } from '../constants';
 import {
   PhotoListItem, PhotoInfo, MoveResponse, UndoResponse,
   ExiftoolCapabilities, ExiftoolMetadata, EditableFields, StripGroup,
   BatchEditResult,
 } from '../models/photo.model';
+import { AppConfig } from '../models/config.model';
 
 @Injectable({ providedIn: 'root' })
 export class PhotoService {
   private http = inject(HttpClient);
-  thumbnailsName = '__thumbnails';
+  thumbnailsName: string = SPECIAL_FOLDERS.THUMBNAILS;
 
   private filePath(filename: string, folder: string): string {
     return folder ? `${folder}/${filename}` : filename;
@@ -92,12 +94,8 @@ export class PhotoService {
     return this.http.post<{ samplers: string[]; schedulers: string[] }>('/api/comfy/samplers', { comfy_url: comfyUrl });
   }
 
-  getConfig(): Observable<{
-    comfy_url: string; lmstudio_url: string;
-    widgets: { gpu_monitor: boolean; comfy_queue: boolean };
-    selected_name: string; dust_name: string; thumbnails_name: string; root_name: string;
-  }> {
-    return this.http.get<any>('/api/config');
+  getConfig(): Observable<AppConfig> {
+    return this.http.get<AppConfig>('/api/config');
   }
 
   setMetricsPaused(paused: boolean, clientId: string): Observable<{ ok: boolean }> {

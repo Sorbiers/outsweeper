@@ -1,4 +1,5 @@
 import { Component, HostBinding, Output, EventEmitter, OnInit, OnDestroy, inject } from '@angular/core';
+import { STORAGE_KEYS } from '../../constants';
 import { DecimalPipe } from '@angular/common';
 import { ComfyQueueService } from '../../services/comfy-queue.service';
 
@@ -27,7 +28,7 @@ export class ComfyQueueWidget implements OnInit, OnDestroy {
   private boundUp   = ()              => this.onMouseUp();
 
   ngOnInit(): void {
-    const saved = localStorage.getItem('pp_comfy_pos');
+    const saved = localStorage.getItem(STORAGE_KEYS.COMFY_POS);
     if (saved) {
       try { const p = JSON.parse(saved); this.x = p.x; this.y = p.y; } catch { /* ignore */ }
     } else {
@@ -59,6 +60,6 @@ export class ComfyQueueWidget implements OnInit, OnDestroy {
   private onMouseUp(): void {
     document.removeEventListener('mousemove', this.boundMove);
     document.removeEventListener('mouseup', this.boundUp);
-    localStorage.setItem('pp_comfy_pos', JSON.stringify({ x: this.x, y: this.y }));
+    localStorage.setItem(STORAGE_KEYS.COMFY_POS, JSON.stringify({ x: this.x, y: this.y }));
   }
 }

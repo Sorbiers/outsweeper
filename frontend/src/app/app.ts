@@ -38,6 +38,7 @@ import { ConnectionStateService } from './services/connection-state.service';
 import { FavoritesService } from './services/favorites.service';
 import { KeyboardService, PhotoAction } from './services/keyboard.service';
 import { PhotoService } from './services/photo.service';
+import { SPECIAL_FOLDERS, STORAGE_KEYS } from './constants';
 
 @Component({
   selector: 'pp-root',
@@ -72,8 +73,8 @@ export class App implements OnInit, OnDestroy {
   currentIndex = 0;
   currentInfo: PhotoInfo | null = null;
   currentPath = '';
-  selectedName = '__selected';
-  dustName = '__dust';
+  selectedName: string = SPECIAL_FOLDERS.SELECTED;
+  dustName: string = SPECIAL_FOLDERS.DUST;
   sourceFolderName = '';
   sortBy: 'name' | 'modified' = 'name';
   sortAsc = true;
@@ -128,9 +129,9 @@ export class App implements OnInit, OnDestroy {
   }
 
   ngOnInit(): void {
-    const savedSort = localStorage.getItem('pp_sortBy');
+    const savedSort = localStorage.getItem(STORAGE_KEYS.SORT_BY);
     if (savedSort === 'name' || savedSort === 'modified') this.sortBy = savedSort;
-    const savedAsc = localStorage.getItem('pp_sortAsc');
+    const savedAsc = localStorage.getItem(STORAGE_KEYS.SORT_ASC);
     if (savedAsc !== null) this.sortAsc = savedAsc === 'true';
 
     this.keyboard.init();
@@ -271,8 +272,8 @@ export class App implements OnInit, OnDestroy {
   setSort(by: 'name' | 'modified', asc: boolean): void {
     this.sortBy = by;
     this.sortAsc = asc;
-    localStorage.setItem('pp_sortBy', by);
-    localStorage.setItem('pp_sortAsc', String(asc));
+    localStorage.setItem(STORAGE_KEYS.SORT_BY, by);
+    localStorage.setItem(STORAGE_KEYS.SORT_ASC, String(asc));
     this.pageOffset = 0;
     this.currentIndex = 0;
     this.loadPhotos();

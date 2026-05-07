@@ -11,6 +11,7 @@ import { forkJoin, of } from 'rxjs';
 import { catchError } from 'rxjs/operators';
 import { ConnectionStateService } from '../../services/connection-state.service';
 import { PhotoService } from '../../services/photo.service';
+import { STORAGE_KEYS } from '../../constants';
 import { PrompterDialog } from '../prompter-dialog/prompter-dialog';
 
 export interface GenerateDialogData {
@@ -110,7 +111,7 @@ export class GenerateDialog {
     this.checkpointNodes = this.extractVariableNodes(this.data.workflow, 'ckpt_name');
 
     this.photoService.getConfig().subscribe(cfg => {
-      this.hasRunComfyCommand = !!(cfg as any).has_run_comfy_command;
+      this.hasRunComfyCommand = !!cfg.has_run_comfy_command;
       if (!this.comfyUrl) this.comfyUrl = cfg.comfy_url || '';
     });
   }
@@ -298,15 +299,15 @@ export class GenerateDialog {
 
   private saveParams(): void {
     const p = this.params;
-    if (p.steps != null) sessionStorage.setItem('pp_gen_steps', String(p.steps));
-    if (p.cfg != null) sessionStorage.setItem('pp_gen_cfg', String(p.cfg));
-    if (p.batchSize != null) sessionStorage.setItem('pp_gen_batchSize', String(p.batchSize));
-    if (p.width != null) sessionStorage.setItem('pp_gen_width', String(p.width));
-    if (p.height != null) sessionStorage.setItem('pp_gen_height', String(p.height));
-    if (p.samplerName) sessionStorage.setItem('pp_gen_samplerName', p.samplerName);
-    if (p.scheduler) sessionStorage.setItem('pp_gen_scheduler', p.scheduler);
-    if (p.positivePrompt) sessionStorage.setItem('pp_gen_positivePrompt', p.positivePrompt);
-    if (p.negativePrompt) sessionStorage.setItem('pp_gen_negativePrompt', p.negativePrompt);
+    if (p.steps != null) sessionStorage.setItem(STORAGE_KEYS.GEN_STEPS, String(p.steps));
+    if (p.cfg != null) sessionStorage.setItem(STORAGE_KEYS.GEN_CFG, String(p.cfg));
+    if (p.batchSize != null) sessionStorage.setItem(STORAGE_KEYS.GEN_BATCH, String(p.batchSize));
+    if (p.width != null) sessionStorage.setItem(STORAGE_KEYS.GEN_WIDTH, String(p.width));
+    if (p.height != null) sessionStorage.setItem(STORAGE_KEYS.GEN_HEIGHT, String(p.height));
+    if (p.samplerName) sessionStorage.setItem(STORAGE_KEYS.GEN_SAMPLER, p.samplerName);
+    if (p.scheduler) sessionStorage.setItem(STORAGE_KEYS.GEN_SCHEDULER, p.scheduler);
+    if (p.positivePrompt) sessionStorage.setItem(STORAGE_KEYS.GEN_POS_PROMPT, p.positivePrompt);
+    if (p.negativePrompt) sessionStorage.setItem(STORAGE_KEYS.GEN_NEG_PROMPT, p.negativePrompt);
   }
 
   private extractVariableNodes(workflow: Record<string, any>, inputKey: string): VariableNode[] {
@@ -376,15 +377,15 @@ export class GenerateDialog {
 
     // Fill empty fields from last used values
     const ls = (k: string) => sessionStorage.getItem(k);
-    if (params.steps == null)     { const v = ls('pp_gen_steps');        if (v) params.steps     = +v; }
-    if (params.cfg == null)       { const v = ls('pp_gen_cfg');          if (v) params.cfg       = +v; }
-    if (params.batchSize == null) { const v = ls('pp_gen_batchSize');    if (v) params.batchSize = +v; }
-    if (params.width == null)     { const v = ls('pp_gen_width');        if (v) params.width     = +v; }
-    if (params.height == null)    { const v = ls('pp_gen_height');       if (v) params.height    = +v; }
-    if (!params.samplerName)      { params.samplerName = ls('pp_gen_samplerName'); }
-    if (!params.scheduler)        { params.scheduler   = ls('pp_gen_scheduler'); }
-    if (!params.positivePrompt)   { params.positivePrompt = ls('pp_gen_positivePrompt') || ''; }
-    if (!params.negativePrompt)   { params.negativePrompt = ls('pp_gen_negativePrompt') || DEFAULT_NEGATIVE_PROMPT; }
+    if (params.steps == null)     { const v = ls(STORAGE_KEYS.GEN_STEPS);      if (v) params.steps     = +v; }
+    if (params.cfg == null)       { const v = ls(STORAGE_KEYS.GEN_CFG);        if (v) params.cfg       = +v; }
+    if (params.batchSize == null) { const v = ls(STORAGE_KEYS.GEN_BATCH);      if (v) params.batchSize = +v; }
+    if (params.width == null)     { const v = ls(STORAGE_KEYS.GEN_WIDTH);      if (v) params.width     = +v; }
+    if (params.height == null)    { const v = ls(STORAGE_KEYS.GEN_HEIGHT);     if (v) params.height    = +v; }
+    if (!params.samplerName)      { params.samplerName = ls(STORAGE_KEYS.GEN_SAMPLER); }
+    if (!params.scheduler)        { params.scheduler   = ls(STORAGE_KEYS.GEN_SCHEDULER); }
+    if (!params.positivePrompt)   { params.positivePrompt = ls(STORAGE_KEYS.GEN_POS_PROMPT) || ''; }
+    if (!params.negativePrompt)   { params.negativePrompt = ls(STORAGE_KEYS.GEN_NEG_PROMPT) || DEFAULT_NEGATIVE_PROMPT; }
 
     return params;
   }

@@ -10,3 +10,5 @@ nul
 __pycache__/
 *.pyc
 Screenshot *.png
+test_folder/**/_*/
+

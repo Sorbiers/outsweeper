@@ -64,15 +64,15 @@ export class FilterDialog {
   get sizeMinKb(): number | null {
     return this.filters.sizeMin != null ? Math.round(this.filters.sizeMin / 1024) : null;
   }
-  set sizeMinKb(v: number | null) {
-    this.filters.sizeMin = v != null && v !== ('' as any) ? v * 1024 : null;
+  set sizeMinKb(v: number | string | null) {
+    this.filters.sizeMin = v != null && v !== '' ? +v * 1024 : null;
   }
 
   get sizeMaxKb(): number | null {
     return this.filters.sizeMax != null ? Math.round(this.filters.sizeMax / 1024) : null;
   }
-  set sizeMaxKb(v: number | null) {
-    this.filters.sizeMax = v != null && v !== ('' as any) ? v * 1024 : null;
+  set sizeMaxKb(v: number | string | null) {
+    this.filters.sizeMax = v != null && v !== '' ? +v * 1024 : null;
   }
 
   isTypeSelected(type: string): boolean {

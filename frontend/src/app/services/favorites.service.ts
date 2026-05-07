@@ -1,9 +1,10 @@
 import { Injectable } from '@angular/core';
+import { STORAGE_KEYS } from '../constants';
 
 @Injectable({ providedIn: 'root' })
 export class FavoritesService {
   private storageKey(folder: string): string {
-    return `pp_favorites:${folder}`;
+    return `${STORAGE_KEYS.FAVORITES_PREFIX}${folder}`;
   }
 
   load(folder: string): Set<string> {

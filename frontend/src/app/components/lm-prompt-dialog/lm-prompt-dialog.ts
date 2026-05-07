@@ -11,6 +11,7 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { Clipboard } from '@angular/cdk/clipboard';
 import { PhotoService } from '../../services/photo.service';
 import { ConnectionStateService } from '../../services/connection-state.service';
+import { STORAGE_KEYS } from '../../constants';
 
 @Component({
   selector: 'pp-lm-prompt-dialog',
@@ -26,7 +27,7 @@ export class LmPromptDialog {
   private connState = inject(ConnectionStateService);
 
   lmstudioUrl = '';
-  model = localStorage.getItem('lmstudioModel') || '';
+  model = localStorage.getItem(STORAGE_KEYS.LMS_MODEL) || '';
   prompt: string;
   availableModels: string[] = [];
   checkStatus: 'idle' | 'checking' | 'ok' | 'error' = 'idle';
@@ -48,7 +49,7 @@ export class LmPromptDialog {
     }
 
     this.photoService.getConfig().subscribe(cfg => {
-      this.hasRunLmstudioCommand = !!(cfg as any).has_run_lmstudio_command;
+      this.hasRunLmstudioCommand = !!cfg.has_run_lmstudio_command;
     });
   }
 
@@ -82,7 +83,7 @@ export class LmPromptDialog {
 
   ask(): void {
     this.connState.lmstudio.url = this.lmstudioUrl;
-    if (this.model) localStorage.setItem('lmstudioModel', this.model);
+    if (this.model) localStorage.setItem(STORAGE_KEYS.LMS_MODEL, this.model);
     this.connState.lastLmPrompt = this.prompt;
     this.asking = true;
     this.result = '';

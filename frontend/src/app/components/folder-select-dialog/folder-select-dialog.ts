@@ -13,6 +13,7 @@ import { MatDividerModule } from '@angular/material/divider';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { PhotoService } from '../../services/photo.service';
+import { SPECIAL_FOLDERS } from '../../constants';
 
 export type FolderSelectResult = { kind: 'navigate'; path: string };
 
@@ -64,8 +65,8 @@ export class FolderSelectDialog implements OnInit {
   private photoService = inject(PhotoService);
   private data: FolderSelectData = inject(MAT_DIALOG_DATA);
 
-  selectedName = '__selected';
-  dustName = '__dust';
+  selectedName: string = SPECIAL_FOLDERS.SELECTED;
+  dustName: string = SPECIAL_FOLDERS.DUST;
   rootName = '';
   folders: string[] = [];
   comfyOutputPath: string | null = null;
@@ -86,8 +87,8 @@ export class FolderSelectDialog implements OnInit {
     this.photoService.listFolders().subscribe({
       next: (res) => {
         this.rootName = res.root_name;
-        this.selectedName = res.selected_name ?? '__selected';
-        this.dustName = res.dust_name ?? '__dust';
+        this.selectedName = res.selected_name ?? SPECIAL_FOLDERS.SELECTED;
+        this.dustName = res.dust_name ?? SPECIAL_FOLDERS.DUST;
         this.folders = ['', ...res.folders];
         this.comfyOutputPath = res.comfy_output;
         this.comfyOutputName = res.comfy_output_name;
