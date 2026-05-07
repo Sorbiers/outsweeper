@@ -1,0 +1,30 @@
+[permissions]
+allow_dir_change = true
+
+[parameters]
+extract_exif = true
+extract_gps  = false
+extract_icc  = false
+extract_png  = true
+
+[defaults]
+port              = 1976
+# Optional: default source folder (ComfyUI output). If not set, must pass folder as CLI arg.
+comfy_output      = ""
+comfy_url         = "http://127.0.0.1:8188"
+lmstudio_url      = "http://localhost:1234/v1"
+# Optional: full path to exiftool binary. Leave as "exiftool" if it's on your PATH.
+exiftool_path     = "exiftool"
+thumb_cache_days  = 3
+# Optional: commands to launch ComfyUI / LM Studio from inside the app
+run_comfy_command    = ""
+run_lmstudio_command = ""
+
+[widgets]
+gpu_monitor = true   # requires nvidia-ml-py
+comfy_queue = true
+
+# [tools]
+# Define shell commands callable from the info panel.
+# %filename% is replaced with the absolute path of the selected image.
+# "My Tool" = "python /path/to/script.py %filename%"

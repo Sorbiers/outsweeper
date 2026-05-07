@@ -37,6 +37,7 @@ function assembleRelease() {
 
   fs.copyFileSync(path.join(ROOT, 'app.py'), path.join(RELEASE, 'app.py'));
   fs.copyFileSync(path.join(ROOT, 'requirements.txt'), path.join(RELEASE, 'requirements.txt'));
+  fs.copyFileSync(path.join(ROOT, 'config.example.toml'), path.join(RELEASE, 'config.example.toml'));
 
   copyDir(STATIC_SRC, STATIC_DEST);
 
@@ -53,6 +54,9 @@ function assembleRelease() {
     '@echo off\r\n' +
     'pip install -r requirements.txt\r\n'
   );
+
+  fs.copyFileSync(path.join(ROOT, 'run.sh'), path.join(RELEASE, 'run.sh'));
+  fs.copyFileSync(path.join(ROOT, 'install_deps.sh'), path.join(RELEASE, 'install_deps.sh'));
 }
 
 function main() {

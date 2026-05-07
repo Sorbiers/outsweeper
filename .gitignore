@@ -6,9 +6,11 @@ test_photos/
 node_modules/
 .angular/
 .playwright-mcp/
+.claude/
 nul
 __pycache__/
 *.pyc
 Screenshot *.png
 test_folder/**/_*/
+config.toml
 
