@@ -1,12 +1,15 @@
 {
-  "name": "photo-parser",
+  "name": "outsweeper",
   "version": "1.0.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "build": "cd frontend && npx ng build",
-    "release": "node scripts/release.js",
+    "release": "node scripts/release.cjs",
     "test": "playwright test",
-    "test:report": "playwright show-report tests/report"
+    "test:report": "playwright show-report tests/report",
+    "test:api": "python -m pytest tests/test_api.py -v",
+    "test:all": "npm run test:api && npm run test"
   },
   "devDependencies": {
     "@playwright/test": "^1.59.1"

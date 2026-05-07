@@ -1,7 +1,8 @@
-// @ts-check
-const { defineConfig, devices } = require('@playwright/test');
+import { defineConfig, devices } from '@playwright/test';
 
-module.exports = defineConfig({
+const photosDir = process.env.TEST_PHOTOS_DIR || 'test_folder';
+
+export default defineConfig({
   testDir: './tests',
   timeout: 60_000,
   expect: { timeout: 10_000 },
@@ -16,6 +17,11 @@ module.exports = defineConfig({
   projects: [
     { name: 'chromium', use: { ...devices['Desktop Chrome'], channel: 'chrome' } },
   ],
-  // No webServer block — user starts `python app.py ./test_photos` separately.
+  webServer: {
+    command: `python app.py ${photosDir}`,
+    url: 'http://localhost:1976',
+    reuseExistingServer: true,
+    timeout: 15_000,
+  },
   outputDir: 'tests/screenshots',
 });

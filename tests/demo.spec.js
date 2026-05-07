@@ -1,18 +1,15 @@
 // @ts-check
 /**
- * Visual demo test for Photo Parser front-end.
- *
- * Prerequisites:
- *   python app.py ./test_photos   (must be running on port 1976)
+ * Visual demo test for OutSweeper front-end.
  *
  * Run:
  *   npx playwright test
  *   npx playwright test --headed        (watch the browser)
  *   npm run test:report                 (open HTML report)
+ *   TEST_PHOTOS_DIR=./my_folder npx playwright test
  */
 
-const { test, expect } = require('@playwright/test');
-const path = require('path');
+import { test, expect } from '@playwright/test';
 
 // ─── selectors ──────────────────────────────────────────────────────────────
 // Filter (funnel) toolbar button
@@ -32,32 +29,35 @@ const SEL_EMPTY         = 'pp-image-strip .empty';
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
-/** Wait for the strip to stabilise after a filter/sort change. */
+/** @param {import('@playwright/test').Page} page */
 async function waitForStrip(page) {
   await page.waitForTimeout(500);
 }
 
-/** Count thumbnails currently shown in the strip. */
+/** @param {import('@playwright/test').Page} page */
 async function thumbCount(page) {
   const empty = page.locator(SEL_EMPTY);
   if (await empty.isVisible()) return 0;
   return page.locator(SEL_THUMB).count();
 }
 
-/** Return filenames in strip order (via alt attribute of the img inside each thumb). */
+/** @param {import('@playwright/test').Page} page */
 async function stripOrder(page) {
   return page.locator(`${SEL_THUMB} img[alt]`).evaluateAll(
-    (imgs) => imgs.map((i) => i.alt),
+    (/** @type {HTMLImageElement[]} */ imgs) => imgs.map((i) => i.alt),
   );
 }
 
-/** Open the Filter dialog via the toolbar filter button. */
+/** @param {import('@playwright/test').Page} page */
 async function openFilterDialog(page) {
   await page.locator(SEL_FILTER_BTN).click();
   await expect(page.getByRole('dialog', { name: 'Filter' })).toBeVisible();
 }
 
-/** Add a tag chip in the already-open Filter dialog (strips leading # automatically). */
+/**
+ * @param {import('@playwright/test').Page} page
+ * @param {string} tag
+ */
 async function addTagChip(page, tag) {
   const rawTag = tag.replace(/^#/, '');
   const input  = page.getByPlaceholder(/#hashtag/);
@@ -67,14 +67,14 @@ async function addTagChip(page, tag) {
   await expect(page.locator('mat-chip-row').filter({ hasText: rawTag })).toBeVisible();
 }
 
-/** Click Apply and wait for the dialog to close. */
+/** @param {import('@playwright/test').Page} page */
 async function applyFilter(page) {
   await page.getByRole('button', { name: 'Apply' }).click();
   await expect(page.getByRole('dialog', { name: 'Filter' })).not.toBeVisible();
   await waitForStrip(page);
 }
 
-/** Click Reset and wait for the dialog to close. */
+/** @param {import('@playwright/test').Page} page */
 async function resetFilter(page) {
   await page.getByRole('button', { name: 'Reset' }).click();
   await expect(page.getByRole('dialog', { name: 'Filter' })).not.toBeVisible();
@@ -82,8 +82,9 @@ async function resetFilter(page) {
 }
 
 /**
- * Navigate the sort menu:
- *   folder-FAB → "Sort" submenu item → the option whose label matches `label`.
+ * Navigate the sort menu: folder-FAB → "Sort" submenu → option matching `label`.
+ * @param {import('@playwright/test').Page} page
+ * @param {string} label
  */
 async function selectSort(page, label) {
   await page.locator(SEL_FOLDER_FAB).click();
@@ -92,7 +93,10 @@ async function selectSort(page, label) {
   await waitForStrip(page);
 }
 
-/** Screenshot to tests/screenshots/<name>.png */
+/**
+ * @param {import('@playwright/test').Page} page
+ * @param {string} name
+ */
 async function shot(page, name) {
   await page.screenshot({ path: `tests/screenshots/${name}.png` });
 }
@@ -187,12 +191,12 @@ test.describe('2 · Filtering', () => {
     expect(await thumbCount(page)).toBe(totalBefore);
   });
 
-  test('file size — minimum 10 000 KB (≈10 MB)', async ({ page }) => {
+  test('file size — minimum 1 000 KB (≈1 MB)', async ({ page }) => {
     const totalBefore = await thumbCount(page);
 
     await openFilterDialog(page);
-    await page.getByRole('spinbutton', { name: /min.*kb/i }).fill('10000');
-    await shot(page, '11-filter-size-min-10mb');
+    await page.getByRole('spinbutton', { name: /min.*kb/i }).fill('1000');
+    await shot(page, '11-filter-size-min-1mb');
     await applyFilter(page);
     await shot(page, '12-filter-size-result');
 
@@ -259,8 +263,10 @@ test.describe('3 · Favorites', () => {
 test.describe('4 · Edit tags + filter by tag', () => {
 
   test('write a unique #tag via EXIF edit dialog, then filter and find exactly that photo', async ({ page }) => {
-    const UNIQUE_TAG = 'demotag99';
+    const UNIQUE_TAG = `demotag${Date.now()}`;
     const total = await thumbCount(page);
+    /** @type {string|null} */
+    let taggedFile = null;
 
     // ── 1. Verify the tag produces 0 results before we write it ─────────────
     await openFilterDialog(page);
@@ -277,6 +283,7 @@ test.describe('4 · Edit tags + filter by tag', () => {
     // ── 2. Select the first photo and open its EXIF edit dialog ─────────────
     const firstThumb = page.locator(`${SEL_THUMB} img[alt]`).first();
     const targetName = await firstThumb.getAttribute('alt');
+    taggedFile = targetName;
     await firstThumb.click();
     await page.waitForTimeout(300);
     await shot(page, '20-first-photo-selected');
@@ -319,5 +326,13 @@ test.describe('4 · Edit tags + filter by tag', () => {
     await resetFilter(page);
     await shot(page, '26-final-all-photos-restored');
     expect(await thumbCount(page)).toBe(total);
+
+    // ── 7. Cleanup: clear the UserComment we wrote ───────────────────────────
+    if (taggedFile) {
+      await page.request.post('/api/exiftool/edit', {
+        params: { path: taggedFile },
+        data:   { user_comment: '' },
+      });
+    }
   });
 });
