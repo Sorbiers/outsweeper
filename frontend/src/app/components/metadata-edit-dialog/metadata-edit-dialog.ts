@@ -44,9 +44,7 @@ export class MetadataEditDialog {
   private snackBar = inject(MatSnackBar);
 
   isBatch = this.data.mode === 'batch';
-  title = this.isBatch
-    ? `Add metadata — ${(this.data as any).filenames.length} file(s)`
-    : `Edit metadata — ${(this.data as any).filename}`;
+  title: string;
 
   loading = signal(this.data.mode === 'single');
   busy = signal(false);
@@ -59,8 +57,22 @@ export class MetadataEditDialog {
   copyright = '';
   user_comment = '';
 
+  private get fieldValues(): Record<keyof EditableFields, string> {
+    return {
+      image_title: this.image_title,
+      artist: this.artist,
+      description: this.description,
+      document_name: this.document_name,
+      copyright: this.copyright,
+      user_comment: this.user_comment,
+    };
+  }
+
   constructor() {
-    if (this.data.mode === 'single') {
+    if (this.data.mode === 'batch') {
+      this.title = `Add metadata — ${this.data.filenames.length} file(s)`;
+    } else {
+      this.title = `Edit metadata — ${this.data.filename}`;
       this.photoService.getExiftoolMetadata(this.data.filename, this.data.folder).subscribe({
         next: meta => {
           const pick = (...keys: string[]): string => {
@@ -87,18 +99,16 @@ export class MetadataEditDialog {
   }
 
   invalid(field: string): boolean {
-    const v = (this as any)[field] as string;
+    const v = this.fieldValues[field as keyof EditableFields] ?? '';
     return !!v && !isAscii(v);
   }
 
   hasAnyInvalid(): boolean {
-    return ['image_title', 'artist', 'description', 'document_name', 'copyright', 'user_comment']
-      .some(f => this.invalid(f));
+    return Object.values(this.fieldValues).some(v => !!v && !isAscii(v));
   }
 
   hasAnyValue(): boolean {
-    return ['image_title', 'artist', 'description', 'document_name', 'copyright', 'user_comment']
-      .some(f => ((this as any)[f] as string).trim() !== '');
+    return Object.values(this.fieldValues).some(v => v.trim() !== '');
   }
 
   canApply(): boolean {
@@ -108,15 +118,11 @@ export class MetadataEditDialog {
   }
 
   private collectFields(): EditableFields {
-    const fields: EditableFields = {};
-    const keys: (keyof EditableFields)[] = [
-      'image_title', 'artist', 'description', 'document_name', 'copyright', 'user_comment',
-    ];
-    for (const k of keys) {
-      const v = (this as any)[k] as string;
-      if (v && v.trim() !== '') (fields as any)[k] = v;
+    const result: EditableFields = {};
+    for (const [key, val] of Object.entries(this.fieldValues) as [keyof EditableFields, string][]) {
+      if (val.trim()) result[key] = val;
     }
-    return fields;
+    return result;
   }
 
   apply(): void {
