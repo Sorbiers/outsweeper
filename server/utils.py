@@ -229,13 +229,19 @@ def extract_exif_text(v: str) -> str:
         return ''
 
 
+# EXIF 2.32 tags absent from Pillow's built-in TAGS dict
+_SUPPLEMENTAL_TAGS: dict[int, str] = {
+    42038: 'ImageTitle',  # 0xA436, EXIF 2.32
+}
+
+
 def extract_exif(filepath: Path) -> dict[str, str]:
     result: dict[str, str] = {}
 
     def _add(ifd) -> None:
         for tag_id, value in ifd.items():
             s = str(value)
-            tag_name = TAGS.get(tag_id, str(tag_id))
+            tag_name = TAGS.get(tag_id) or _SUPPLEMENTAL_TAGS.get(tag_id) or str(tag_id)
             if s.startswith(("b'ASCII", "b'UNICODE", "b'JIS")):
                 result[str(tag_name)] = extract_exif_text(value)
                 continue
