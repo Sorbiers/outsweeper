@@ -1,7 +1,7 @@
 {
   "name": "outsweeper",
-  "version": "1.0.0",
-  "private": true,
+  "version": "1.0.1",
+  "private": false,
   "type": "module",
   "scripts": {
     "build": "cd frontend && npx ng build",

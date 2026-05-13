@@ -482,16 +482,71 @@ def create_app(
         except Exception as e:
             return jsonify({'error': str(e)}), 502
 
+    def _wait_and_copy_result(cu: str, prompt_id: str) -> None:
+        """Background thread: polls ComfyUI history until job done, copies exact output files."""
+        deadline = time.time() + 600  # 10 min timeout
+        hist_entry: dict = {}
+        while time.time() < deadline:
+            try:
+                resp = http_requests.get(f'{cu}/history/{prompt_id}', timeout=5).json()
+                if prompt_id in resp:
+                    hist_entry = resp[prompt_id]
+                    break
+            except Exception:
+                pass
+            time.sleep(2)
+        else:
+            print(f'[warn] copy-result: timeout waiting for {prompt_id}', flush=True)
+            return
+
+        if not state.co_resolved:
+            return
+
+        # Collect output image paths from history (type == 'output' only)
+        image_refs: list[tuple[str, str]] = []  # (subfolder, filename)
+        for node_output in hist_entry.get('outputs', {}).values():
+            for img in node_output.get('images', []):
+                if img.get('type') == 'output':
+                    image_refs.append((img.get('subfolder', ''), img['filename']))
+
+        copied: list[str] = []
+        dst_cache = cache_for(state.root_dir)
+        for subfolder, filename in image_refs:
+            src = state.co_resolved / subfolder / filename if subfolder else state.co_resolved / filename
+            if not src.is_file():
+                print(f'[warn] copy-result: not found: {src}', flush=True)
+                continue
+            try:
+                dest = state.root_dir / filename
+                shutil.copy2(src, dest)
+                copied.append(filename)
+                if dst_cache is not None:
+                    dst_cache[filename] = stat_entry(dest.stat())
+            except Exception as e:
+                print(f'[warn] copy-result {filename}: {e}', flush=True)
+        if copied:
+            _sse_broadcast(f'source_changed:+{len(copied)}')
+
     @app.route('/api/comfy/prompt', methods=['POST'])
     def comfy_prompt():
         data = request.get_json()
-        cu = data.get('comfy_url', 'http://127.0.0.1:8188')
-        prompt = data.get('prompt')
+        cu          = data.get('comfy_url', 'http://127.0.0.1:8188')
+        prompt      = data.get('prompt')
+        copy_result = data.get('copy_result', False)
         if not prompt:
             return jsonify({'error': 'no prompt data'}), 400
         try:
-            resp = http_requests.post(f'{cu}/prompt', json={'prompt': prompt}, timeout=10)
-            return jsonify(resp.json()), resp.status_code
+            resp      = http_requests.post(f'{cu}/prompt', json={'prompt': prompt}, timeout=10)
+            resp_json = resp.json()
+            if copy_result and state.co_resolved:
+                prompt_id = resp_json.get('prompt_id')
+                if prompt_id:
+                    threading.Thread(
+                        target=_wait_and_copy_result,
+                        args=(cu, prompt_id),
+                        daemon=True,
+                    ).start()
+            return jsonify(resp_json), resp.status_code
         except Exception as e:
             return jsonify({'error': str(e)}), 502
 

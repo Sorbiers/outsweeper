@@ -25,7 +25,9 @@ import {
 } from './components/folder-select-dialog/folder-select-dialog';
 import {
   DEFAULT_FLUX_WORKFLOW,
+  GenerateCloseResult,
   GenerateDialog,
+  GenerateDialogData,
 } from './components/generate-dialog/generate-dialog';
 import { GpuMonitorWidget } from './components/gpu-monitor/gpu-monitor';
 import { ImageStrip } from './components/image-strip/image-strip';
@@ -324,11 +326,17 @@ export class App implements OnInit, OnDestroy {
   }
 
   openGenerator(): void {
-    this.dialog.open(GenerateDialog, {
-      data: { workflow: DEFAULT_FLUX_WORKFLOW },
-      width: '90vw',
-      maxWidth: '800px',
-    });
+    this.openGenerateDialog({ workflow: DEFAULT_FLUX_WORKFLOW });
+  }
+
+  private openGenerateDialog(data: GenerateDialogData): void {
+    this.dialog.open(GenerateDialog, { data, width: '90vw', maxWidth: '800px' })
+      .afterClosed()
+      .subscribe((result: GenerateCloseResult | undefined) => {
+        if (result?.copyResult) {
+          this.snackBar.open('Images will appear in working folder when ready', '', { duration: 5000 });
+        }
+      });
   }
 
   openAboutDialog(): void {
@@ -340,10 +348,9 @@ export class App implements OnInit, OnDestroy {
       .afterClosed()
       .subscribe(result => {
         if (result?.action === 'generate') {
-          this.dialog.open(GenerateDialog, {
-            data: { workflow: DEFAULT_FLUX_WORKFLOW, positivePromptOverride: result.prompt },
-            width: '90vw',
-            maxWidth: '800px',
+          this.openGenerateDialog({
+            workflow: DEFAULT_FLUX_WORKFLOW,
+            positivePromptOverride: result.prompt,
           });
         }
       });

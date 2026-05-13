@@ -178,8 +178,10 @@ export class PhotoService {
     return this.http.get<any>('/api/folders');
   }
 
-  sendToComfy(comfyUrl: string, prompt: object): Observable<any> {
-    return this.http.post('/api/comfy/prompt', { comfy_url: comfyUrl, prompt });
+  sendToComfy(comfyUrl: string, prompt: object, copyResult = false): Observable<any> {
+    return this.http.post('/api/comfy/prompt', {
+      comfy_url: comfyUrl, prompt, copy_result: copyResult,
+    });
   }
 
   checkLmStudio(lmstudioUrl: string): Observable<any> {
