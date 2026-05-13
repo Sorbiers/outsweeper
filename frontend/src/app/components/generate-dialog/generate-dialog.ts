@@ -1,6 +1,7 @@
 import { Component, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
+import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MAT_DIALOG_DATA, MatDialog, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
@@ -17,6 +18,10 @@ import { PrompterDialog } from '../prompter-dialog/prompter-dialog';
 export interface GenerateDialogData {
   workflow: Record<string, any>;
   positivePromptOverride?: string;
+}
+
+export interface GenerateCloseResult {
+  copyResult: boolean;
 }
 
 export const DEFAULT_FLUX_WORKFLOW: Record<string, any> = {
@@ -65,7 +70,7 @@ const DEFAULT_NEGATIVE_PROMPT = 'worst quality, low quality, bad anatomy, bad ha
 
 @Component({
   selector: 'pp-generate-dialog',
-  imports: [FormsModule, MatDialogModule, MatFormFieldModule, MatInputModule, MatSelectModule, MatButtonModule, MatIconModule],
+  imports: [FormsModule, MatDialogModule, MatFormFieldModule, MatInputModule, MatSelectModule, MatButtonModule, MatIconModule, MatCheckboxModule],
   templateUrl: './generate-dialog.html',
   styleUrl: './generate-dialog.scss',
 })
@@ -80,6 +85,7 @@ export class GenerateDialog {
   comfyUrl = '';
   params: WorkflowParams;
   sending = false;
+  copyResult = false;
   checkStatus: 'idle' | 'checking' | 'ok' | 'error' = 'idle';
   hasRunComfyCommand = false;
   runTriggered = false;
@@ -214,10 +220,10 @@ export class GenerateDialog {
         this.removeEmptyLoraNodes(this.applyParams(this.data.workflow, this.params)),
         this.manualLoras.filter(l => l.name)
       );
-      this.photoService.sendToComfy(this.comfyUrl, workflow).subscribe({
+      this.photoService.sendToComfy(this.comfyUrl, workflow, this.copyResult).subscribe({
         next: () => {
           this.snackBar.open('Prompt queued', '', { duration: 3000 });
-          this.dialogRef.close(true);
+          this.dialogRef.close({ copyResult: this.copyResult });
         },
         error: (err) => {
           this.sending = false;
@@ -242,14 +248,15 @@ export class GenerateDialog {
         this.injectManualLoras(
           this.removeEmptyLoraNodes(workflow),
           this.manualLoras.filter(l => l.name)
-        )
+        ),
+        this.copyResult,
       );
     });
 
     forkJoin(requests).subscribe({
       next: () => {
         this.snackBar.open(`Queued ${requests.length} prompts`, '', { duration: 3000 });
-        this.dialogRef.close(true);
+        this.dialogRef.close({ copyResult: this.copyResult });
       },
       error: (err) => {
         this.sending = false;

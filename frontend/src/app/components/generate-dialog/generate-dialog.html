@@ -217,6 +217,9 @@
       <mat-icon>download</mat-icon> Extract Workflow
     </button>
     <button mat-stroked-button (click)="extractApi()"><mat-icon>code</mat-icon> Extract API</button>
+    <mat-checkbox [(ngModel)]="copyResult" class="copy-result-checkbox">
+      Copy the result to the working folder.
+    </mat-checkbox>
   </div>
 </mat-dialog-content>
 
