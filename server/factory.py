@@ -11,6 +11,7 @@ import subprocess
 import sys
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 import uuid as _uuid
 import zipfile
 from datetime import datetime
@@ -106,6 +107,7 @@ def create_app(
     )
 
     app = Flask(__name__, static_folder=None)
+    _copy_executor = ThreadPoolExecutor(max_workers=8, thread_name_prefix='comfy-copy')
 
     @app.errorhandler(400)
     @app.errorhandler(403)
@@ -512,18 +514,31 @@ def create_app(
         copied: list[str] = []
         dst_cache = cache_for(state.root_dir)
         for subfolder, filename in image_refs:
-            src = state.co_resolved / subfolder / filename if subfolder else state.co_resolved / filename
+            # P1: treat filename as basename only — strip any directory components
+            safe_name = Path(filename).name
+            if not safe_name:
+                continue
+            # Resolve src and assert it stays within co_resolved
+            src = (state.co_resolved / subfolder / safe_name).resolve() if subfolder \
+                  else (state.co_resolved / safe_name).resolve()
+            if not src.is_relative_to(state.co_resolved):
+                print(f'[warn] copy-result: path traversal rejected: {src}', flush=True)
+                continue
             if not src.is_file():
                 print(f'[warn] copy-result: not found: {src}', flush=True)
                 continue
+            # Resolve dest and assert it stays within root_dir
+            dest = (state.root_resolved / safe_name).resolve()
+            if not dest.is_relative_to(state.root_resolved):
+                print(f'[warn] copy-result: path traversal rejected dest: {dest}', flush=True)
+                continue
             try:
-                dest = state.root_dir / filename
                 shutil.copy2(src, dest)
-                copied.append(filename)
+                copied.append(safe_name)
                 if dst_cache is not None:
-                    dst_cache[filename] = stat_entry(dest.stat())
+                    dst_cache[safe_name] = stat_entry(dest.stat())
             except Exception as e:
-                print(f'[warn] copy-result {filename}: {e}', flush=True)
+                print(f'[warn] copy-result {safe_name}: {e}', flush=True)
         if copied:
             _sse_broadcast(f'source_changed:+{len(copied)}')
 
@@ -541,11 +556,7 @@ def create_app(
             if copy_result and state.co_resolved:
                 prompt_id = resp_json.get('prompt_id')
                 if prompt_id:
-                    threading.Thread(
-                        target=_wait_and_copy_result,
-                        args=(cu, prompt_id),
-                        daemon=True,
-                    ).start()
+                    _copy_executor.submit(_wait_and_copy_result, cu, prompt_id)
             return jsonify(resp_json), resp.status_code
         except Exception as e:
             return jsonify({'error': str(e)}), 502
