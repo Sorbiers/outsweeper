@@ -14,6 +14,7 @@ import { PhotoInfo } from '../../models/photo.model';
 import { PhotoService } from '../../services/photo.service';
 import { DescribeDialog } from '../describe-dialog/describe-dialog';
 import { DEFAULT_FLUX_WORKFLOW, GenerateDialog } from '../generate-dialog/generate-dialog';
+import { GenerateFromDialog, GenerateFromDialogData } from '../generate-from-dialog/generate-from-dialog';
 import { MetadataEditDialog } from '../metadata-edit-dialog/metadata-edit-dialog';
 import { MetadataStripDialog } from '../metadata-strip-dialog/metadata-strip-dialog';
 import { MetadataViewDialog } from '../metadata-view-dialog/metadata-view-dialog';
@@ -132,6 +133,24 @@ export class InfoPanel implements OnInit {
     const workflow = JSON.parse(this.info.png_metadata['prompt']);
     this.dialog.open(GenerateDialog, {
       data: { workflow },
+      width: '90vw',
+      maxWidth: '800px',
+    });
+  }
+
+  openGenerateFrom(): void {
+    if (!this.info) return;
+    const comfyPrompt = this.info.png_metadata?.['prompt']
+      ? JSON.parse(this.info.png_metadata['prompt'])
+      : undefined;
+    this.dialog.open(GenerateFromDialog, {
+      data: {
+        filename: this.info.filename,
+        folder: this.folder,
+        imageWidth: this.info.width ?? null,
+        imageHeight: this.info.height ?? null,
+        imageComfyPrompt: comfyPrompt,
+      } satisfies GenerateFromDialogData,
       width: '90vw',
       maxWidth: '800px',
     });

@@ -471,6 +471,42 @@ def create_app(
         except Exception as e:
             return jsonify({'error': str(e)}), 502
 
+    @app.route('/api/comfy/models', methods=['POST'])
+    def comfy_models():
+        data = request.get_json()
+        cu = data.get('comfy_url', 'http://127.0.0.1:8188')
+        try:
+            resp = http_requests.get(f'{cu}/object_info', timeout=10)
+            info = resp.json()
+            checkpoints = info.get('CheckpointLoaderSimple', {}) \
+                .get('input', {}).get('required', {}).get('ckpt_name', [[]])[0]
+            unets = info.get('UNETLoader', {}) \
+                .get('input', {}).get('required', {}).get('unet_name', [[]])[0]
+            models = [{'name': n, 'type': 'checkpoint'} for n in checkpoints] + \
+                     [{'name': n, 'type': 'unet'} for n in unets]
+            return jsonify({'models': models})
+        except Exception as e:
+            return jsonify({'error': str(e)}), 502
+
+    @app.route('/api/comfy/upload', methods=['POST'])
+    def comfy_upload():
+        data = request.get_json()
+        cu = data.get('comfy_url', 'http://127.0.0.1:8188')
+        file_path = resolve_path(request.args.get('path', ''))
+        if not file_path.is_file():
+            return jsonify({'error': 'not found'}), 404
+        try:
+            with open(file_path, 'rb') as f:
+                mime = mimetypes.guess_type(str(file_path))[0] or 'image/png'
+                resp = http_requests.post(
+                    f'{cu}/upload/image',
+                    files={'image': (file_path.name, f, mime)},
+                    timeout=30,
+                )
+            return jsonify(resp.json()), resp.status_code
+        except Exception as e:
+            return jsonify({'error': str(e)}), 502
+
     @app.route('/api/comfy/samplers', methods=['POST'])
     def comfy_samplers():
         data = request.get_json()

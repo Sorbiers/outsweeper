@@ -1,0 +1,207 @@
+<h2 mat-dialog-title>Generate from</h2>
+
+<mat-dialog-content>
+  <div class="url-row">
+    <mat-form-field class="url-field">
+      <mat-label>ComfyUI URL</mat-label>
+      <input matInput [(ngModel)]="comfyUrl" (ngModelChange)="onUrlChange()" />
+    </mat-form-field>
+    @if (checkStatus === 'checking') {
+      <button mat-stroked-button disabled class="check-btn">Checking...</button>
+    } @else if (checkStatus === 'ok') {
+      <button mat-stroked-button (click)="checkConnection()" class="check-btn">
+        <mat-icon class="check-ok">check_circle</mat-icon> OK
+      </button>
+    } @else if (checkStatus === 'error') {
+      <button mat-stroked-button (click)="checkConnection()" class="check-btn">
+        <mat-icon class="check-err">error</mat-icon> Failed
+      </button>
+      @if (hasRunComfyCommand && !runTriggered) {
+        <button mat-stroked-button (click)="runService()" class="check-btn">
+          <mat-icon>play_arrow</mat-icon> Run
+        </button>
+      }
+    } @else {
+      <button mat-stroked-button (click)="checkConnection()" class="check-btn">Check</button>
+    }
+  </div>
+
+  <!-- Combined Model selector (checkpoints + diffusion models) -->
+  @if (availableModels.length) {
+    <mat-form-field class="full-width">
+      <mat-label>Model</mat-label>
+      <mat-select [(ngModel)]="selectedModel" (ngModelChange)="onModelChange($event)">
+        @for (m of availableModels; track m.name) {
+          <mat-option [value]="m.name">
+            <span class="model-type-tag" [class.unet]="m.type === 'unet'">[{{ m.type === 'checkpoint' ? 'CKPT' : 'UNET' }}]</span>
+            {{ m.name }}
+          </mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+  }
+
+  <!-- LoRA section (hidden by default) -->
+  @if (showLoras) {
+    @if (loraNodes.length) {
+      <div class="lora-section">
+        @for (node of loraNodes; track node.nodeId; let i = $index) {
+          @if (!node.removed) {
+            <div class="lora-row">
+              <mat-form-field class="lora-name-field">
+                <mat-label>LoRA {{ loraNodes.length > 1 ? i + 1 : '' }} (was: {{ node.originalName }})</mat-label>
+                <mat-select [(ngModel)]="node.selected[0]" [disabled]="!availableLoras.length">
+                  <mat-option value="">— none —</mat-option>
+                  @for (lora of availableLoras; track lora) {
+                    <mat-option [value]="lora">{{ lora }}</mat-option>
+                  }
+                </mat-select>
+              </mat-form-field>
+              <mat-form-field class="lora-strength-field">
+                <mat-label>Str Model</mat-label>
+                <input matInput type="number" [(ngModel)]="node.strengthModel" step="0.1" min="0" max="2" />
+              </mat-form-field>
+              <mat-form-field class="lora-strength-field">
+                <mat-label>Str Clip</mat-label>
+                <input matInput type="number" [(ngModel)]="node.strengthClip" step="0.1" min="0" max="2" />
+              </mat-form-field>
+              <button mat-icon-button (click)="node.removed = true" title="Remove LoRA" class="lora-remove-btn">
+                <mat-icon>remove_circle_outline</mat-icon>
+              </button>
+            </div>
+          }
+        }
+      </div>
+    }
+
+    @if (manualLoras.length) {
+      <div class="lora-section">
+        @for (lora of manualLoras; track $index; let i = $index) {
+          <div class="lora-row">
+            <mat-form-field class="lora-name-field">
+              <mat-label>New LoRA {{ i + 1 }}</mat-label>
+              <mat-select [(ngModel)]="lora.name">
+                @for (l of availableLoras; track l) {
+                  <mat-option [value]="l">{{ l }}</mat-option>
+                }
+              </mat-select>
+            </mat-form-field>
+            <mat-form-field class="lora-strength-field">
+              <mat-label>Str Model</mat-label>
+              <input matInput type="number" [(ngModel)]="lora.strengthModel" step="0.1" min="0" max="2" />
+            </mat-form-field>
+            <mat-form-field class="lora-strength-field">
+              <mat-label>Str Clip</mat-label>
+              <input matInput type="number" [(ngModel)]="lora.strengthClip" step="0.1" min="0" max="2" />
+            </mat-form-field>
+            <button mat-icon-button (click)="removeLora(i)" title="Remove" class="lora-remove-btn">
+              <mat-icon>remove_circle_outline</mat-icon>
+            </button>
+          </div>
+        }
+      </div>
+    }
+  }
+
+  <div class="add-lora-row">
+    <button mat-stroked-button (click)="showLoras = !showLoras">
+      <mat-icon>{{ showLoras ? 'expand_less' : 'expand_more' }}</mat-icon>
+      {{ showLoras ? 'Hide LoRAs' : 'Show LoRAs' }}
+    </button>
+    @if (showLoras) {
+      <button mat-stroked-button (click)="addLora()" [disabled]="!availableLoras.length">
+        <mat-icon>add</mat-icon> Add LoRA
+      </button>
+    }
+  </div>
+
+  <div class="params-grid">
+    <mat-form-field>
+      <mat-label>Seed</mat-label>
+      <input matInput type="number" [(ngModel)]="params.seed" />
+      <button mat-icon-button matSuffix (click)="randomizeSeed()" title="Randomize">
+        <mat-icon>casino</mat-icon>
+      </button>
+    </mat-form-field>
+
+    <mat-form-field>
+      <mat-label>Steps</mat-label>
+      <input matInput type="number" [(ngModel)]="params.steps" />
+    </mat-form-field>
+
+    <mat-form-field>
+      <mat-label>CFG</mat-label>
+      <input matInput type="number" [(ngModel)]="params.cfg" />
+    </mat-form-field>
+
+    <mat-form-field>
+      <mat-label>Denoise</mat-label>
+      <input matInput type="number" [(ngModel)]="params.denoise" step="0.05" min="0" max="1" />
+    </mat-form-field>
+
+    <mat-form-field>
+      <mat-label>Batch Size</mat-label>
+      <input matInput type="number" [(ngModel)]="params.batchSize" />
+    </mat-form-field>
+
+    <mat-form-field>
+      <mat-label>Width</mat-label>
+      <input matInput type="number" [(ngModel)]="params.width" step="64" />
+    </mat-form-field>
+
+    <mat-form-field>
+      <mat-label>Height</mat-label>
+      <input matInput type="number" [(ngModel)]="params.height" step="64" />
+    </mat-form-field>
+
+    <mat-form-field>
+      <mat-label>Sampler</mat-label>
+      <mat-select [(ngModel)]="params.samplerName">
+        @for (s of availableSamplers; track s) {
+          <mat-option [value]="s">{{ s }}</mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+
+    <mat-form-field>
+      <mat-label>Scheduler</mat-label>
+      <mat-select [(ngModel)]="params.scheduler">
+        @for (s of availableSchedulers; track s) {
+          <mat-option [value]="s">{{ s }}</mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+  </div>
+
+  <div class="prompt-row">
+    <mat-form-field class="prompt-field">
+      <mat-label>Positive Prompt</mat-label>
+      <textarea matInput [(ngModel)]="params.positivePrompt" rows="4"></textarea>
+    </mat-form-field>
+    <button mat-icon-button (click)="openPrompter()" title="Prompter" class="prompter-btn">
+      <mat-icon>auto_awesome</mat-icon>
+    </button>
+  </div>
+
+  <mat-form-field class="full-width">
+    <mat-label>Negative Prompt</mat-label>
+    <textarea matInput [(ngModel)]="params.negativePrompt" rows="3"></textarea>
+  </mat-form-field>
+
+  <div class="extract-row">
+    <mat-checkbox [(ngModel)]="copyResult" class="copy-result-checkbox">
+      Copy the result to the working folder.
+    </mat-checkbox>
+  </div>
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button mat-button mat-dialog-close>Close</button>
+  <button mat-flat-button (click)="send()" [disabled]="sending || checkStatus !== 'ok'">
+    @if (sending) {
+      Sending...
+    } @else {
+      Send
+    }
+  </button>
+</mat-dialog-actions>
