@@ -60,6 +60,18 @@
             @if (job.steps != null) {
               <span class="steps">{{ job.steps }} steps</span>
             }
+            <div class="job-actions">
+              <button mat-icon-button class="action-btn"
+                      (click)="moveToFront(job.prompt_id)"
+                      matTooltip="Move to front">
+                <mat-icon>vertical_align_top</mat-icon>
+              </button>
+              <button mat-icon-button class="action-btn"
+                      (click)="removeJob(job.prompt_id)"
+                      matTooltip="Remove">
+                <mat-icon>close</mat-icon>
+              </button>
+            </div>
           </div>
           @if (job.prompt) {
             <div class="job-prompt">{{ job.prompt }}</div>
@@ -71,6 +83,11 @@
 </mat-dialog-content>
 
 <mat-dialog-actions align="end">
+  @if (pending.length > 0) {
+    <button mat-stroked-button (click)="clearQueue()" class="clear-btn" matTooltip="Remove all pending jobs">
+      <mat-icon>clear_all</mat-icon> Clear queue
+    </button>
+  }
   <button mat-icon-button (click)="fetchQueue()" [disabled]="checkStatus !== 'ok' || loading" matTooltip="Refresh">
     <mat-icon>refresh</mat-icon>
   </button>

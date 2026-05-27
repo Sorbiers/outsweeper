@@ -102,6 +102,18 @@ export class PhotoService {
     return this.http.post<{ running: ComfyQueueJob[]; pending: ComfyQueueJob[] }>('/api/comfy/queue', { comfy_url: comfyUrl });
   }
 
+  deleteComfyQueueJob(comfyUrl: string, promptId: string): Observable<{ ok: boolean }> {
+    return this.http.post<{ ok: boolean }>('/api/comfy/queue/delete', { comfy_url: comfyUrl, prompt_id: promptId });
+  }
+
+  moveComfyQueueJobToFront(comfyUrl: string, promptId: string): Observable<{ ok: boolean }> {
+    return this.http.post<{ ok: boolean }>('/api/comfy/queue/front', { comfy_url: comfyUrl, prompt_id: promptId });
+  }
+
+  clearComfyQueue(comfyUrl: string): Observable<{ ok: boolean }> {
+    return this.http.post<{ ok: boolean }>('/api/comfy/queue/clear', { comfy_url: comfyUrl });
+  }
+
   uploadToComfy(comfyUrl: string, filename: string, folder: string): Observable<{ name: string }> {
     return this.http.post<any>(
       '/api/comfy/upload',

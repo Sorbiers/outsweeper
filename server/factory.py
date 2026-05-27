@@ -587,6 +587,53 @@ def create_app(
         except Exception as e:
             return jsonify({'error': str(e)}), 502
 
+    @app.route('/api/comfy/queue/delete', methods=['POST'])
+    def comfy_queue_delete():
+        data = request.get_json()
+        cu = data.get('comfy_url', 'http://127.0.0.1:8188')
+        prompt_id = data.get('prompt_id')
+        if not prompt_id:
+            return jsonify({'error': 'prompt_id required'}), 400
+        try:
+            http_requests.post(f'{cu}/queue', json={'delete': [prompt_id]}, timeout=10)
+            return jsonify({'ok': True})
+        except Exception as e:
+            return jsonify({'error': str(e)}), 502
+
+    @app.route('/api/comfy/queue/front', methods=['POST'])
+    def comfy_queue_front():
+        data = request.get_json()
+        cu = data.get('comfy_url', 'http://127.0.0.1:8188')
+        prompt_id = data.get('prompt_id')
+        if not prompt_id:
+            return jsonify({'error': 'prompt_id required'}), 400
+        try:
+            q = http_requests.get(f'{cu}/queue', timeout=10).json()
+            job = next((j for j in q.get('queue_pending', []) if j[1] == prompt_id), None)
+            if not job:
+                return jsonify({'error': 'job not found in pending queue'}), 404
+            workflow = job[2]
+            extra_data = job[3] if len(job) > 3 else {}
+            http_requests.post(f'{cu}/queue', json={'delete': [prompt_id]}, timeout=10)
+            resp = http_requests.post(
+                f'{cu}/prompt',
+                json={'prompt': workflow, 'extra_data': extra_data, 'front': True},
+                timeout=10,
+            )
+            return jsonify({'ok': True}), resp.status_code
+        except Exception as e:
+            return jsonify({'error': str(e)}), 502
+
+    @app.route('/api/comfy/queue/clear', methods=['POST'])
+    def comfy_queue_clear():
+        data = request.get_json()
+        cu = data.get('comfy_url', 'http://127.0.0.1:8188')
+        try:
+            http_requests.post(f'{cu}/queue', json={'clear': True}, timeout=10)
+            return jsonify({'ok': True})
+        except Exception as e:
+            return jsonify({'error': str(e)}), 502
+
     def _wait_and_copy_result(cu: str, prompt_id: str) -> None:
         """Background thread: polls ComfyUI history until job done, copies exact output files."""
         deadline = time.time() + 600  # 10 min timeout

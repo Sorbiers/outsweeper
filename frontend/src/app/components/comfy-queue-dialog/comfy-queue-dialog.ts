@@ -5,6 +5,7 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { FormsModule } from '@angular/forms';
 import { ComfyQueueJob } from '../../models/photo.model';
@@ -33,6 +34,7 @@ export interface ComfyQueueDialogData {
 export class ComfyQueueDialog {
   private photoService = inject(PhotoService);
   private connState = inject(ConnectionStateService);
+  private snackBar = inject(MatSnackBar);
   private data: ComfyQueueDialogData = inject(MAT_DIALOG_DATA);
 
   comfyUrl = '';
@@ -85,13 +87,33 @@ export class ComfyQueueDialog {
     });
   }
 
+  removeJob(promptId: string): void {
+    this.photoService.deleteComfyQueueJob(this.comfyUrl, promptId).subscribe({
+      next: () => this.fetchQueue(),
+      error: () => this.snackBar.open('Failed to remove job', '', { duration: 3000 }),
+    });
+  }
+
+  moveToFront(promptId: string): void {
+    this.photoService.moveComfyQueueJobToFront(this.comfyUrl, promptId).subscribe({
+      next: () => this.fetchQueue(),
+      error: (err) => this.snackBar.open(err.error?.error || 'Failed to move job', '', { duration: 3000 }),
+    });
+  }
+
+  clearQueue(): void {
+    this.photoService.clearComfyQueue(this.comfyUrl).subscribe({
+      next: () => this.fetchQueue(),
+      error: () => this.snackBar.open('Failed to clear queue', '', { duration: 3000 }),
+    });
+  }
+
   get isEmpty(): boolean {
     return !this.loading && this.running.length === 0 && this.pending.length === 0;
   }
 
   modelLabel(job: ComfyQueueJob): string {
     if (!job.model) return '—';
-    // Strip file extension for cleaner display
     return job.model.replace(/\.[^.]+$/, '');
   }
 }
