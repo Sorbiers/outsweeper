@@ -419,8 +419,8 @@ export class GenerateFromDialog {
               }
             }
 
-            // Rewire VAEDecode: vae from VAELoader → checkpoint[2]
-            if (node.class_type === 'VAEDecode') {
+            // Rewire VAEDecode and VAEEncode: vae from VAELoader → checkpoint[2]
+            if ((node.class_type === 'VAEDecode' || node.class_type === 'VAEEncode')) {
               if (vaeLoaderEntry && Array.isArray(inp.vae) && inp.vae[0] === vaeLoaderEntry[0]) {
                 inp.vae = [ckptId, 2];
               }
@@ -572,10 +572,17 @@ export class GenerateFromDialog {
       insertAfterModel = [tailId, 0];
       insertAfterClip  = [tailId, 1];
     } else {
-      const ckptEntry = Object.entries(workflow).find(([, n]) => n.class_type === 'CheckpointLoaderSimple');
-      if (!ckptEntry) return workflow;
-      insertAfterModel = [ckptEntry[0], 0];
-      insertAfterClip  = [ckptEntry[0], 1];
+      // No LoRA nodes remain — trace the live model/clip sources from the graph.
+      // (Don't fall back to CheckpointLoaderSimple: in UNET workflows it is a
+      //  disconnected floating node and chaining from it would produce dead LoRAs.)
+      const ksamplerNode = Object.values(workflow).find(n => n.class_type === 'KSampler');
+      const clipEncNode  = Object.values(workflow).find(n => n.class_type === 'CLIPTextEncode');
+      if (!ksamplerNode || !clipEncNode) return workflow;
+      const modelRef = ksamplerNode.inputs?.model;
+      const clipRef  = clipEncNode.inputs?.clip;
+      if (!Array.isArray(modelRef) || !Array.isArray(clipRef)) return workflow;
+      insertAfterModel = [modelRef[0] as string, modelRef[1] as number];
+      insertAfterClip  = [clipRef[0]  as string, clipRef[1]  as number];
     }
 
     const originalNodeIds = new Set(Object.keys(workflow));

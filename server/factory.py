@@ -525,30 +525,55 @@ def create_app(
         data = request.get_json()
         cu = data.get('comfy_url', 'http://127.0.0.1:8188')
 
+        def _find_positive_prompt(workflow: dict) -> str | None:
+            """Trace KSampler.positive backwards through conditioning nodes to find
+            the CLIPTextEncode whose text is the true positive prompt."""
+            ksampler = next(
+                (n for n in workflow.values()
+                 if n.get('class_type') in ('KSampler', 'KSamplerAdvanced')),
+                None,
+            )
+            if not ksampler:
+                return None
+            ref = ksampler.get('inputs', {}).get('positive')
+            if not isinstance(ref, list):
+                return None
+
+            visited: set[str] = set()
+            queue: list[str] = [ref[0]]
+            while queue:
+                nid = queue.pop()
+                if nid in visited:
+                    continue
+                visited.add(nid)
+                node = workflow.get(nid)
+                if not node:
+                    continue
+                if node.get('class_type') == 'CLIPTextEncode':
+                    text = node.get('inputs', {}).get('text', '')
+                    if isinstance(text, str):
+                        return text
+                # Follow all list-valued inputs (conditioning pass-throughs)
+                for val in node.get('inputs', {}).values():
+                    if isinstance(val, list) and len(val) == 2 and isinstance(val[0], str):
+                        queue.append(val[0])
+            return None
+
         def _parse_job(job):
             try:
                 workflow = job[2]
                 prompt_id = job[1]
                 model = None
                 steps = None
-                positive_prompt = None
-                clip_texts: list[str] = []
                 for node in workflow.values():
                     inputs = node.get('inputs', {})
-                    ct = node.get('class_type', '')
                     if 'ckpt_name' in inputs:
                         model = inputs['ckpt_name']
                     elif 'unet_name' in inputs and model is None:
                         model = inputs['unet_name']
                     if 'steps' in inputs and 'cfg' in inputs:
                         steps = inputs.get('steps')
-                    if ct == 'CLIPTextEncode':
-                        text = inputs.get('text', '')
-                        if isinstance(text, str):
-                            clip_texts.append(text)
-                # heuristic: longest CLIP text is usually the positive prompt
-                if clip_texts:
-                    positive_prompt = max(clip_texts, key=len)
+                positive_prompt = _find_positive_prompt(workflow)
                 return {'prompt_id': prompt_id, 'model': model, 'steps': steps, 'prompt': positive_prompt}
             except Exception:
                 return None
