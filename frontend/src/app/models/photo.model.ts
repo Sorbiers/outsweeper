@@ -86,3 +86,10 @@ export interface BatchEditResult {
 }
 
 export type StripGroup = 'all' | 'sensitive' | 'icc' | 'exif' | 'gps';
+
+export interface ComfyQueueJob {
+  prompt_id: string;
+  model: string | null;
+  steps: number | null;
+  prompt: string | null;
+}

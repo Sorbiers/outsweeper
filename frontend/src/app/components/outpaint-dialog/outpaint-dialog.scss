@@ -1,0 +1,35 @@
+.url-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.url-field { flex: 1; }
+.check-btn  { flex-shrink: 0; }
+.check-ok   { color: #4caf50; }
+.check-err  { color: #f44336; }
+
+.full-width { width: 100%; }
+
+.section-label {
+  font-size: 12px;
+  color: rgba(255,255,255,0.6);
+  margin: 4px 0 0;
+}
+
+.pad-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr 1fr 1fr;
+  gap: 0 12px;
+}
+
+.params-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr 1fr 1fr 1fr;
+  gap: 0 12px;
+}
+
+.footer-row {
+  margin-top: 4px;
+}

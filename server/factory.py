@@ -520,6 +520,48 @@ def create_app(
         except Exception as e:
             return jsonify({'error': str(e)}), 502
 
+    @app.route('/api/comfy/queue', methods=['POST'])
+    def comfy_queue_detail():
+        data = request.get_json()
+        cu = data.get('comfy_url', 'http://127.0.0.1:8188')
+
+        def _parse_job(job):
+            try:
+                workflow = job[2]
+                prompt_id = job[1]
+                model = None
+                steps = None
+                positive_prompt = None
+                clip_texts: list[str] = []
+                for node in workflow.values():
+                    inputs = node.get('inputs', {})
+                    ct = node.get('class_type', '')
+                    if 'ckpt_name' in inputs:
+                        model = inputs['ckpt_name']
+                    elif 'unet_name' in inputs and model is None:
+                        model = inputs['unet_name']
+                    if 'steps' in inputs and 'cfg' in inputs:
+                        steps = inputs.get('steps')
+                    if ct == 'CLIPTextEncode':
+                        text = inputs.get('text', '')
+                        if isinstance(text, str):
+                            clip_texts.append(text)
+                # heuristic: longest CLIP text is usually the positive prompt
+                if clip_texts:
+                    positive_prompt = max(clip_texts, key=len)
+                return {'prompt_id': prompt_id, 'model': model, 'steps': steps, 'prompt': positive_prompt}
+            except Exception:
+                return None
+
+        try:
+            resp = http_requests.get(f'{cu}/queue', timeout=10)
+            q = resp.json()
+            running = [j for j in (_parse_job(x) for x in q.get('queue_running', [])) if j]
+            pending = [j for j in (_parse_job(x) for x in q.get('queue_pending', [])) if j]
+            return jsonify({'running': running, 'pending': pending})
+        except Exception as e:
+            return jsonify({'error': str(e)}), 502
+
     def _wait_and_copy_result(cu: str, prompt_id: str) -> None:
         """Background thread: polls ComfyUI history until job done, copies exact output files."""
         deadline = time.time() + 600  # 10 min timeout

@@ -11,6 +11,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { Subject } from 'rxjs';
 import { debounceTime, distinctUntilChanged, finalize } from 'rxjs/operators';
 import { AboutDialog } from './components/about-dialog/about-dialog';
+import { ComfyQueueDialog } from './components/comfy-queue-dialog/comfy-queue-dialog';
 import { BatchDialog } from './components/batch-dialog/batch-dialog';
 import { ComfyQueueWidget } from './components/comfy-queue/comfy-queue';
 import {
@@ -341,6 +342,14 @@ export class App implements OnInit, OnDestroy {
 
   openAboutDialog(): void {
     this.dialog.open(AboutDialog, { width: '900px', maxWidth: '95vw' });
+  }
+
+  openComfyQueueDialog(): void {
+    this.dialog.open(ComfyQueueDialog, {
+      data: { comfyUrl: this.connState.comfy.url },
+      width: '90vw',
+      maxWidth: '640px',
+    });
   }
 
   openLmPrompt(): void {

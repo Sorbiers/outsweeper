@@ -5,7 +5,7 @@ import { SPECIAL_FOLDERS } from '../constants';
 import {
   PhotoListItem, PhotoInfo, MoveResponse, UndoResponse,
   ExiftoolCapabilities, ExiftoolMetadata, EditableFields, StripGroup,
-  BatchEditResult,
+  BatchEditResult, ComfyQueueJob,
 } from '../models/photo.model';
 import { AppConfig } from '../models/config.model';
 
@@ -96,6 +96,10 @@ export class PhotoService {
 
   getComfyModels(comfyUrl: string): Observable<{ models: { name: string; type: 'checkpoint' | 'unet' }[] }> {
     return this.http.post<any>('/api/comfy/models', { comfy_url: comfyUrl });
+  }
+
+  getComfyQueue(comfyUrl: string): Observable<{ running: ComfyQueueJob[]; pending: ComfyQueueJob[] }> {
+    return this.http.post<{ running: ComfyQueueJob[]; pending: ComfyQueueJob[] }>('/api/comfy/queue', { comfy_url: comfyUrl });
   }
 
   uploadToComfy(comfyUrl: string, filename: string, folder: string): Observable<{ name: string }> {

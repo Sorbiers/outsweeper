@@ -1,0 +1,78 @@
+<h2 mat-dialog-title>ComfyUI Queue</h2>
+
+<mat-dialog-content>
+  <!-- URL row -->
+  <div class="url-row">
+    <mat-form-field class="url-field">
+      <mat-label>ComfyUI URL</mat-label>
+      <input matInput [(ngModel)]="comfyUrl" (ngModelChange)="onUrlChange()" />
+    </mat-form-field>
+    @if (checkStatus === 'checking') {
+      <button mat-stroked-button disabled class="check-btn">Checking…</button>
+    } @else if (checkStatus === 'ok') {
+      <button mat-stroked-button (click)="checkConnection()" class="check-btn">
+        <mat-icon class="check-ok">check_circle</mat-icon> OK
+      </button>
+    } @else if (checkStatus === 'error') {
+      <button mat-stroked-button (click)="checkConnection()" class="check-btn">
+        <mat-icon class="check-err">error</mat-icon> Failed
+      </button>
+    } @else {
+      <button mat-stroked-button (click)="checkConnection()" class="check-btn">Check</button>
+    }
+  </div>
+
+  <!-- Queue list -->
+  @if (loading) {
+    <div class="center-row">
+      <mat-spinner diameter="32"></mat-spinner>
+    </div>
+  } @else if (checkStatus !== 'ok') {
+    <div class="hint">Connect to ComfyUI to view the queue.</div>
+  } @else if (isEmpty) {
+    <div class="hint">Queue is empty.</div>
+  } @else {
+    @if (running.length > 0) {
+      <div class="section-label">Running ({{ running.length }})</div>
+      @for (job of running; track job.prompt_id) {
+        <div class="job-row running">
+          <div class="job-meta">
+            <span class="badge running-badge">▶</span>
+            <span class="model" [title]="job.model ?? ''">{{ modelLabel(job) }}</span>
+            @if (job.steps != null) {
+              <span class="steps">{{ job.steps }} steps</span>
+            }
+          </div>
+          @if (job.prompt) {
+            <div class="job-prompt">{{ job.prompt }}</div>
+          }
+        </div>
+      }
+    }
+
+    @if (pending.length > 0) {
+      <div class="section-label">Pending ({{ pending.length }})</div>
+      @for (job of pending; track job.prompt_id) {
+        <div class="job-row">
+          <div class="job-meta">
+            <span class="badge pending-badge">◷</span>
+            <span class="model" [title]="job.model ?? ''">{{ modelLabel(job) }}</span>
+            @if (job.steps != null) {
+              <span class="steps">{{ job.steps }} steps</span>
+            }
+          </div>
+          @if (job.prompt) {
+            <div class="job-prompt">{{ job.prompt }}</div>
+          }
+        </div>
+      }
+    }
+  }
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button mat-icon-button (click)="fetchQueue()" [disabled]="checkStatus !== 'ok' || loading" matTooltip="Refresh">
+    <mat-icon>refresh</mat-icon>
+  </button>
+  <button mat-button mat-dialog-close>Close</button>
+</mat-dialog-actions>
