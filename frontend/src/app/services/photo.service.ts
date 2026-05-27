@@ -94,6 +94,18 @@ export class PhotoService {
     return this.http.post<{ samplers: string[]; schedulers: string[] }>('/api/comfy/samplers', { comfy_url: comfyUrl });
   }
 
+  getComfyModels(comfyUrl: string): Observable<{ models: { name: string; type: 'checkpoint' | 'unet' }[] }> {
+    return this.http.post<any>('/api/comfy/models', { comfy_url: comfyUrl });
+  }
+
+  uploadToComfy(comfyUrl: string, filename: string, folder: string): Observable<{ name: string }> {
+    return this.http.post<any>(
+      '/api/comfy/upload',
+      { comfy_url: comfyUrl },
+      { params: { path: this.filePath(filename, folder) } },
+    );
+  }
+
   getConfig(): Observable<AppConfig> {
     return this.http.get<AppConfig>('/api/config');
   }
