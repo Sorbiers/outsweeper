@@ -189,6 +189,9 @@
   </mat-form-field>
 
   <div class="extract-row">
+    <button mat-stroked-button (click)="saveWorkflow()">
+      <mat-icon>download</mat-icon> Save Workflow
+    </button>
     <mat-checkbox [(ngModel)]="copyResult" class="copy-result-checkbox">
       Copy the result to the working folder.
     </mat-checkbox>

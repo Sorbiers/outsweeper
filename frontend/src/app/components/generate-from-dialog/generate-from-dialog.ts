@@ -242,6 +242,24 @@ export class GenerateFromDialog {
     this.manualLoras.splice(index, 1);
   }
 
+  saveWorkflow(): void {
+    const workflow = this.injectManualLoras(
+      this.removeEmptyLoraNodes(this.applyFullFlowParams(FULL_FLOW_WORKFLOW, this.params, null)),
+      this.manualLoras.filter(l => l.name),
+    );
+    this.downloadJson(workflow, 'full_flow_api.json');
+  }
+
+  private downloadJson(data: object, filename: string): void {
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   runService(): void {
     this.runTriggered = true;
     this.photoService.runCommand('comfy').subscribe({
@@ -370,7 +388,7 @@ export class GenerateFromDialog {
         }
       }
     } else {
-      // img2img: set uploaded image name, optionally update resize target
+      // img2img: set uploaded image name; resize only if size changed
       const loadImageEntry   = Object.entries(copy).find(([, n]) => n.class_type === 'LoadImage');
       const resizeEntry      = Object.entries(copy).find(([, n]) => n.class_type === 'ResizeAndPadImage');
       const repeatBatchEntry = Object.entries(copy).find(([, n]) => n.class_type === 'RepeatImageBatch');
@@ -379,11 +397,25 @@ export class GenerateFromDialog {
         loadImageEntry[1].inputs.image = uploadedImageName;
       }
 
+      const sizeModified = params.width !== this.originalWidth || params.height !== this.originalHeight;
+
       if (resizeEntry) {
-        const sizeModified = params.width !== this.originalWidth || params.height !== this.originalHeight;
         if (sizeModified) {
+          // Update resize dimensions and keep the node
           if (params.width  != null) resizeEntry[1].inputs.target_width  = params.width;
           if (params.height != null) resizeEntry[1].inputs.target_height = params.height;
+        } else {
+          // Size unchanged: bypass ResizeAndPadImage entirely
+          const [resizeId, resizeNode] = resizeEntry;
+          const upstream = resizeNode.inputs.image; // the [loadImageId, 0] reference
+          for (const node of Object.values(copy)) {
+            for (const [key, val] of Object.entries(node.inputs ?? {})) {
+              if (Array.isArray(val) && val[0] === resizeId) {
+                (node.inputs as any)[key] = upstream;
+              }
+            }
+          }
+          delete copy[resizeId];
         }
       }
 
@@ -395,35 +427,21 @@ export class GenerateFromDialog {
     // --- 3. Model selection ---
     if (this.selectedModel && this.selectedModelType) {
       if (this.selectedModelType === 'checkpoint') {
-        // Find CheckpointLoaderSimple and set checkpoint name
+        // Set the checkpoint name and rewire ONLY the model signal.
+        // DualCLIPLoader and VAELoader stay connected — Flux needs its own CLIP/VAE loaders.
         const ckptEntry = Object.entries(copy).find(([, n]) => n.class_type === 'CheckpointLoaderSimple');
         const unetEntry = Object.entries(copy).find(([, n]) => n.class_type === 'UNETLoader');
-        const dualClipEntry = Object.entries(copy).find(([, n]) => n.class_type === 'DualCLIPLoader');
-        const vaeLoaderEntry = Object.entries(copy).find(([, n]) => n.class_type === 'VAELoader');
 
-        if (ckptEntry) {
+        if (ckptEntry && unetEntry) {
           const [ckptId] = ckptEntry;
+          const [unetId] = unetEntry;
           ckptEntry[1].inputs.ckpt_name = this.selectedModel;
 
+          // Redirect every node whose `model` input points to UNETLoader → checkpoint[0]
           for (const node of Object.values(copy)) {
             const inp = node.inputs || {};
-
-            // Rewire LoraLoader: model from UNETLoader → checkpoint[0]
-            if (node.class_type === 'LoraLoader') {
-              if (unetEntry && Array.isArray(inp.model) && inp.model[0] === unetEntry[0]) {
-                inp.model = [ckptId, 0];
-              }
-              // Rewire LoraLoader: clip from DualCLIPLoader → checkpoint[1]
-              if (dualClipEntry && Array.isArray(inp.clip) && inp.clip[0] === dualClipEntry[0]) {
-                inp.clip = [ckptId, 1];
-              }
-            }
-
-            // Rewire VAEDecode and VAEEncode: vae from VAELoader → checkpoint[2]
-            if ((node.class_type === 'VAEDecode' || node.class_type === 'VAEEncode')) {
-              if (vaeLoaderEntry && Array.isArray(inp.vae) && inp.vae[0] === vaeLoaderEntry[0]) {
-                inp.vae = [ckptId, 2];
-              }
+            if (Array.isArray(inp.model) && inp.model[0] === unetId) {
+              inp.model = [ckptId, 0];
             }
           }
         }
