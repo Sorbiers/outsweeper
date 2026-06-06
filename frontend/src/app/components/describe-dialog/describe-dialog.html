@@ -71,6 +71,11 @@
     <button mat-stroked-button (click)="openGenerate()">
       <mat-icon>bolt</mat-icon> Generate
     </button>
+    @if (hasImageWorkflow) {
+      <button mat-stroked-button (click)="openRegenerate()">
+        <mat-icon>replay</mat-icon> Re-generate
+      </button>
+    }
   }
   <button mat-flat-button (click)="describe()" [disabled]="describing">
     @if (describing) {

@@ -18,6 +18,7 @@ import { LmStudioConnectionService } from '../../services/lmstudio-connection.se
 export interface DescribeDialogData {
   filename: string;
   folder: string;
+  hasImageWorkflow?: boolean;
 }
 
 @Component({
@@ -95,7 +96,15 @@ export class DescribeDialog {
     });
   }
 
+  get hasImageWorkflow(): boolean {
+    return !!this.data.hasImageWorkflow;
+  }
+
   openGenerate(): void {
     this.dialogRef.close({ action: 'generate', prompt: this.description });
+  }
+
+  openRegenerate(): void {
+    this.dialogRef.close({ action: 'regenerate', prompt: this.description });
   }
 }

@@ -21,6 +21,7 @@ import { PrompterDialog } from '../prompter-dialog/prompter-dialog';
 export interface GenerateDialogData {
   workflow: Record<string, any>;
   positivePromptOverride?: string;
+  title?: string;
 }
 
 export interface GenerateCloseResult {
@@ -155,6 +156,10 @@ export class GenerateDialog {
         this.connState.comfy.status = 'error';
       },
     });
+  }
+
+  get dialogTitle(): string {
+    return this.data.title ?? 'Generate with ComfyUI';
   }
 
   randomizeSeed(): void {

@@ -111,17 +111,23 @@ export class InfoPanel implements OnInit {
 
   openDescribe(): void {
     if (!this.info) return;
+    const hasImageWorkflow = !!this.info.png_metadata?.['prompt'];
     this.dialog.open(DescribeDialog, {
-      data: { filename: this.info.filename, folder: this.folder },
+      data: { filename: this.info.filename, folder: this.folder, hasImageWorkflow },
       width: '90vw',
       maxWidth: '700px',
     }).afterClosed().subscribe(result => {
-      if (result?.action === 'generate') {
-        const workflow = this.info?.png_metadata['prompt']
-          ? JSON.parse(this.info.png_metadata['prompt'])
-          : JSON.parse(JSON.stringify(DEFAULT_FLUX_WORKFLOW));
+      if (!result?.prompt) return;
+      if (result.action === 'generate') {
         this.dialog.open(GenerateDialog, {
-          data: { workflow, positivePromptOverride: result.prompt },
+          data: { workflow: JSON.parse(JSON.stringify(DEFAULT_FLUX_WORKFLOW)), positivePromptOverride: result.prompt },
+          width: '90vw',
+          maxWidth: '800px',
+        });
+      } else if (result.action === 'regenerate') {
+        const workflow = JSON.parse(this.info!.png_metadata['prompt']);
+        this.dialog.open(GenerateDialog, {
+          data: { workflow, positivePromptOverride: result.prompt, title: 'Re-generate' },
           width: '90vw',
           maxWidth: '800px',
         });
@@ -133,7 +139,7 @@ export class InfoPanel implements OnInit {
     if (!this.info?.png_metadata['prompt']) return;
     const workflow = JSON.parse(this.info.png_metadata['prompt']);
     this.dialog.open(GenerateDialog, {
-      data: { workflow },
+      data: { workflow, title: 'Re-generate' },
       width: '90vw',
       maxWidth: '800px',
     });
