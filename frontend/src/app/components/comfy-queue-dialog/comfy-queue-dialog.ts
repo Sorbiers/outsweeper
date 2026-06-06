@@ -108,6 +108,13 @@ export class ComfyQueueDialog {
     });
   }
 
+  cancelRunning(): void {
+    this.photoService.interruptComfy(this.comfyUrl).subscribe({
+      next: () => setTimeout(() => this.fetchQueue(), 600),
+      error: () => this.snackBar.open('Failed to cancel job', '', { duration: 3000 }),
+    });
+  }
+
   get isEmpty(): boolean {
     return !this.loading && this.running.length === 0 && this.pending.length === 0;
   }

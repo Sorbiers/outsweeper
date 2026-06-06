@@ -478,6 +478,12 @@ export class App implements OnInit, OnDestroy {
         this.openFolderDialog();
         break;
       }
+      case 'openComfyQueue':
+        this.openComfyQueueDialog();
+        break;
+      case 'refresh':
+        this.refresh();
+        break;
     }
   }
 

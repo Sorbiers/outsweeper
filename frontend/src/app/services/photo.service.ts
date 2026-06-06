@@ -114,6 +114,10 @@ export class PhotoService {
     return this.http.post<{ ok: boolean }>('/api/comfy/queue/clear', { comfy_url: comfyUrl });
   }
 
+  interruptComfy(comfyUrl: string): Observable<{ ok: boolean }> {
+    return this.http.post<{ ok: boolean }>('/api/comfy/interrupt', { comfy_url: comfyUrl });
+  }
+
   uploadToComfy(comfyUrl: string, filename: string, folder: string): Observable<{ name: string }> {
     return this.http.post<any>(
       '/api/comfy/upload',
@@ -206,9 +210,9 @@ export class PhotoService {
     return this.http.get<any>('/api/folders');
   }
 
-  sendToComfy(comfyUrl: string, prompt: object, copyResult = false): Observable<any> {
+  sendToComfy(comfyUrl: string, prompt: object, copyResult = false, front = false): Observable<any> {
     return this.http.post('/api/comfy/prompt', {
-      comfy_url: comfyUrl, prompt, copy_result: copyResult,
+      comfy_url: comfyUrl, prompt, copy_result: copyResult, front,
     });
   }
 

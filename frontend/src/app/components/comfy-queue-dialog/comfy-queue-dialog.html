@@ -42,6 +42,13 @@
             @if (job.steps != null) {
               <span class="steps">{{ job.steps }} steps</span>
             }
+            <div class="job-actions">
+              <button mat-icon-button class="action-btn"
+                      (click)="cancelRunning()"
+                      matTooltip="Cancel (interrupt)">
+                <mat-icon class="cancel-icon">stop_circle</mat-icon>
+              </button>
+            </div>
           </div>
           @if (job.prompt) {
             <div class="job-prompt">{{ job.prompt }}</div>

@@ -156,6 +156,8 @@ export class GenerateFromDialog {
   originalHeight: number | null;
 
   constructor() {
+    this.dialogRef.disableClose = true;
+    this.dialogRef.keydownEvents().subscribe(e => { if (e.key === 'Escape') this.dialogRef.close(); });
     this.comfyUrl = this.connState.comfy.url || '';
 
     if (this.comfyUrl && this.connState.comfy.status === 'ok') {
@@ -173,6 +175,15 @@ export class GenerateFromDialog {
     // Extract params from the base workflow, then override from image's ComfyUI prompt if present
     const baseWorkflow = this.data.imageComfyPrompt ?? FULL_FLOW_WORKFLOW;
     this.params = this.extractParams(baseWorkflow);
+
+    // Pre-fill model from the image's workflow (trace KSampler → model chain)
+    if (this.data.imageComfyPrompt) {
+      const modelInfo = this.extractModelFromWorkflow(this.data.imageComfyPrompt);
+      if (modelInfo) {
+        this.selectedModel     = modelInfo.name;
+        this.selectedModelType = modelInfo.type;
+      }
+    }
 
     // Preload image dimensions
     this.originalWidth  = this.data.imageWidth;
@@ -268,7 +279,7 @@ export class GenerateFromDialog {
     });
   }
 
-  send(): void {
+  send(front = false): void {
     this.connState.comfy.url = this.comfyUrl;
     this.sending = true;
 
@@ -282,7 +293,7 @@ export class GenerateFromDialog {
       unload$.pipe(
         switchMap(() => this.photoService.uploadToComfy(this.comfyUrl, this.data.filename, this.data.folder))
       ).subscribe({
-        next: (res) => this._doSend(res.name),
+        next: (res) => this._doSend(res.name, front),
         error: (err) => {
           this.sending = false;
           const msg = err.error?.error || err.message || 'Failed to upload image';
@@ -291,18 +302,22 @@ export class GenerateFromDialog {
       });
     } else {
       // txt2img: no upload needed
-      unload$.subscribe(() => this._doSend(null));
+      unload$.subscribe(() => this._doSend(null, front));
     }
   }
 
-  private _doSend(uploadedImageName: string | null): void {
+  sendFront(): void {
+    this.send(true);
+  }
+
+  private _doSend(uploadedImageName: string | null, front = false): void {
     const workflow = this.applyFullFlowParams(FULL_FLOW_WORKFLOW, this.params, uploadedImageName);
     const finalWorkflow = this.injectManualLoras(
       this.removeEmptyLoraNodes(workflow),
       this.manualLoras.filter(l => l.name),
     );
 
-    this.photoService.sendToComfy(this.comfyUrl, finalWorkflow, this.copyResult).subscribe({
+    this.photoService.sendToComfy(this.comfyUrl, finalWorkflow, this.copyResult, front).subscribe({
       next: () => {
         this.sending = false;
         this.snackBar.open('Prompt queued', '', { duration: 3000 });
@@ -532,6 +547,27 @@ export class GenerateFromDialog {
       }
     }
     return nodes;
+  }
+
+  private extractModelFromWorkflow(
+    workflow: Record<string, any>,
+  ): { name: string; type: 'checkpoint' | 'unet' } | null {
+    // Trace KSampler.model back through any LoRA chain to find the root model loader
+    const ksampler = Object.values(workflow).find(n => n.class_type === 'KSampler');
+    if (!ksampler) return null;
+    let ref = ksampler.inputs?.model;
+    const visited = new Set<string>();
+    while (Array.isArray(ref)) {
+      const [nodeId] = ref as [string, number];
+      if (visited.has(nodeId)) break;
+      visited.add(nodeId);
+      const node = workflow[nodeId];
+      if (!node) break;
+      if (node.class_type === 'UNETLoader') return { name: node.inputs?.unet_name, type: 'unet' };
+      if (node.class_type === 'CheckpointLoaderSimple') return { name: node.inputs?.ckpt_name, type: 'checkpoint' };
+      ref = node.inputs?.model;
+    }
+    return null;
   }
 
   private fetchModels(): void {

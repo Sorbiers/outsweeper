@@ -45,7 +45,7 @@
 }
 
 .add-lora-row {
-  margin: 0 0 12px;
+  margin: 0 0 24px;
 }
 
 .extract-row {
@@ -76,4 +76,17 @@
 
 .prompter-btn {
   margin-top: 8px;
+}
+
+mat-dialog-content {
+  padding: 20px !important;
+}
+
+.dialog-title {
+  cursor: move;
+  user-select: none;
+}
+
+.actions-menu-btn {
+  margin-right: auto;
 }

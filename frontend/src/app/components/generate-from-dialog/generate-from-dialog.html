@@ -200,11 +200,10 @@
 
 <mat-dialog-actions align="end">
   <button mat-button mat-dialog-close>Close</button>
+  <button mat-stroked-button (click)="sendFront()" [disabled]="sending || checkStatus !== 'ok'">
+    <mat-icon>vertical_align_top</mat-icon> Send to front
+  </button>
   <button mat-flat-button (click)="send()" [disabled]="sending || checkStatus !== 'ok'">
-    @if (sending) {
-      Sending...
-    } @else {
-      Send
-    }
+    @if (sending) { Sending... } @else { Send }
   </button>
 </mat-dialog-actions>

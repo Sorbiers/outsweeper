@@ -1,18 +1,21 @@
 import { Component, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { CdkDrag, CdkDragHandle } from '@angular/cdk/drag-drop';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MAT_DIALOG_DATA, MatDialog, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
+import { MatDividerModule } from '@angular/material/divider';
+import { MatMenuModule } from '@angular/material/menu';
 import { MatSelectModule } from '@angular/material/select';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { forkJoin, of } from 'rxjs';
 import { catchError } from 'rxjs/operators';
+import { STORAGE_KEYS } from '../../constants';
 import { ConnectionStateService } from '../../services/connection-state.service';
 import { PhotoService } from '../../services/photo.service';
-import { STORAGE_KEYS } from '../../constants';
 import { PrompterDialog } from '../prompter-dialog/prompter-dialog';
 
 export interface GenerateDialogData {
@@ -25,22 +28,22 @@ export interface GenerateCloseResult {
 }
 
 export const DEFAULT_FLUX_WORKFLOW: Record<string, any> = {
-  "1": { "class_type": "CheckpointLoaderSimple", "inputs": { "ckpt_name": "flux1-dev.safetensors" } },
-  "2": { "class_type": "LoraLoader", "inputs": { "lora_name": "", "strength_model": 1.0, "strength_clip": 1.0, "model": ["1", 0], "clip": ["1", 1] } },
-  "3": { "class_type": "LoraLoader", "inputs": { "lora_name": "", "strength_model": 1.0, "strength_clip": 1.0, "model": ["2", 0], "clip": ["2", 1] } },
-  "4": { "class_type": "LoraLoader", "inputs": { "lora_name": "", "strength_model": 1.0, "strength_clip": 1.0, "model": ["3", 0], "clip": ["3", 1] } },
-  "5": { "class_type": "CLIPTextEncode", "inputs": { "text": "", "clip": ["4", 1] } },
-  "6": { "class_type": "CLIPTextEncode", "inputs": { "text": "", "clip": ["4", 1] } },
-  "7": { "class_type": "EmptyLatentImage", "inputs": { "width": 1024, "height": 1024, "batch_size": 1 } },
-  "8": { "class_type": "KSampler", "inputs": { "seed": 0, "steps": 20, "cfg": 1.0, "sampler_name": "euler", "scheduler": "simple", "denoise": 1.0, "model": ["4", 0], "positive": ["5", 0], "negative": ["6", 0], "latent_image": ["7", 0] } },
-  "9": { "class_type": "VAEDecode", "inputs": { "samples": ["8", 0], "vae": ["1", 2] } },
-  "10": { "class_type": "SaveImage", "inputs": { "filename_prefix": "flux", "images": ["9", 0] } }
+  "9":     { "class_type": "SaveImage",             "inputs": { "filename_prefix": "ComfyUI", "images": ["41:8", 0] }, "_meta": { "title": "Save Image" } },
+  "103":   { "class_type": "CLIPTextEncode",         "inputs": { "text": "worst quality, low quality, bad anatomy, bad hands, text, watermark, blurry, deformed", "clip": ["41:40", 0] }, "_meta": { "title": "CLIP Text Encode (Prompt)" } },
+  "41:39": { "class_type": "VAELoader",              "inputs": { "vae_name": "ae.safetensors" }, "_meta": { "title": "Load VAE" } },
+  "41:27": { "class_type": "EmptySD3LatentImage",    "inputs": { "width": 1024, "height": 1024, "batch_size": 1 }, "_meta": { "title": "EmptySD3LatentImage" } },
+  "41:47": { "class_type": "CheckpointLoaderSimple", "inputs": { "ckpt_name": "fluxmania_kreamania.safetensors" }, "_meta": { "title": "Load Checkpoint" } },
+  "41:40": { "class_type": "DualCLIPLoader",         "inputs": { "clip_name1": "clip_l.safetensors", "clip_name2": "t5xxl_fp16.safetensors", "type": "flux", "device": "default" }, "_meta": { "title": "DualCLIPLoader" } },
+  "41:45": { "class_type": "CLIPTextEncode",         "inputs": { "text": "", "clip": ["41:40", 0] }, "_meta": { "title": "CLIP Text Encode (Prompt)" } },
+  "41:31": { "class_type": "KSampler",               "inputs": { "seed": 472850275239431, "steps": 20, "cfg": 1, "sampler_name": "euler", "scheduler": "simple", "denoise": 1, "model": ["41:47", 0], "positive": ["41:45", 0], "negative": ["103", 0], "latent_image": ["41:27", 0] }, "_meta": { "title": "KSampler" } },
+  "41:8":  { "class_type": "VAEDecode",              "inputs": { "samples": ["41:31", 0], "vae": ["41:39", 0] }, "_meta": { "title": "VAE Decode" } }
 };
 
 interface WorkflowParams {
   seed: number | null;
   steps: number | null;
   cfg: number | null;
+  denoise: number | null;
   batchSize: number | null;
   width: number | null;
   height: number | null;
@@ -70,7 +73,7 @@ const DEFAULT_NEGATIVE_PROMPT = 'worst quality, low quality, bad anatomy, bad ha
 
 @Component({
   selector: 'pp-generate-dialog',
-  imports: [FormsModule, MatDialogModule, MatFormFieldModule, MatInputModule, MatSelectModule, MatButtonModule, MatIconModule, MatCheckboxModule],
+  imports: [FormsModule, CdkDrag, CdkDragHandle, MatDialogModule, MatFormFieldModule, MatInputModule, MatSelectModule, MatButtonModule, MatIconModule, MatCheckboxModule, MatMenuModule, MatDividerModule],
   templateUrl: './generate-dialog.html',
   styleUrl: './generate-dialog.scss',
 })
@@ -89,6 +92,7 @@ export class GenerateDialog {
   checkStatus: 'idle' | 'checking' | 'ok' | 'error' = 'idle';
   hasRunComfyCommand = false;
   runTriggered = false;
+  hasDenoise = false;
 
   availableLoras: string[] = [];
   loraNodes: VariableNode[] = [];
@@ -99,6 +103,8 @@ export class GenerateDialog {
   availableSchedulers: string[] = [];
 
   constructor() {
+    this.dialogRef.disableClose = true;
+    this.dialogRef.keydownEvents().subscribe(e => { if (e.key === 'Escape') this.dialogRef.close(); });
     this.comfyUrl = this.connState.comfy.url || '';
 
     if (this.comfyUrl && this.connState.comfy.status === 'ok') {
@@ -113,6 +119,9 @@ export class GenerateDialog {
     if (this.data.positivePromptOverride) {
       this.params.positivePrompt = this.data.positivePromptOverride;
     }
+    this.hasDenoise = Object.values(this.data.workflow).some(
+      n => 'denoise' in (n.inputs || {}) && n.inputs.denoise !== 1.0,
+    );
     this.loraNodes = this.extractVariableNodes(this.data.workflow, 'lora_name');
     this.checkpointNodes = this.extractVariableNodes(this.data.workflow, 'ckpt_name');
 
@@ -161,7 +170,11 @@ export class GenerateDialog {
   }
 
   extractWorkflow(): void {
-    this.downloadJson(this.data.workflow, 'workflow.json');
+    const workflow = this.injectManualLoras(
+      this.removeEmptyLoraNodes(this.applyParams(this.data.workflow, this.params)),
+      this.manualLoras.filter(l => l.name),
+    );
+    this.downloadJson(workflow, 'workflow.json');
   }
 
   extractApi(): void {
@@ -198,7 +211,7 @@ export class GenerateDialog {
     this.manualLoras.splice(index, 1);
   }
 
-  send(): void {
+  send(front = false): void {
     this.connState.comfy.url = this.comfyUrl;
     this.saveParams();
     this.sending = true;
@@ -206,10 +219,21 @@ export class GenerateDialog {
     const unload$ = lmstudioUrl
       ? this.photoService.unloadLmStudio(lmstudioUrl).pipe(catchError(() => of(null)))
       : of(null);
-    unload$.subscribe(() => this._doSend());
+    unload$.subscribe(() => this._doSend(front));
   }
 
-  private _doSend(): void {
+  sendFront(): void {
+    this.send(true);
+  }
+
+  private _doSend(front = false): void {
+    const notifySuccess = (count: number) => {
+      this.sending = false;
+      const msg = count > 1 ? `Queued ${count} prompts` : 'Prompt queued';
+      const suffix = this.copyResult ? ' — will copy to folder' : '';
+      this.snackBar.open(msg + suffix, '', { duration: 4000 });
+    };
+
     const variableNodes = [
       ...this.checkpointNodes.filter(n => n.selected.length > 0),
       ...this.loraNodes.filter(n => n.selected.length > 0 && !n.removed),
@@ -220,11 +244,8 @@ export class GenerateDialog {
         this.removeEmptyLoraNodes(this.applyParams(this.data.workflow, this.params)),
         this.manualLoras.filter(l => l.name)
       );
-      this.photoService.sendToComfy(this.comfyUrl, workflow, this.copyResult).subscribe({
-        next: () => {
-          this.snackBar.open('Prompt queued', '', { duration: 3000 });
-          this.dialogRef.close({ copyResult: this.copyResult });
-        },
+      this.photoService.sendToComfy(this.comfyUrl, workflow, this.copyResult, front).subscribe({
+        next: () => notifySuccess(1),
         error: (err) => {
           this.sending = false;
           const msg = err.error?.error || err.message || 'Failed to send';
@@ -250,14 +271,12 @@ export class GenerateDialog {
           this.manualLoras.filter(l => l.name)
         ),
         this.copyResult,
+        front,
       );
     });
 
     forkJoin(requests).subscribe({
-      next: () => {
-        this.snackBar.open(`Queued ${requests.length} prompts`, '', { duration: 3000 });
-        this.dialogRef.close({ copyResult: this.copyResult });
-      },
+      next: () => notifySuccess(requests.length),
       error: (err) => {
         this.sending = false;
         const msg = err.error?.error || err.message || 'Failed to send';
@@ -338,18 +357,28 @@ export class GenerateDialog {
     return nodes;
   }
 
+  /** Trace a node reference chain until a CLIPTextEncode is found; return its text. */
+  private resolveClipText(ref: any, workflow: Record<string, any>): string {
+    const visited = new Set<string>();
+    let nodeId = Array.isArray(ref) ? ref[0] : null;
+    while (nodeId && !visited.has(nodeId)) {
+      visited.add(nodeId);
+      const node = workflow[nodeId];
+      if (!node) break;
+      if (node.class_type === 'CLIPTextEncode') return node.inputs?.text ?? '';
+      // Follow the first input reference onward (handles FluxGuidance etc.)
+      const next = Object.values(node.inputs ?? {}).find(v => Array.isArray(v));
+      nodeId = next ? (next as any)[0] : null;
+    }
+    return '';
+  }
+
   private extractParams(workflow: Record<string, any>): WorkflowParams {
     const params: WorkflowParams = {
-      seed: null,
-      steps: null,
-      cfg: null,
-      batchSize: null,
-      width: null,
-      height: null,
-      samplerName: null,
-      scheduler: null,
-      positivePrompt: '',
-      negativePrompt: '',
+      seed: null, steps: null, cfg: null, denoise: null,
+      batchSize: null, width: null, height: null,
+      samplerName: null, scheduler: null,
+      positivePrompt: '', negativePrompt: '',
     };
 
     for (const node of Object.values(workflow)) {
@@ -358,79 +387,85 @@ export class GenerateDialog {
 
       if ('steps' in inputs && 'cfg' in inputs) {
         params.steps = inputs.steps;
-        params.cfg = inputs.cfg;
-        if ('seed' in inputs) params.seed = inputs.seed;
+        params.cfg   = inputs.cfg;
+        if ('seed'         in inputs) params.seed        = inputs.seed;
         if ('sampler_name' in inputs) params.samplerName = inputs.sampler_name;
-        if ('scheduler' in inputs) params.scheduler = inputs.scheduler;
+        if ('scheduler'    in inputs) params.scheduler   = inputs.scheduler;
+        if ('denoise'      in inputs && inputs.denoise !== 1.0) params.denoise = inputs.denoise;
+        // Resolve prompts via KSampler references so order in the object doesn't matter
+        params.positivePrompt = this.resolveClipText(inputs.positive, workflow);
+        params.negativePrompt = this.resolveClipText(inputs.negative, workflow);
       }
 
-      if ('batch_size' in inputs) {
-        params.batchSize = inputs.batch_size;
-      }
+      if ('batch_size' in inputs) params.batchSize = inputs.batch_size;
 
       if (classType === 'EmptyLatentImage' || classType === 'EmptySD3LatentImage') {
-        if ('width' in inputs) params.width = inputs.width;
+        if ('width'  in inputs) params.width  = inputs.width;
         if ('height' in inputs) params.height = inputs.height;
-      }
-
-      if (classType === 'CLIPTextEncode' && 'text' in inputs) {
-        if (!params.positivePrompt) {
-          params.positivePrompt = inputs.text;
-        } else if (!params.negativePrompt) {
-          params.negativePrompt = inputs.text;
-        }
       }
     }
 
     // Fill empty fields from last used values
     const ls = (k: string) => sessionStorage.getItem(k);
-    if (params.steps == null)     { const v = ls(STORAGE_KEYS.GEN_STEPS);      if (v) params.steps     = +v; }
-    if (params.cfg == null)       { const v = ls(STORAGE_KEYS.GEN_CFG);        if (v) params.cfg       = +v; }
-    if (params.batchSize == null) { const v = ls(STORAGE_KEYS.GEN_BATCH);      if (v) params.batchSize = +v; }
-    if (params.width == null)     { const v = ls(STORAGE_KEYS.GEN_WIDTH);      if (v) params.width     = +v; }
-    if (params.height == null)    { const v = ls(STORAGE_KEYS.GEN_HEIGHT);     if (v) params.height    = +v; }
-    if (!params.samplerName)      { params.samplerName = ls(STORAGE_KEYS.GEN_SAMPLER); }
-    if (!params.scheduler)        { params.scheduler   = ls(STORAGE_KEYS.GEN_SCHEDULER); }
-    if (!params.positivePrompt)   { params.positivePrompt = ls(STORAGE_KEYS.GEN_POS_PROMPT) || ''; }
-    if (!params.negativePrompt)   { params.negativePrompt = ls(STORAGE_KEYS.GEN_NEG_PROMPT) || DEFAULT_NEGATIVE_PROMPT; }
+    if (params.steps     == null) { const v = ls(STORAGE_KEYS.GEN_STEPS);  if (v) params.steps     = +v; }
+    if (params.cfg       == null) { const v = ls(STORAGE_KEYS.GEN_CFG);    if (v) params.cfg       = +v; }
+    if (params.batchSize == null) { const v = ls(STORAGE_KEYS.GEN_BATCH);  if (v) params.batchSize = +v; }
+    if (params.width     == null) { const v = ls(STORAGE_KEYS.GEN_WIDTH);  if (v) params.width     = +v; }
+    if (params.height    == null) { const v = ls(STORAGE_KEYS.GEN_HEIGHT); if (v) params.height    = +v; }
+    if (!params.samplerName)  params.samplerName  = ls(STORAGE_KEYS.GEN_SAMPLER);
+    if (!params.scheduler)    params.scheduler    = ls(STORAGE_KEYS.GEN_SCHEDULER);
+    if (!params.positivePrompt) params.positivePrompt = ls(STORAGE_KEYS.GEN_POS_PROMPT) || '';
+    if (!params.negativePrompt) params.negativePrompt = ls(STORAGE_KEYS.GEN_NEG_PROMPT) || DEFAULT_NEGATIVE_PROMPT;
 
     return params;
   }
 
+  /** Find the node ID of the CLIPTextEncode reached by following ref in workflow. */
+  private resolveClipNodeId(ref: any, workflow: Record<string, any>): string | null {
+    const visited = new Set<string>();
+    let nodeId = Array.isArray(ref) ? ref[0] : null;
+    while (nodeId && !visited.has(nodeId)) {
+      visited.add(nodeId);
+      const node = workflow[nodeId];
+      if (!node) break;
+      if (node.class_type === 'CLIPTextEncode') return nodeId;
+      const next = Object.values(node.inputs ?? {}).find(v => Array.isArray(v));
+      nodeId = next ? (next as any)[0] : null;
+    }
+    return null;
+  }
+
   private applyParams(workflow: Record<string, any>, params: WorkflowParams): Record<string, any> {
     const copy: Record<string, any> = JSON.parse(JSON.stringify(workflow));
-    let positiveSet = false;
-    let negativeSet = false;
+
+    // Resolve positive/negative node IDs from KSampler references upfront
+    const ksampler = Object.values(copy).find(n => 'steps' in (n.inputs || {}) && 'cfg' in (n.inputs || {}));
+    const posNodeId = ksampler ? this.resolveClipNodeId(ksampler.inputs.positive, copy) : null;
+    const negNodeId = ksampler ? this.resolveClipNodeId(ksampler.inputs.negative, copy) : null;
 
     for (const [nodeId, node] of Object.entries(copy)) {
       const inputs = node.inputs || {};
       const classType = node.class_type || '';
 
       if ('steps' in inputs && 'cfg' in inputs) {
-        if (params.steps != null) inputs.steps = params.steps;
-        if (params.cfg != null) inputs.cfg = params.cfg;
+        if (params.steps != null)  inputs.steps         = params.steps;
+        if (params.cfg   != null)  inputs.cfg           = params.cfg;
         if ('seed' in inputs && params.seed != null) inputs.seed = params.seed;
-        if (params.samplerName) inputs.sampler_name = params.samplerName;
-        if (params.scheduler) inputs.scheduler = params.scheduler;
+        if (params.samplerName)    inputs.sampler_name  = params.samplerName;
+        if (params.scheduler)      inputs.scheduler     = params.scheduler;
+        if ('denoise' in inputs && params.denoise != null) inputs.denoise = params.denoise;
       }
 
-      if ('batch_size' in inputs && params.batchSize != null) {
-        inputs.batch_size = params.batchSize;
-      }
+      if ('batch_size' in inputs && params.batchSize != null) inputs.batch_size = params.batchSize;
 
       if (classType === 'EmptyLatentImage' || classType === 'EmptySD3LatentImage') {
-        if (params.width != null) inputs.width = params.width;
+        if (params.width  != null) inputs.width  = params.width;
         if (params.height != null) inputs.height = params.height;
       }
 
       if (classType === 'CLIPTextEncode' && 'text' in inputs) {
-        if (!positiveSet) {
-          inputs.text = params.positivePrompt;
-          positiveSet = true;
-        } else if (!negativeSet) {
-          inputs.text = params.negativePrompt;
-          negativeSet = true;
-        }
+        if (nodeId === posNodeId) inputs.text = params.positivePrompt;
+        else if (nodeId === negNodeId) inputs.text = params.negativePrompt;
       }
 
       const loraNode = this.loraNodes.find(n => n.nodeId === nodeId);

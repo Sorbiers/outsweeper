@@ -141,8 +141,8 @@ def create_app(
     if monitor_enabled:
         threading.Thread(target=_metrics_loop, daemon=True).start()
     if comfy_queue_enabled:
-        threading.Thread(target=_comfy_queue_loop, args=(comfy_url,), daemon=True).start()
-        threading.Thread(target=_comfy_ws_loop, args=(comfy_url,), daemon=True).start()
+        threading.Thread(target=_comfy_queue_loop, args=(state,), daemon=True).start()
+        threading.Thread(target=_comfy_ws_loop, args=(state,), daemon=True).start()
 
     # --- Shared helpers ---
 
@@ -430,7 +430,7 @@ def create_app(
     @app.route('/api/comfy/free', methods=['POST'])
     def comfy_free():
         data = request.get_json()
-        cu = data.get('comfy_url', 'http://127.0.0.1:8188')
+        cu = data.get('comfy_url', 'http://127.0.0.1:8188').rstrip('/')
         try:
             http_requests.post(f'{cu}/free', json={'unload_models': True, 'free_memory': True}, timeout=5)
         except Exception:
@@ -440,9 +440,10 @@ def create_app(
     @app.route('/api/comfy/check', methods=['POST'])
     def comfy_check():
         data = request.get_json()
-        cu = data.get('comfy_url', 'http://127.0.0.1:8188')
+        cu = data.get('comfy_url', 'http://127.0.0.1:8188').rstrip('/').rstrip('/')
         try:
             resp = http_requests.get(f'{cu}/system_stats', timeout=5)
+            state.comfy_url = cu   # update so background threads pick up the new URL
             return jsonify(resp.json()), resp.status_code
         except Exception as e:
             return jsonify({'error': str(e)}), 502
@@ -450,7 +451,7 @@ def create_app(
     @app.route('/api/comfy/loras', methods=['POST'])
     def comfy_loras():
         data = request.get_json()
-        cu = data.get('comfy_url', 'http://127.0.0.1:8188')
+        cu = data.get('comfy_url', 'http://127.0.0.1:8188').rstrip('/')
         try:
             resp = http_requests.get(f'{cu}/object_info', timeout=10)
             info = resp.json()
@@ -462,7 +463,7 @@ def create_app(
     @app.route('/api/comfy/checkpoints', methods=['POST'])
     def comfy_checkpoints():
         data = request.get_json()
-        cu = data.get('comfy_url', 'http://127.0.0.1:8188')
+        cu = data.get('comfy_url', 'http://127.0.0.1:8188').rstrip('/')
         try:
             resp = http_requests.get(f'{cu}/object_info', timeout=10)
             info = resp.json()
@@ -474,7 +475,7 @@ def create_app(
     @app.route('/api/comfy/models', methods=['POST'])
     def comfy_models():
         data = request.get_json()
-        cu = data.get('comfy_url', 'http://127.0.0.1:8188')
+        cu = data.get('comfy_url', 'http://127.0.0.1:8188').rstrip('/')
         try:
             resp = http_requests.get(f'{cu}/object_info', timeout=10)
             info = resp.json()
@@ -491,7 +492,7 @@ def create_app(
     @app.route('/api/comfy/upload', methods=['POST'])
     def comfy_upload():
         data = request.get_json()
-        cu = data.get('comfy_url', 'http://127.0.0.1:8188')
+        cu = data.get('comfy_url', 'http://127.0.0.1:8188').rstrip('/')
         file_path = resolve_path(request.args.get('path', ''))
         if not file_path.is_file():
             return jsonify({'error': 'not found'}), 404
@@ -510,7 +511,7 @@ def create_app(
     @app.route('/api/comfy/samplers', methods=['POST'])
     def comfy_samplers():
         data = request.get_json()
-        cu = data.get('comfy_url', 'http://127.0.0.1:8188')
+        cu = data.get('comfy_url', 'http://127.0.0.1:8188').rstrip('/')
         try:
             resp = http_requests.get(f'{cu}/object_info/KSampler', timeout=10)
             info = resp.json().get('KSampler', {}).get('input', {}).get('required', {})
@@ -523,7 +524,7 @@ def create_app(
     @app.route('/api/comfy/queue', methods=['POST'])
     def comfy_queue_detail():
         data = request.get_json()
-        cu = data.get('comfy_url', 'http://127.0.0.1:8188')
+        cu = data.get('comfy_url', 'http://127.0.0.1:8188').rstrip('/')
 
         def _find_positive_prompt(workflow: dict) -> str | None:
             """Trace KSampler.positive backwards through conditioning nodes to find
@@ -590,7 +591,7 @@ def create_app(
     @app.route('/api/comfy/queue/delete', methods=['POST'])
     def comfy_queue_delete():
         data = request.get_json()
-        cu = data.get('comfy_url', 'http://127.0.0.1:8188')
+        cu = data.get('comfy_url', 'http://127.0.0.1:8188').rstrip('/')
         prompt_id = data.get('prompt_id')
         if not prompt_id:
             return jsonify({'error': 'prompt_id required'}), 400
@@ -603,7 +604,7 @@ def create_app(
     @app.route('/api/comfy/queue/front', methods=['POST'])
     def comfy_queue_front():
         data = request.get_json()
-        cu = data.get('comfy_url', 'http://127.0.0.1:8188')
+        cu = data.get('comfy_url', 'http://127.0.0.1:8188').rstrip('/')
         prompt_id = data.get('prompt_id')
         if not prompt_id:
             return jsonify({'error': 'prompt_id required'}), 400
@@ -627,15 +628,26 @@ def create_app(
     @app.route('/api/comfy/queue/clear', methods=['POST'])
     def comfy_queue_clear():
         data = request.get_json()
-        cu = data.get('comfy_url', 'http://127.0.0.1:8188')
+        cu = data.get('comfy_url', 'http://127.0.0.1:8188').rstrip('/')
         try:
             http_requests.post(f'{cu}/queue', json={'clear': True}, timeout=10)
             return jsonify({'ok': True})
         except Exception as e:
             return jsonify({'error': str(e)}), 502
 
+    @app.route('/api/comfy/interrupt', methods=['POST'])
+    def comfy_interrupt():
+        data = request.get_json()
+        cu = data.get('comfy_url', 'http://127.0.0.1:8188').rstrip('/')
+        try:
+            http_requests.post(f'{cu}/interrupt', timeout=10)
+            return jsonify({'ok': True})
+        except Exception as e:
+            return jsonify({'error': str(e)}), 502
+
     def _wait_and_copy_result(cu: str, prompt_id: str) -> None:
-        """Background thread: polls ComfyUI history until job done, copies exact output files."""
+        """Background thread: polls ComfyUI history until done, then downloads output
+        files via /view — works for both local and remote ComfyUI instances."""
         deadline = time.time() + 600  # 10 min timeout
         hist_entry: dict = {}
         while time.time() < deadline:
@@ -651,10 +663,7 @@ def create_app(
             print(f'[warn] copy-result: timeout waiting for {prompt_id}', flush=True)
             return
 
-        if not state.co_resolved:
-            return
-
-        # Collect output image paths from history (type == 'output' only)
+        # Collect output image refs from history (type == 'output' only)
         image_refs: list[tuple[str, str]] = []  # (subfolder, filename)
         for node_output in hist_entry.get('outputs', {}).values():
             for img in node_output.get('images', []):
@@ -664,26 +673,20 @@ def create_app(
         copied: list[str] = []
         dst_cache = cache_for(state.root_dir)
         for subfolder, filename in image_refs:
-            # P1: treat filename as basename only — strip any directory components
             safe_name = Path(filename).name
             if not safe_name:
                 continue
-            # Resolve src and assert it stays within co_resolved
-            src = (state.co_resolved / subfolder / safe_name).resolve() if subfolder \
-                  else (state.co_resolved / safe_name).resolve()
-            if not src.is_relative_to(state.co_resolved):
-                print(f'[warn] copy-result: path traversal rejected: {src}', flush=True)
-                continue
-            if not src.is_file():
-                print(f'[warn] copy-result: not found: {src}', flush=True)
-                continue
-            # Resolve dest and assert it stays within root_dir
             dest = (state.root_resolved / safe_name).resolve()
             if not dest.is_relative_to(state.root_resolved):
-                print(f'[warn] copy-result: path traversal rejected dest: {dest}', flush=True)
+                print(f'[warn] copy-result: path traversal rejected: {dest}', flush=True)
                 continue
             try:
-                shutil.copy2(src, dest)
+                params: dict = {'filename': safe_name, 'type': 'output'}
+                if subfolder:
+                    params['subfolder'] = subfolder
+                dl = http_requests.get(f'{cu}/view', params=params, timeout=60)
+                dl.raise_for_status()
+                dest.write_bytes(dl.content)
                 copied.append(safe_name)
                 if dst_cache is not None:
                     dst_cache[safe_name] = stat_entry(dest.stat())
@@ -695,15 +698,19 @@ def create_app(
     @app.route('/api/comfy/prompt', methods=['POST'])
     def comfy_prompt():
         data = request.get_json()
-        cu          = data.get('comfy_url', 'http://127.0.0.1:8188')
+        cu          = data.get('comfy_url', 'http://127.0.0.1:8188').rstrip('/')
         prompt      = data.get('prompt')
         copy_result = data.get('copy_result', False)
+        front       = data.get('front', False)
         if not prompt:
             return jsonify({'error': 'no prompt data'}), 400
         try:
-            resp      = http_requests.post(f'{cu}/prompt', json={'prompt': prompt}, timeout=10)
+            payload = {'prompt': prompt}
+            if front:
+                payload['front'] = True
+            resp      = http_requests.post(f'{cu}/prompt', json=payload, timeout=10)
             resp_json = resp.json()
-            if copy_result and state.co_resolved:
+            if copy_result:
                 prompt_id = resp_json.get('prompt_id')
                 if prompt_id:
                     _copy_executor.submit(_wait_and_copy_result, cu, prompt_id)
