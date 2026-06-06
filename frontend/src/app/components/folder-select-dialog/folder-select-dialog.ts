@@ -7,6 +7,7 @@ import {
   QueryList,
   ViewChildren,
 } from '@angular/core';
+import { CdkDrag, CdkDragHandle } from '@angular/cdk/drag-drop';
 import { MatButtonModule } from '@angular/material/button';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatDividerModule } from '@angular/material/divider';
@@ -24,6 +25,8 @@ export interface FolderSelectData {
 @Component({
   selector: 'pp-folder-select-dialog',
   imports: [
+    CdkDrag,
+    CdkDragHandle,
     MatDialogModule,
     MatButtonModule,
     MatIconModule,

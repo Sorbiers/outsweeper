@@ -1,4 +1,5 @@
 import { Component, computed, inject, signal } from '@angular/core';
+import { CdkDrag, CdkDragHandle } from '@angular/cdk/drag-drop';
 import { MatButtonModule } from '@angular/material/button';
 import { MAT_DIALOG_DATA, MatDialogModule } from '@angular/material/dialog';
 import { MatExpansionModule } from '@angular/material/expansion';
@@ -20,6 +21,8 @@ interface Group {
 @Component({
   selector: 'pp-metadata-view-dialog',
   imports: [
+    CdkDrag,
+    CdkDragHandle,
     MatDialogModule,
     MatButtonModule,
     MatIconModule,

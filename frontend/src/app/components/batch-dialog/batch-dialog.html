@@ -1,4 +1,4 @@
-<h2 mat-dialog-title>
+<h2 mat-dialog-title cdkDrag cdkDragRootElement=".cdk-overlay-pane" cdkDragHandle style="cursor: move; user-select: none">
   {{ operation === 'copy' ? 'Copy' : 'Move' }} {{ count }} {{ count === 1 ? 'file' : 'files' }}
 </h2>
 

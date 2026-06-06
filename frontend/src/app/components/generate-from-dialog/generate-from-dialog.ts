@@ -1,4 +1,5 @@
 import { Component, inject } from '@angular/core';
+import { CdkDrag, CdkDragHandle } from '@angular/cdk/drag-drop';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCheckboxModule } from '@angular/material/checkbox';
@@ -120,7 +121,7 @@ const DEFAULT_NEGATIVE_PROMPT = 'worst quality, low quality, bad anatomy, bad ha
 
 @Component({
   selector: 'pp-generate-from-dialog',
-  imports: [FormsModule, MatDialogModule, MatFormFieldModule, MatInputModule, MatSelectModule, MatButtonModule, MatIconModule, MatCheckboxModule],
+  imports: [CdkDrag, CdkDragHandle, FormsModule, MatDialogModule, MatFormFieldModule, MatInputModule, MatSelectModule, MatButtonModule, MatIconModule, MatCheckboxModule],
   templateUrl: './generate-from-dialog.html',
   styleUrl: './generate-from-dialog.scss',
 })

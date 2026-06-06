@@ -1,4 +1,5 @@
 import { Component, inject } from '@angular/core';
+import { CdkDrag, CdkDragHandle } from '@angular/cdk/drag-drop';
 import { MatButtonModule } from '@angular/material/button';
 import { MAT_DIALOG_DATA, MatDialogModule } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -19,6 +20,8 @@ export interface ComfyQueueDialogData {
 @Component({
   selector: 'pp-comfy-queue-dialog',
   imports: [
+    CdkDrag,
+    CdkDragHandle,
     FormsModule,
     MatDialogModule,
     MatButtonModule,

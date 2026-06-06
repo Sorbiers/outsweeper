@@ -1,4 +1,5 @@
 import { COMMA, ENTER, SPACE } from '@angular/cdk/keycodes';
+import { CdkDrag, CdkDragHandle } from '@angular/cdk/drag-drop';
 import { Component, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
@@ -42,7 +43,7 @@ export interface FilterDialogData {
 @Component({
   selector: 'pp-filter-dialog',
   providers: [provideNativeDateAdapter()],
-  imports: [FormsModule, MatDialogModule, MatFormFieldModule, MatInputModule, MatButtonModule, MatIconModule, MatCheckboxModule, MatChipsModule, MatRadioModule, MatDatepickerModule],
+  imports: [CdkDrag, CdkDragHandle, FormsModule, MatDialogModule, MatFormFieldModule, MatInputModule, MatButtonModule, MatIconModule, MatCheckboxModule, MatChipsModule, MatRadioModule, MatDatepickerModule],
   templateUrl: './filter-dialog.html',
   styleUrl: './filter-dialog.scss',
 })

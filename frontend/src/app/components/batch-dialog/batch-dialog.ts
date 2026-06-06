@@ -1,4 +1,5 @@
 import { Component, inject, OnInit } from '@angular/core';
+import { CdkDrag, CdkDragHandle } from '@angular/cdk/drag-drop';
 import { FormsModule } from '@angular/forms';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
@@ -17,7 +18,7 @@ export interface BatchDialogData {
 
 @Component({
   selector: 'pp-batch-dialog',
-  imports: [FormsModule, MatDialogModule, MatButtonModule, MatIconModule,
+  imports: [CdkDrag, CdkDragHandle, FormsModule, MatDialogModule, MatButtonModule, MatIconModule,
             MatCheckboxModule, MatProgressSpinnerModule, MatDividerModule],
   templateUrl: './batch-dialog.html',
   styleUrl: './batch-dialog.scss',
