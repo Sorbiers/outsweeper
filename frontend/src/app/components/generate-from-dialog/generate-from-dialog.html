@@ -3,93 +3,84 @@
 <mat-dialog-content>
   <pp-comfy-url-row (connected)="onConnected()"></pp-comfy-url-row>
 
-  <!-- Combined Model selector (checkpoints + diffusion models) -->
-  @if (availableModels.length) {
-    <mat-form-field class="full-width">
-      <mat-label>Model</mat-label>
-      <mat-select [(ngModel)]="selectedModel" (ngModelChange)="onModelChange($event)">
-        @for (m of availableModels; track m.name) {
-          <mat-option [value]="m.name">
-            <span class="model-type-tag" [class.unet]="m.type === 'unet'">[{{ m.type === 'checkpoint' ? 'CKPT' : 'UNET' }}]</span>
-            {{ m.name }}
-          </mat-option>
-        }
-      </mat-select>
-    </mat-form-field>
-  }
+  <!-- Combined Model selector — always visible, disabled until ComfyUI connected -->
+  <mat-form-field class="full-width">
+    <mat-label>Model</mat-label>
+    <mat-select [(ngModel)]="selectedModel" (ngModelChange)="onModelChange($event)"
+                [disabled]="comfy.checkStatus !== 'ok'">
+      @for (m of availableModels; track m.name) {
+        <mat-option [value]="m.name">
+          <span class="model-type-tag" [class.unet]="m.type === 'unet'">[{{ m.type === 'checkpoint' ? 'CKPT' : 'UNET' }}]</span>
+          {{ m.name }}
+        </mat-option>
+      }
+    </mat-select>
+  </mat-form-field>
 
-  <!-- LoRA section (hidden by default) -->
-  @if (showLoras) {
-    @if (loraNodes.length) {
-      <div class="lora-section">
-        @for (node of loraNodes; track node.nodeId; let i = $index) {
-          @if (!node.removed) {
-            <div class="lora-row">
-              <mat-form-field class="lora-name-field">
-                <mat-label>LoRA {{ loraNodes.length > 1 ? i + 1 : '' }} (was: {{ node.originalName }})</mat-label>
-                <mat-select [(ngModel)]="node.selected[0]" [disabled]="!availableLoras.length">
-                  <mat-option value="">— none —</mat-option>
-                  @for (lora of availableLoras; track lora) {
-                    <mat-option [value]="lora">{{ lora }}</mat-option>
-                  }
-                </mat-select>
-              </mat-form-field>
-              <mat-form-field class="lora-strength-field">
-                <mat-label>Str Model</mat-label>
-                <input matInput type="number" [(ngModel)]="node.strengthModel" step="0.1" min="0" max="2" />
-              </mat-form-field>
-              <mat-form-field class="lora-strength-field">
-                <mat-label>Str Clip</mat-label>
-                <input matInput type="number" [(ngModel)]="node.strengthClip" step="0.1" min="0" max="2" />
-              </mat-form-field>
-              <button mat-icon-button (click)="node.removed = true" title="Remove LoRA" class="lora-remove-btn">
-                <mat-icon>remove_circle_outline</mat-icon>
-              </button>
-            </div>
-          }
-        }
-      </div>
-    }
-
-    @if (manualLoras.length) {
-      <div class="lora-section">
-        @for (lora of manualLoras; track $index; let i = $index) {
+  <!-- LoRA section -->
+  @if (loraNodes.length) {
+    <div class="lora-section">
+      @for (node of loraNodes; track node.nodeId; let i = $index) {
+        @if (!node.removed) {
           <div class="lora-row">
             <mat-form-field class="lora-name-field">
-              <mat-label>New LoRA {{ i + 1 }}</mat-label>
-              <mat-select [(ngModel)]="lora.name">
-                @for (l of availableLoras; track l) {
-                  <mat-option [value]="l">{{ l }}</mat-option>
+              <mat-label>LoRA {{ loraNodes.length > 1 ? i + 1 : '' }} (was: {{ node.originalName }})</mat-label>
+              <mat-select [(ngModel)]="node.selected[0]" [disabled]="comfy.checkStatus !== 'ok'">
+                <mat-option value="">— none —</mat-option>
+                @for (lora of availableLoras; track lora) {
+                  <mat-option [value]="lora">{{ lora }}</mat-option>
                 }
               </mat-select>
             </mat-form-field>
             <mat-form-field class="lora-strength-field">
               <mat-label>Str Model</mat-label>
-              <input matInput type="number" [(ngModel)]="lora.strengthModel" step="0.1" min="0" max="2" />
+              <input matInput type="number" [(ngModel)]="node.strengthModel" step="0.1" min="0" max="2" />
             </mat-form-field>
             <mat-form-field class="lora-strength-field">
               <mat-label>Str Clip</mat-label>
-              <input matInput type="number" [(ngModel)]="lora.strengthClip" step="0.1" min="0" max="2" />
+              <input matInput type="number" [(ngModel)]="node.strengthClip" step="0.1" min="0" max="2" />
             </mat-form-field>
-            <button mat-icon-button (click)="removeLora(i)" title="Remove" class="lora-remove-btn">
+            <button mat-icon-button (click)="node.removed = true" title="Remove LoRA" class="lora-remove-btn">
               <mat-icon>remove_circle_outline</mat-icon>
             </button>
           </div>
         }
-      </div>
-    }
+      }
+    </div>
+  }
+
+  @if (manualLoras.length) {
+    <div class="lora-section">
+      @for (lora of manualLoras; track $index; let i = $index) {
+        <div class="lora-row">
+          <mat-form-field class="lora-name-field">
+            <mat-label>New LoRA {{ i + 1 }}</mat-label>
+            <mat-select [(ngModel)]="lora.name">
+              @for (l of availableLoras; track l) {
+                <mat-option [value]="l">{{ l }}</mat-option>
+              }
+            </mat-select>
+          </mat-form-field>
+          <mat-form-field class="lora-strength-field">
+            <mat-label>Str Model</mat-label>
+            <input matInput type="number" [(ngModel)]="lora.strengthModel" step="0.1" min="0" max="2" />
+          </mat-form-field>
+          <mat-form-field class="lora-strength-field">
+            <mat-label>Str Clip</mat-label>
+            <input matInput type="number" [(ngModel)]="lora.strengthClip" step="0.1" min="0" max="2" />
+          </mat-form-field>
+          <button mat-icon-button (click)="removeLora(i)" title="Remove" class="lora-remove-btn">
+            <mat-icon>remove_circle_outline</mat-icon>
+          </button>
+        </div>
+      }
+    </div>
   }
 
   <div class="add-lora-row">
-    <button mat-stroked-button (click)="showLoras = !showLoras">
-      <mat-icon>{{ showLoras ? 'expand_less' : 'expand_more' }}</mat-icon>
-      {{ showLoras ? 'Hide LoRAs' : 'Show LoRAs' }}
+    <button mat-stroked-button (click)="addLora()" [disabled]="comfy.checkStatus !== 'ok'">
+      <mat-icon>add</mat-icon> Add LoRA
     </button>
-    @if (showLoras) {
-      <button mat-stroked-button (click)="addLora()" [disabled]="!availableLoras.length">
-        <mat-icon>add</mat-icon> Add LoRA
-      </button>
-    }
   </div>
 
   <div class="params-grid">
@@ -166,9 +157,6 @@
   </mat-form-field>
 
   <div class="extract-row">
-    <button mat-stroked-button (click)="saveWorkflow()">
-      <mat-icon>download</mat-icon> Save Workflow
-    </button>
     <mat-checkbox [(ngModel)]="copyResult" class="copy-result-checkbox">
       Copy the result to the working folder.
     </mat-checkbox>
@@ -176,10 +164,19 @@
 </mat-dialog-content>
 
 <mat-dialog-actions align="end">
-  <button mat-button mat-dialog-close>Close</button>
-  <button mat-stroked-button (click)="sendFront()" [disabled]="sending || comfy.checkStatus !== 'ok'">
-    <mat-icon>vertical_align_top</mat-icon> Send to front
+  <button mat-icon-button [matMenuTriggerFor]="actionsMenu" class="actions-menu-btn" matTooltip="More actions">
+    <mat-icon>more_vert</mat-icon>
   </button>
+  <mat-menu #actionsMenu="matMenu">
+    <button mat-menu-item (click)="saveWorkflow()">
+      <mat-icon>download</mat-icon> Save Workflow
+    </button>
+    <mat-divider></mat-divider>
+    <button mat-menu-item (click)="sendFront()" [disabled]="sending || comfy.checkStatus !== 'ok'">
+      <mat-icon>vertical_align_top</mat-icon> Send to front
+    </button>
+  </mat-menu>
+  <button mat-button mat-dialog-close>Close</button>
   <button mat-flat-button (click)="send()" [disabled]="sending || comfy.checkStatus !== 'ok'">
     @if (sending) { Sending... } @else { Send }
   </button>

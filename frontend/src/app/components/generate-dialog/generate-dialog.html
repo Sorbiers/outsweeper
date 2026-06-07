@@ -5,12 +5,12 @@
 <mat-dialog-content>
   <pp-comfy-url-row (connected)="onConnected()"></pp-comfy-url-row>
 
-  @if (checkpointNodes.length && availableCheckpoints.length) {
+  @if (checkpointNodes.length) {
     <div class="lora-section">
       @for (node of checkpointNodes; track node.nodeId) {
         <mat-form-field class="full-width">
           <mat-label>Checkpoint (was: {{ node.originalName }})</mat-label>
-          <mat-select multiple [(ngModel)]="node.selected">
+          <mat-select multiple [(ngModel)]="node.selected" [disabled]="comfy.checkStatus !== 'ok'">
             @for (ckpt of availableCheckpoints; track ckpt) {
               <mat-option [value]="ckpt">{{ ckpt }}</mat-option>
             }
@@ -31,7 +31,7 @@
                 >LoRA {{ loraNodes.length > 1 ? i + 1 : '' }} (was:
                 {{ node.originalName }})</mat-label
               >
-              <mat-select multiple [(ngModel)]="node.selected" [disabled]="!availableLoras.length">
+              <mat-select multiple [(ngModel)]="node.selected" [disabled]="comfy.checkStatus !== 'ok'">
                 @for (lora of availableLoras; track lora) {
                   <mat-option [value]="lora">{{ lora }}</mat-option>
                 }
@@ -118,7 +118,7 @@
   }
 
   <div class="add-lora-row">
-    <button mat-stroked-button (click)="addLora()" [disabled]="!availableLoras.length">
+    <button mat-stroked-button (click)="addLora()" [disabled]="comfy.checkStatus !== 'ok'">
       <mat-icon>add</mat-icon> Add LoRA
     </button>
   </div>

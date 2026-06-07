@@ -1,3 +1,7 @@
+.actions-menu-btn {
+  margin-right: auto;
+}
+
 .lora-section {
   margin: 4px 0;
 }
@@ -25,7 +29,7 @@
 .add-lora-row {
   display: flex;
   gap: 8px;
-  margin: 0 0 12px;
+  margin: 0 0 24px;
 }
 
 .extract-row {
@@ -67,4 +71,8 @@
   &.unet {
     color: #7b1fa2;
   }
+}
+
+mat-dialog-content {
+  padding: 20px !important;
 }

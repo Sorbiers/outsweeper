@@ -3,6 +3,9 @@ import { CdkDrag, CdkDragHandle } from '@angular/cdk/drag-drop';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCheckboxModule } from '@angular/material/checkbox';
+import { MatDividerModule } from '@angular/material/divider';
+import { MatMenuModule } from '@angular/material/menu';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import { MAT_DIALOG_DATA, MatDialog, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
@@ -123,7 +126,7 @@ const DEFAULT_NEGATIVE_PROMPT = 'worst quality, low quality, bad anatomy, bad ha
 
 @Component({
   selector: 'pp-generate-from-dialog',
-  imports: [CdkDrag, CdkDragHandle, FormsModule, MatDialogModule, MatFormFieldModule, MatInputModule, MatSelectModule, MatButtonModule, MatIconModule, MatCheckboxModule, ComfyUrlRowComponent],
+  imports: [CdkDrag, CdkDragHandle, FormsModule, MatDialogModule, MatFormFieldModule, MatInputModule, MatSelectModule, MatButtonModule, MatIconModule, MatCheckboxModule, MatMenuModule, MatDividerModule, MatTooltipModule, ComfyUrlRowComponent],
   templateUrl: './generate-from-dialog.html',
   styleUrl: './generate-from-dialog.scss',
 })
@@ -149,8 +152,6 @@ export class GenerateFromDialog {
   manualLoras: ManualLora[] = [];
   availableSamplers: string[] = [];
   availableSchedulers: string[] = [];
-
-  showLoras = false;
 
   originalWidth: number | null;
   originalHeight: number | null;
@@ -213,7 +214,6 @@ export class GenerateFromDialog {
 
   addLora(): void {
     this.manualLoras.push({ name: '', strengthModel: 0.7, strengthClip: 0.7 });
-    this.showLoras = true;
   }
 
   removeLora(index: number): void {
