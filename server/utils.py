@@ -158,20 +158,35 @@ def get_exif_date(filepath: Path) -> str | None:
 def extract_comfyui_data(prompt: str) -> dict[str, Any]:
     result: dict[str, Any] = {'found': False}
     try:
-        prompt = json.loads(prompt)
+        workflow = json.loads(prompt)
         result['found'] = True
         model = None
         loras = []
         positive_prompt = None
         negative_prompt = None
-        steps = cfg = seed = sampler = scheduler = batch_size = None
+        steps = cfg = seed = sampler = scheduler = batch_size = denoise = source_image = None
 
-        for node in prompt.values():
+        # Resolve positive/negative CLIPTextEncode by tracing KSampler references
+        ksampler = next(
+            (n for n in workflow.values()
+             if 'steps' in n.get('inputs', {}) and 'cfg' in n.get('inputs', {})),
+            None,
+        )
+        pos_node_id = neg_node_id = None
+        if ksampler:
+            pos_ref = ksampler['inputs'].get('positive')
+            neg_ref = ksampler['inputs'].get('negative')
+            if isinstance(pos_ref, list): pos_node_id = pos_ref[0]
+            if isinstance(neg_ref, list): neg_node_id = neg_ref[0]
+
+        for node_id, node in workflow.items():
             inputs     = node.get('inputs', {})
             class_type = node.get('class_type', '')
             if 'ckpt_name' in inputs:
                 model = inputs['ckpt_name']
-            if 'lora_name' in inputs:
+            elif 'unet_name' in inputs and model is None:
+                model = inputs['unet_name']
+            if 'lora_name' in inputs and inputs.get('lora_name'):
                 loras.append({
                     'name':           inputs['lora_name'],
                     'strength_model': inputs.get('strength_model', 1.0),
@@ -183,20 +198,28 @@ def extract_comfyui_data(prompt: str) -> dict[str, Any]:
                 seed      = inputs.get('seed')
                 sampler   = inputs.get('sampler_name')
                 scheduler = inputs.get('scheduler')
+                d = inputs.get('denoise', 1.0)
+                if d is not None and d != 1.0:
+                    denoise = d
             if class_type == 'CLIPTextEncode' and 'text' in inputs:
                 text = inputs['text']
-                if positive_prompt is None:
+                if node_id == pos_node_id:
                     positive_prompt = text
-                else:
+                elif node_id == neg_node_id:
                     negative_prompt = text
+                elif positive_prompt is None:
+                    positive_prompt = text          # fallback if no KSampler ref
             if 'batch_size' in inputs:
                 batch_size = inputs['batch_size']
+            if class_type == 'LoadImage' and 'image' in inputs:
+                source_image = inputs['image']
 
         result.update({
             'model': model, 'loras': loras,
             'prompt': positive_prompt, 'negative_prompt': negative_prompt,
             'steps': steps, 'cfg': cfg, 'seed': seed,
             'sampler': sampler, 'scheduler': scheduler, 'batch_size': batch_size,
+            'denoise': denoise, 'source_image': source_image,
         })
     except Exception as e:
         result['error'] = str(e)

@@ -11,9 +11,12 @@ import { MatMenuModule } from '@angular/material/menu';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { PhotoInfo } from '../../models/photo.model';
+import { ComfyConnectionService } from '../../services/comfy-connection.service';
 import { PhotoService } from '../../services/photo.service';
 import { DescribeDialog } from '../describe-dialog/describe-dialog';
 import { DEFAULT_FLUX_WORKFLOW, GenerateDialog } from '../generate-dialog/generate-dialog';
+import { GenerateFromDialog, GenerateFromDialogData } from '../generate-from-dialog/generate-from-dialog';
+import { OutpaintDialog, OutpaintDialogData } from '../outpaint-dialog/outpaint-dialog';
 import { MetadataEditDialog } from '../metadata-edit-dialog/metadata-edit-dialog';
 import { MetadataStripDialog } from '../metadata-strip-dialog/metadata-strip-dialog';
 import { MetadataViewDialog } from '../metadata-view-dialog/metadata-view-dialog';
@@ -36,6 +39,7 @@ export class InfoPanel implements OnInit {
 
   private dialog = inject(MatDialog);
   private photoService = inject(PhotoService);
+  comfy = inject(ComfyConnectionService);
   private snackBar = inject(MatSnackBar);
   copyDoneIconActive = signal(false);
   exiftoolAvailable = signal(false);
@@ -109,17 +113,23 @@ export class InfoPanel implements OnInit {
 
   openDescribe(): void {
     if (!this.info) return;
+    const hasImageWorkflow = !!this.info.png_metadata?.['prompt'];
     this.dialog.open(DescribeDialog, {
-      data: { filename: this.info.filename, folder: this.folder },
+      data: { filename: this.info.filename, folder: this.folder, hasImageWorkflow },
       width: '90vw',
       maxWidth: '700px',
     }).afterClosed().subscribe(result => {
-      if (result?.action === 'generate') {
-        const workflow = this.info?.png_metadata['prompt']
-          ? JSON.parse(this.info.png_metadata['prompt'])
-          : JSON.parse(JSON.stringify(DEFAULT_FLUX_WORKFLOW));
+      if (!result?.prompt) return;
+      if (result.action === 'generate') {
         this.dialog.open(GenerateDialog, {
-          data: { workflow, positivePromptOverride: result.prompt },
+          data: { workflow: JSON.parse(JSON.stringify(DEFAULT_FLUX_WORKFLOW)), positivePromptOverride: result.prompt },
+          width: '90vw',
+          maxWidth: '800px',
+        });
+      } else if (result.action === 'regenerate') {
+        const workflow = JSON.parse(this.info!.png_metadata['prompt']);
+        this.dialog.open(GenerateDialog, {
+          data: { workflow, positivePromptOverride: result.prompt, title: 'Re-generate' },
           width: '90vw',
           maxWidth: '800px',
         });
@@ -131,7 +141,49 @@ export class InfoPanel implements OnInit {
     if (!this.info?.png_metadata['prompt']) return;
     const workflow = JSON.parse(this.info.png_metadata['prompt']);
     this.dialog.open(GenerateDialog, {
-      data: { workflow },
+      data: { workflow, title: 'Re-generate' },
+      width: '90vw',
+      maxWidth: '800px',
+    });
+  }
+
+  extractWorkflow(): void {
+    if (!this.info?.png_metadata['prompt']) return;
+    const workflow = JSON.parse(this.info.png_metadata['prompt']);
+    const blob = new Blob([JSON.stringify(workflow, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = this.info.filename.replace(/\.[^.]+$/, '') + '_workflow.json';
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  openGenerateFrom(): void {
+    if (!this.info) return;
+    const comfyPrompt = this.info.png_metadata?.['prompt']
+      ? JSON.parse(this.info.png_metadata['prompt'])
+      : undefined;
+    this.dialog.open(GenerateFromDialog, {
+      data: {
+        filename: this.info.filename,
+        folder: this.folder,
+        imageWidth: this.info.width ?? null,
+        imageHeight: this.info.height ?? null,
+        imageComfyPrompt: comfyPrompt,
+      } satisfies GenerateFromDialogData,
+      width: '90vw',
+      maxWidth: '800px',
+    });
+  }
+
+  openOutpaint(): void {
+    if (!this.info) return;
+    this.dialog.open(OutpaintDialog, {
+      data: {
+        filename: this.info.filename,
+        folder: this.folder,
+      } satisfies OutpaintDialogData,
       width: '90vw',
       maxWidth: '800px',
     });

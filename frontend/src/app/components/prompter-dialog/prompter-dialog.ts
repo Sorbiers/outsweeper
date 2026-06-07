@@ -1,4 +1,5 @@
 import { Component, inject } from '@angular/core';
+import { CdkDrag, CdkDragHandle } from '@angular/cdk/drag-drop';
 import { FormsModule } from '@angular/forms';
 import { MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -94,7 +95,7 @@ function randomItem<T>(arr: T[]): T {
 
 @Component({
   selector: 'pp-prompter-dialog',
-  imports: [FormsModule, MatDialogModule, MatFormFieldModule, MatSelectModule, MatButtonModule, MatIconModule],
+  imports: [CdkDrag, CdkDragHandle, FormsModule, MatDialogModule, MatFormFieldModule, MatSelectModule, MatButtonModule, MatIconModule],
   templateUrl: './prompter-dialog.html',
   styleUrl: './prompter-dialog.scss',
 })

@@ -1,4 +1,5 @@
 import { Component, inject, signal } from '@angular/core';
+import { CdkDrag, CdkDragHandle } from '@angular/cdk/drag-drop';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
@@ -30,6 +31,8 @@ const OPTIONS: StripOption[] = [
 @Component({
   selector: 'pp-metadata-strip-dialog',
   imports: [
+    CdkDrag,
+    CdkDragHandle,
     MatDialogModule,
     MatButtonModule,
     MatIconModule,

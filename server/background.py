@@ -2,9 +2,13 @@ from __future__ import annotations
 
 import json
 import time
+from typing import TYPE_CHECKING
 
 from .events import _SSE_CLIENTS, _SSE_LOCK, _sse_broadcast
 from .utils import LMS_CHECK_TIMEOUT, SSE_QUEUE_TIMEOUT
+
+if TYPE_CHECKING:
+    from .state import AppState
 
 _COMFY_PROGRESS: dict = {}
 
@@ -45,14 +49,15 @@ def _metrics_loop(interval: float = 2.0) -> None:
             print(f'[warn] metrics: {e}', flush=True)
 
 
-def _comfy_ws_loop(comfy_url: str) -> None:
+def _comfy_ws_loop(state: 'AppState') -> None:
     global _COMFY_PROGRESS
     try:
         import websocket
     except ImportError:
         return
-    ws_url = comfy_url.replace('http://', 'ws://').replace('https://', 'wss://') + '/ws'
     while True:
+        cu = state.comfy_url.rstrip('/')
+        ws_url = cu.replace('http://', 'ws://').replace('https://', 'wss://') + '/ws'
         try:
             def on_message(ws, message):
                 global _COMFY_PROGRESS
@@ -72,7 +77,7 @@ def _comfy_ws_loop(comfy_url: str) -> None:
         time.sleep(5)
 
 
-def _comfy_queue_loop(comfy_url: str, interval: float = 2.0) -> None:
+def _comfy_queue_loop(state: 'AppState', interval: float = 2.0) -> None:
     import requests as http_requests
     prev_running_ids: set = set()
     done_count = 0
@@ -82,8 +87,9 @@ def _comfy_queue_loop(comfy_url: str, interval: float = 2.0) -> None:
             has_comfy = any(c.get('comfy_queue', True) for c in _SSE_CLIENTS.values())
         if not has_comfy:
             continue
+        cu = state.comfy_url.rstrip('/')
         try:
-            resp = http_requests.get(f'{comfy_url}/queue', timeout=3)
+            resp = http_requests.get(f'{cu}/queue', timeout=3)
             data = resp.json()
             running_items = data.get('queue_running', [])
             pending_items = data.get('queue_pending', [])

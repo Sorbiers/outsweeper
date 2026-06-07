@@ -1,4 +1,5 @@
 import { Component, inject, signal } from '@angular/core';
+import { CdkDrag, CdkDragHandle } from '@angular/cdk/drag-drop';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
@@ -26,6 +27,8 @@ function isAscii(s: string): boolean {
 @Component({
   selector: 'pp-metadata-edit-dialog',
   imports: [
+    CdkDrag,
+    CdkDragHandle,
     FormsModule,
     MatDialogModule,
     MatFormFieldModule,

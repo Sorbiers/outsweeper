@@ -1,0 +1,16 @@
+:host { display: block; }
+
+.url-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.url-field { flex: 1; }
+
+.check-btn { flex-shrink: 0; }
+
+.check-ok { color: #4caf50; }
+
+.check-err { color: #f44336; }

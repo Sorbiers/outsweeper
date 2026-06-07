@@ -1,0 +1,83 @@
+<h2 mat-dialog-title cdkDrag cdkDragRootElement=".cdk-overlay-pane" cdkDragHandle style="cursor: move; user-select: none">ComfyUI Queue</h2>
+
+<mat-dialog-content>
+  <pp-comfy-url-row (connected)="onConnected()"></pp-comfy-url-row>
+
+  <!-- Queue list -->
+  @if (loading) {
+    <div class="center-row">
+      <mat-spinner diameter="32"></mat-spinner>
+    </div>
+  } @else if (comfy.checkStatus !== 'ok') {
+    <div class="hint">Connect to ComfyUI to view the queue.</div>
+  } @else if (isEmpty) {
+    <div class="hint">Queue is empty.</div>
+  } @else {
+    @if (running.length > 0) {
+      <div class="section-label">Running ({{ running.length }})</div>
+      @for (job of running; track job.prompt_id) {
+        <div class="job-row running">
+          <div class="job-meta">
+            <span class="badge running-badge">▶</span>
+            <span class="model" [title]="job.model ?? ''">{{ modelLabel(job) }}</span>
+            @if (job.steps != null) {
+              <span class="steps">{{ job.steps }} steps</span>
+            }
+            <div class="job-actions">
+              <button mat-icon-button class="action-btn"
+                      (click)="cancelRunning()"
+                      matTooltip="Cancel (interrupt)">
+                <mat-icon class="cancel-icon">stop_circle</mat-icon>
+              </button>
+            </div>
+          </div>
+          @if (job.prompt) {
+            <div class="job-prompt">{{ job.prompt }}</div>
+          }
+        </div>
+      }
+    }
+
+    @if (pending.length > 0) {
+      <div class="section-label">Pending ({{ pending.length }})</div>
+      @for (job of pending; track job.prompt_id) {
+        <div class="job-row">
+          <div class="job-meta">
+            <span class="badge pending-badge">◷</span>
+            <span class="model" [title]="job.model ?? ''">{{ modelLabel(job) }}</span>
+            @if (job.steps != null) {
+              <span class="steps">{{ job.steps }} steps</span>
+            }
+            <div class="job-actions">
+              <button mat-icon-button class="action-btn"
+                      (click)="moveToFront(job.prompt_id)"
+                      matTooltip="Move to front">
+                <mat-icon>vertical_align_top</mat-icon>
+              </button>
+              <button mat-icon-button class="action-btn"
+                      (click)="removeJob(job.prompt_id)"
+                      matTooltip="Remove">
+                <mat-icon>close</mat-icon>
+              </button>
+            </div>
+          </div>
+          @if (job.prompt) {
+            <div class="job-prompt">{{ job.prompt }}</div>
+          }
+        </div>
+      }
+    }
+  }
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  @if (pending.length > 0) {
+    <button mat-stroked-button (click)="clearQueue()" class="clear-btn" matTooltip="Remove all pending jobs">
+      <mat-icon>clear_all</mat-icon> Clear queue
+    </button>
+  }
+  <button mat-icon-button (click)="fetchQueue()" [disabled]="comfy.checkStatus !== 'ok' || loading" matTooltip="Refresh">
+    <mat-icon>refresh</mat-icon>
+  </button>
+  <button mat-button mat-dialog-close>Close</button>
+</mat-dialog-actions>

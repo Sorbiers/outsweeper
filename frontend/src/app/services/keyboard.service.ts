@@ -20,7 +20,9 @@ export type PhotoAction =
   | 'rowDown'
   | 'selectSourceFolder'
   | 'selectSelectedFolder'
-  | 'selectDustFolder';
+  | 'selectDustFolder'
+  | 'openComfyQueue'
+  | 'refresh';
 
 @Injectable({ providedIn: 'root' })
 export class KeyboardService {
@@ -55,6 +57,8 @@ export class KeyboardService {
           else if (event.key === 'PageUp') action = 'pageBackward';
           else if (event.key === ' ') action = 'toggleSelection';
           else if (event.key === '=') action = 'selectSourceFolder';
+          else if (event.key === 'q') action = 'openComfyQueue';
+          else if (event.key === 'r') action = 'refresh';
         } else if (!(event.ctrlKey || event.metaKey || event.altKey)) {
           if (event.key === 'PageDown' && event.shiftKey) action = 'pageForward10';
           else if (event.key === 'PageUp' && event.shiftKey) action = 'pageBackward10';

@@ -5,7 +5,7 @@ import { SPECIAL_FOLDERS } from '../constants';
 import {
   PhotoListItem, PhotoInfo, MoveResponse, UndoResponse,
   ExiftoolCapabilities, ExiftoolMetadata, EditableFields, StripGroup,
-  BatchEditResult,
+  BatchEditResult, ComfyQueueJob,
 } from '../models/photo.model';
 import { AppConfig } from '../models/config.model';
 
@@ -94,6 +94,38 @@ export class PhotoService {
     return this.http.post<{ samplers: string[]; schedulers: string[] }>('/api/comfy/samplers', { comfy_url: comfyUrl });
   }
 
+  getComfyModels(comfyUrl: string): Observable<{ models: { name: string; type: 'checkpoint' | 'unet' }[] }> {
+    return this.http.post<any>('/api/comfy/models', { comfy_url: comfyUrl });
+  }
+
+  getComfyQueue(comfyUrl: string): Observable<{ running: ComfyQueueJob[]; pending: ComfyQueueJob[] }> {
+    return this.http.post<{ running: ComfyQueueJob[]; pending: ComfyQueueJob[] }>('/api/comfy/queue', { comfy_url: comfyUrl });
+  }
+
+  deleteComfyQueueJob(comfyUrl: string, promptId: string): Observable<{ ok: boolean }> {
+    return this.http.post<{ ok: boolean }>('/api/comfy/queue/delete', { comfy_url: comfyUrl, prompt_id: promptId });
+  }
+
+  moveComfyQueueJobToFront(comfyUrl: string, promptId: string): Observable<{ ok: boolean }> {
+    return this.http.post<{ ok: boolean }>('/api/comfy/queue/front', { comfy_url: comfyUrl, prompt_id: promptId });
+  }
+
+  clearComfyQueue(comfyUrl: string): Observable<{ ok: boolean }> {
+    return this.http.post<{ ok: boolean }>('/api/comfy/queue/clear', { comfy_url: comfyUrl });
+  }
+
+  interruptComfy(comfyUrl: string): Observable<{ ok: boolean }> {
+    return this.http.post<{ ok: boolean }>('/api/comfy/interrupt', { comfy_url: comfyUrl });
+  }
+
+  uploadToComfy(comfyUrl: string, filename: string, folder: string): Observable<{ name: string }> {
+    return this.http.post<any>(
+      '/api/comfy/upload',
+      { comfy_url: comfyUrl },
+      { params: { path: this.filePath(filename, folder) } },
+    );
+  }
+
   getConfig(): Observable<AppConfig> {
     return this.http.get<AppConfig>('/api/config');
   }
@@ -178,9 +210,9 @@ export class PhotoService {
     return this.http.get<any>('/api/folders');
   }
 
-  sendToComfy(comfyUrl: string, prompt: object, copyResult = false): Observable<any> {
+  sendToComfy(comfyUrl: string, prompt: object, copyResult = false, front = false): Observable<any> {
     return this.http.post('/api/comfy/prompt', {
-      comfy_url: comfyUrl, prompt, copy_result: copyResult,
+      comfy_url: comfyUrl, prompt, copy_result: copyResult, front,
     });
   }
 

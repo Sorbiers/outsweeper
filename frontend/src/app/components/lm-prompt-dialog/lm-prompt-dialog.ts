@@ -1,4 +1,5 @@
 import { Component, inject } from '@angular/core';
+import { CdkDrag, CdkDragHandle } from '@angular/cdk/drag-drop';
 import { FormsModule } from '@angular/forms';
 import { MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -15,7 +16,7 @@ import { LmStudioConnectionService } from '../../services/lmstudio-connection.se
 
 @Component({
   selector: 'pp-lm-prompt-dialog',
-  imports: [FormsModule, MatDialogModule, MatFormFieldModule, MatInputModule, MatSelectModule, MatButtonModule, MatIconModule, MatProgressSpinnerModule],
+  imports: [CdkDrag, CdkDragHandle, FormsModule, MatDialogModule, MatFormFieldModule, MatInputModule, MatSelectModule, MatButtonModule, MatIconModule, MatProgressSpinnerModule],
   templateUrl: './lm-prompt-dialog.html',
   styleUrl: './lm-prompt-dialog.scss',
 })

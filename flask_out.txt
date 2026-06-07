@@ -1,0 +1,26 @@
+[index] F:\photoParser\test_folder — 11 files in 1.3 ms
+[index] Revalidation interval: 200s (build: 0.0s)
+[index] F:\photoParser\test_folder\__selected — 0 files in 0.1 ms
+[index] F:\photoParser\test_folder\__dust — 0 files in 2.4 ms
+[thumbs] cleanup: removed 0 stale thumbnail(s) older than 3 day(s)
+ * Serving Flask app 'server.factory'
+ * Debug mode: off
+[warn] comfy queue: HTTPConnectionPool(host='127.0.0.1', port=8188): Read timed out. (read timeout=3)
+[warn] comfy queue: HTTPConnectionPool(host='127.0.0.1', port=8188): Read timed out. (read timeout=3)
+[warn] comfy queue: HTTPConnectionPool(host='127.0.0.1', port=8188): Read timed out. (read timeout=3)
+[watcher] rebuild start — 15 files known
+[index] F:\photoParser\test_folder — 15 files in 14.0 ms
+[watcher] rebuild done — 15 files in 21.3 ms
+[index] F:\photoParser\test_folder — 15 files in 7.7 ms
+[index] F:\ai\ComfyUI_windows_portable_nvidia_cu128\ComfyUI_windows_portable\ComfyUI\output — 926 files in 574.2 ms
+[warn] comfy queue: HTTPConnectionPool(host='127.0.0.1', port=8188): Read timed out. (read timeout=3)
+[warn] copy-result: timeout waiting for 1a954fef-1ff2-436e-a094-d181633f036a
+[warn] comfy queue: HTTPConnectionPool(host='127.0.0.1', port=8188): Read timed out. (read timeout=3)
+[warn] comfy queue: HTTPConnectionPool(host='127.0.0.1', port=8188): Read timed out. (read timeout=3)
+[watcher] rebuild start — 19 files known
+[index] F:\photoParser\test_folder — 19 files in 10.0 ms
+[watcher] rebuild done — 19 files in 17.5 ms
+[warn] comfy queue: HTTPConnectionPool(host='127.0.0.1', port=8188): Read timed out. (read timeout=3)
+[warn] comfy queue: HTTPConnectionPool(host='127.0.0.1', port=8188): Read timed out. (read timeout=3)
+[warn] comfy queue: HTTPConnectionPool(host='127.0.0.1', port=8188): Read timed out. (read timeout=3)
+[index] F:\ai\ComfyUI_windows_portable_nvidia_cu128\ComfyUI_windows_portable\ComfyUI\output — 933 files in 223.1 ms

@@ -35,6 +35,8 @@ export interface ComfyUIData {
   sampler?: string;
   scheduler?: string;
   batch_size?: number;
+  denoise?: number;
+  source_image?: string;
   error?: string;
 }
 
@@ -86,3 +88,10 @@ export interface BatchEditResult {
 }
 
 export type StripGroup = 'all' | 'sensitive' | 'icc' | 'exif' | 'gps';
+
+export interface ComfyQueueJob {
+  prompt_id: string;
+  model: string | null;
+  steps: number | null;
+  prompt: string | null;
+}
