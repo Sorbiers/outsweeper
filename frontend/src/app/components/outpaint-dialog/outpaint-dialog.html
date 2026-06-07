@@ -1,30 +1,7 @@
 <h2 mat-dialog-title cdkDrag cdkDragRootElement=".cdk-overlay-pane" cdkDragHandle style="cursor: move; user-select: none">Outpaint</h2>
 
 <mat-dialog-content>
-  <div class="url-row">
-    <mat-form-field class="url-field">
-      <mat-label>ComfyUI URL</mat-label>
-      <input matInput [(ngModel)]="comfyUrl" (ngModelChange)="onUrlChange()" />
-    </mat-form-field>
-    @if (checkStatus === 'checking') {
-      <button mat-stroked-button disabled class="check-btn">Checking...</button>
-    } @else if (checkStatus === 'ok') {
-      <button mat-stroked-button (click)="checkConnection()" class="check-btn">
-        <mat-icon class="check-ok">check_circle</mat-icon> OK
-      </button>
-    } @else if (checkStatus === 'error') {
-      <button mat-stroked-button (click)="checkConnection()" class="check-btn">
-        <mat-icon class="check-err">error</mat-icon> Failed
-      </button>
-      @if (hasRunComfyCommand && !runTriggered) {
-        <button mat-stroked-button (click)="runService()" class="check-btn">
-          <mat-icon>play_arrow</mat-icon> Run
-        </button>
-      }
-    } @else {
-      <button mat-stroked-button (click)="checkConnection()" class="check-btn">Check</button>
-    }
-  </div>
+  <pp-comfy-url-row (connected)="onConnected()"></pp-comfy-url-row>
 
   <!-- Model (UNET only — fill models) -->
   @if (availableModels.length) {
@@ -114,7 +91,7 @@
 
 <mat-dialog-actions align="end">
   <button mat-button mat-dialog-close>Close</button>
-  <button mat-flat-button (click)="send()" [disabled]="sending || checkStatus !== 'ok'">
+  <button mat-flat-button (click)="send()" [disabled]="sending || comfy.checkStatus !== 'ok'">
     {{ sending ? 'Sending...' : 'Send' }}
   </button>
 </mat-dialog-actions>

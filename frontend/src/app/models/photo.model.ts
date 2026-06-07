@@ -35,6 +35,8 @@ export interface ComfyUIData {
   sampler?: string;
   scheduler?: string;
   batch_size?: number;
+  denoise?: number;
+  source_image?: string;
   error?: string;
 }
 

@@ -123,6 +123,31 @@ mat-card-header {
   flex-shrink: 0;
 }
 
+.source-image-row {
+  margin-top: 8px;
+}
+
+.source-thumb {
+  max-width: 100%;
+  max-height: 200px;
+  border-radius: 4px;
+  object-fit: contain;
+  display: block;
+  cursor: pointer;
+}
+
+.source-unavailable {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: rgba(255, 255, 255, 0.35);
+  font-size: 12px;
+
+  mat-icon { font-size: 18px; width: 18px; height: 18px; }
+}
+
+.hidden { display: none !important; }
+
 h3, h4 {
   margin: 16px 0 8px;
   font-weight: 500;

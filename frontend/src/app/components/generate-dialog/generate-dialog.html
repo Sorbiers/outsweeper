@@ -3,30 +3,7 @@
     class="dialog-title">{{ dialogTitle }}</h2>
 
 <mat-dialog-content>
-  <div class="url-row">
-    <mat-form-field class="url-field">
-      <mat-label>ComfyUI URL</mat-label>
-      <input matInput [(ngModel)]="comfyUrl" (ngModelChange)="onUrlChange()" />
-    </mat-form-field>
-    @if (checkStatus === 'checking') {
-      <button mat-stroked-button disabled class="check-btn">Checking...</button>
-    } @else if (checkStatus === 'ok') {
-      <button mat-stroked-button (click)="checkConnection()" class="check-btn">
-        <mat-icon class="check-ok">check_circle</mat-icon> OK
-      </button>
-    } @else if (checkStatus === 'error') {
-      <button mat-stroked-button (click)="checkConnection()" class="check-btn">
-        <mat-icon class="check-err">error</mat-icon> Failed
-      </button>
-      @if (hasRunComfyCommand && !runTriggered) {
-        <button mat-stroked-button (click)="runService()" class="check-btn">
-          <mat-icon>play_arrow</mat-icon> Run
-        </button>
-      }
-    } @else {
-      <button mat-stroked-button (click)="checkConnection()" class="check-btn">Check</button>
-    }
-  </div>
+  <pp-comfy-url-row (connected)="onConnected()"></pp-comfy-url-row>
 
   @if (checkpointNodes.length && availableCheckpoints.length) {
     <div class="lora-section">
@@ -161,7 +138,7 @@
     </mat-form-field>
 
     <mat-form-field>
-      <mat-label>CFG</mat-label>
+     <mat-label>CFG</mat-label>
       <input matInput type="number" [(ngModel)]="params.cfg" />
     </mat-form-field>
 
@@ -240,13 +217,13 @@
       <mat-icon>code</mat-icon> Extract API
     </button>
     <mat-divider></mat-divider>
-    <button mat-menu-item (click)="sendFront()" [disabled]="sending || checkStatus !== 'ok'">
+    <button mat-menu-item (click)="sendFront()" [disabled]="sending || comfy.checkStatus !== 'ok'">
       <mat-icon>vertical_align_top</mat-icon>
       @if (totalPrompts > 1) { Send {{ totalPrompts }} to front } @else { Send to front }
     </button>
   </mat-menu>
   <button mat-button mat-dialog-close>Cancel</button>
-  <button mat-flat-button (click)="send()" [disabled]="sending || checkStatus !== 'ok'">
+  <button mat-flat-button (click)="send()" [disabled]="sending || comfy.checkStatus !== 'ok'">
     @if (sending) {
       Sending...
     } @else if (totalPrompts > 1) {

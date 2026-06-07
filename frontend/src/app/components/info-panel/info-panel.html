@@ -15,6 +15,12 @@
             <mat-icon>auto_fix_high</mat-icon>
             <span class="menu-label">Generate from</span>
           </button>
+          @if (info.png_metadata['prompt']) {
+            <button mat-menu-item (click)="extractWorkflow()">
+              <mat-icon>data_object</mat-icon>
+              <span class="menu-label">Extract Workflow</span>
+            </button>
+          }
           <button mat-menu-item (click)="openOutpaint()">
             <mat-icon>open_with</mat-icon>
             <span class="menu-label">Outpaint</span>
@@ -168,7 +174,28 @@
                   <span class="value">{{ comfyui.batch_size }}</span>
                 </div>
               }
+              @if (comfyui.denoise != null) {
+                <div class="meta-item">
+                  <span class="label">Denoise</span>
+                  <span class="value">{{ comfyui.denoise }}</span>
+                </div>
+              }
             </div>
+            @if (comfyui.source_image && comfy.effectiveUrl) {
+              <div class="source-image-row">
+                <h4>Source Image</h4>
+                <img class="source-thumb"
+                     #srcImg
+                     [src]="comfy.effectiveUrl + '/view?filename=' + comfyui.source_image + '&type=input'"
+                     [title]="comfyui.source_image"
+                     alt="source"
+                     (error)="srcImg.classList.add('hidden'); srcErr.classList.remove('hidden')" />
+                <div #srcErr class="source-unavailable hidden">
+                  <mat-icon>broken_image</mat-icon>
+                  <span>{{ comfyui.source_image }} — not available</span>
+                </div>
+              </div>
+            }
 
             @if (comfyui.loras?.length) {
               <h4>LoRAs</h4>

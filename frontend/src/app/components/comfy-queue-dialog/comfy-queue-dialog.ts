@@ -1,5 +1,7 @@
 import { Component, inject } from '@angular/core';
 import { CdkDrag, CdkDragHandle } from '@angular/cdk/drag-drop';
+import { ComfyConnectionService } from '../../services/comfy-connection.service';
+import { ComfyUrlRowComponent } from '../comfy-url-row/comfy-url-row';
 import { MatButtonModule } from '@angular/material/button';
 import { MAT_DIALOG_DATA, MatDialogModule } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -11,7 +13,6 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { FormsModule } from '@angular/forms';
 import { ComfyQueueJob } from '../../models/photo.model';
 import { PhotoService } from '../../services/photo.service';
-import { ConnectionStateService } from '../../services/connection-state.service';
 
 export interface ComfyQueueDialogData {
   comfyUrl?: string;
@@ -24,6 +25,7 @@ export interface ComfyQueueDialogData {
     CdkDragHandle,
     FormsModule,
     MatDialogModule,
+    ComfyUrlRowComponent,
     MatButtonModule,
     MatIconModule,
     MatFormFieldModule,
@@ -36,49 +38,28 @@ export interface ComfyQueueDialogData {
 })
 export class ComfyQueueDialog {
   private photoService = inject(PhotoService);
-  private connState = inject(ConnectionStateService);
   private snackBar = inject(MatSnackBar);
   private data: ComfyQueueDialogData = inject(MAT_DIALOG_DATA);
+  comfy = inject(ComfyConnectionService);
 
-  comfyUrl = '';
-  checkStatus: 'idle' | 'checking' | 'ok' | 'error' = 'idle';
   loading = false;
-
   running: ComfyQueueJob[] = [];
   pending: ComfyQueueJob[] = [];
 
   constructor() {
-    this.comfyUrl = this.connState.comfy.url || this.data?.comfyUrl || '';
-    if (this.comfyUrl && this.connState.comfy.status === 'ok') {
-      this.checkStatus = 'ok';
+    this.comfy.init();
+    if (this.comfy.checkStatus === 'ok') {
       this.fetchQueue();
     }
   }
 
-  onUrlChange(): void {
-    if (this.comfyUrl !== this.connState.comfy.url) this.checkStatus = 'idle';
-  }
-
-  checkConnection(): void {
-    this.checkStatus = 'checking';
-    this.connState.comfy.url = this.comfyUrl;
-    this.connState.comfy.status = 'checking';
-    this.photoService.checkComfy(this.comfyUrl).subscribe({
-      next: () => {
-        this.checkStatus = 'ok';
-        this.connState.comfy.status = 'ok';
-        this.fetchQueue();
-      },
-      error: () => {
-        this.checkStatus = 'error';
-        this.connState.comfy.status = 'error';
-      },
-    });
+  onConnected(): void {
+    this.fetchQueue();
   }
 
   fetchQueue(): void {
     this.loading = true;
-    this.photoService.getComfyQueue(this.comfyUrl).subscribe({
+    this.photoService.getComfyQueue(this.comfy.comfyUrl).subscribe({
       next: (res) => {
         this.running = res.running;
         this.pending = res.pending;
@@ -91,28 +72,28 @@ export class ComfyQueueDialog {
   }
 
   removeJob(promptId: string): void {
-    this.photoService.deleteComfyQueueJob(this.comfyUrl, promptId).subscribe({
+    this.photoService.deleteComfyQueueJob(this.comfy.comfyUrl, promptId).subscribe({
       next: () => this.fetchQueue(),
       error: () => this.snackBar.open('Failed to remove job', '', { duration: 3000 }),
     });
   }
 
   moveToFront(promptId: string): void {
-    this.photoService.moveComfyQueueJobToFront(this.comfyUrl, promptId).subscribe({
+    this.photoService.moveComfyQueueJobToFront(this.comfy.comfyUrl, promptId).subscribe({
       next: () => this.fetchQueue(),
       error: (err) => this.snackBar.open(err.error?.error || 'Failed to move job', '', { duration: 3000 }),
     });
   }
 
   clearQueue(): void {
-    this.photoService.clearComfyQueue(this.comfyUrl).subscribe({
+    this.photoService.clearComfyQueue(this.comfy.comfyUrl).subscribe({
       next: () => this.fetchQueue(),
       error: () => this.snackBar.open('Failed to clear queue', '', { duration: 3000 }),
     });
   }
 
   cancelRunning(): void {
-    this.photoService.interruptComfy(this.comfyUrl).subscribe({
+    this.photoService.interruptComfy(this.comfy.comfyUrl).subscribe({
       next: () => setTimeout(() => this.fetchQueue(), 600),
       error: () => this.snackBar.open('Failed to cancel job', '', { duration: 3000 }),
     });

@@ -11,6 +11,7 @@ import { MatMenuModule } from '@angular/material/menu';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { PhotoInfo } from '../../models/photo.model';
+import { ComfyConnectionService } from '../../services/comfy-connection.service';
 import { PhotoService } from '../../services/photo.service';
 import { DescribeDialog } from '../describe-dialog/describe-dialog';
 import { DEFAULT_FLUX_WORKFLOW, GenerateDialog } from '../generate-dialog/generate-dialog';
@@ -38,6 +39,7 @@ export class InfoPanel implements OnInit {
 
   private dialog = inject(MatDialog);
   private photoService = inject(PhotoService);
+  comfy = inject(ComfyConnectionService);
   private snackBar = inject(MatSnackBar);
   copyDoneIconActive = signal(false);
   exiftoolAvailable = signal(false);
@@ -143,6 +145,18 @@ export class InfoPanel implements OnInit {
       width: '90vw',
       maxWidth: '800px',
     });
+  }
+
+  extractWorkflow(): void {
+    if (!this.info?.png_metadata['prompt']) return;
+    const workflow = JSON.parse(this.info.png_metadata['prompt']);
+    const blob = new Blob([JSON.stringify(workflow, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = this.info.filename.replace(/\.[^.]+$/, '') + '_workflow.json';
+    a.click();
+    URL.revokeObjectURL(url);
   }
 
   openGenerateFrom(): void {

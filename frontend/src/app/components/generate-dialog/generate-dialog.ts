@@ -14,8 +14,10 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { forkJoin, of } from 'rxjs';
 import { catchError } from 'rxjs/operators';
 import { STORAGE_KEYS } from '../../constants';
+import { ComfyConnectionService } from '../../services/comfy-connection.service';
 import { ConnectionStateService } from '../../services/connection-state.service';
 import { PhotoService } from '../../services/photo.service';
+import { ComfyUrlRowComponent } from '../comfy-url-row/comfy-url-row';
 import { PrompterDialog } from '../prompter-dialog/prompter-dialog';
 
 export interface GenerateDialogData {
@@ -74,7 +76,7 @@ const DEFAULT_NEGATIVE_PROMPT = 'worst quality, low quality, bad anatomy, bad ha
 
 @Component({
   selector: 'pp-generate-dialog',
-  imports: [FormsModule, CdkDrag, CdkDragHandle, MatDialogModule, MatFormFieldModule, MatInputModule, MatSelectModule, MatButtonModule, MatIconModule, MatCheckboxModule, MatMenuModule, MatDividerModule],
+  imports: [FormsModule, CdkDrag, CdkDragHandle, MatDialogModule, MatFormFieldModule, MatInputModule, MatSelectModule, MatButtonModule, MatIconModule, MatCheckboxModule, MatMenuModule, MatDividerModule, ComfyUrlRowComponent],
   templateUrl: './generate-dialog.html',
   styleUrl: './generate-dialog.scss',
 })
@@ -85,14 +87,11 @@ export class GenerateDialog {
   private photoService = inject(PhotoService);
   private snackBar = inject(MatSnackBar);
   private connState = inject(ConnectionStateService);
+  comfy = inject(ComfyConnectionService);
 
-  comfyUrl = '';
   params: WorkflowParams;
   sending = false;
   copyResult = false;
-  checkStatus: 'idle' | 'checking' | 'ok' | 'error' = 'idle';
-  hasRunComfyCommand = false;
-  runTriggered = false;
   hasDenoise = false;
 
   availableLoras: string[] = [];
@@ -106,10 +105,9 @@ export class GenerateDialog {
   constructor() {
     this.dialogRef.disableClose = true;
     this.dialogRef.keydownEvents().subscribe(e => { if (e.key === 'Escape') this.dialogRef.close(); });
-    this.comfyUrl = this.connState.comfy.url || '';
+    this.comfy.init();
 
-    if (this.comfyUrl && this.connState.comfy.status === 'ok') {
-      this.checkStatus = 'ok';
+    if (this.comfy.checkStatus === 'ok') {
       this.availableLoras = [...this.connState.comfy.loras];
       this.availableCheckpoints = [...this.connState.comfy.checkpoints];
       this.availableSamplers = [...this.connState.comfy.samplers];
@@ -126,36 +124,26 @@ export class GenerateDialog {
     this.loraNodes = this.extractVariableNodes(this.data.workflow, 'lora_name');
     this.checkpointNodes = this.extractVariableNodes(this.data.workflow, 'ckpt_name');
 
-    this.photoService.getConfig().subscribe(cfg => {
-      this.hasRunComfyCommand = !!cfg.has_run_comfy_command;
-      if (!this.comfyUrl) this.comfyUrl = cfg.comfy_url || '';
-    });
-  }
-
-  onUrlChange(): void {
-    if (this.comfyUrl !== this.connState.comfy.url) {
-      this.checkStatus = 'idle';
+    // Pre-seed option lists from workflow values so dropdowns render
+    // even before ComfyUI is connected (overwritten by full lists on connect).
+    if (!this.availableSamplers.length && this.params.samplerName)
+      this.availableSamplers = [this.params.samplerName];
+    if (!this.availableSchedulers.length && this.params.scheduler)
+      this.availableSchedulers = [this.params.scheduler];
+    if (!this.availableLoras.length) {
+      const names = [...new Set(this.loraNodes.map(n => n.originalName).filter(Boolean))];
+      if (names.length) this.availableLoras = names;
+    }
+    if (!this.availableCheckpoints.length) {
+      const names = [...new Set(this.checkpointNodes.map(n => n.originalName).filter(Boolean))];
+      if (names.length) this.availableCheckpoints = names;
     }
   }
 
-  checkConnection(): void {
-    this.checkStatus = 'checking';
-    this.runTriggered = false;
-    this.connState.comfy.url = this.comfyUrl;
-    this.connState.comfy.status = 'checking';
-    this.photoService.checkComfy(this.comfyUrl).subscribe({
-      next: () => {
-        this.checkStatus = 'ok';
-        this.connState.comfy.status = 'ok';
-        this.fetchLoras();
-        this.fetchCheckpoints();
-        this.fetchSamplers();
-      },
-      error: () => {
-        this.checkStatus = 'error';
-        this.connState.comfy.status = 'error';
-      },
-    });
+  onConnected(): void {
+    this.fetchLoras();
+    this.fetchCheckpoints();
+    this.fetchSamplers();
   }
 
   get dialogTitle(): string {
@@ -200,14 +188,6 @@ export class GenerateDialog {
     URL.revokeObjectURL(url);
   }
 
-  runService(): void {
-    this.runTriggered = true;
-    this.photoService.runCommand('comfy').subscribe({
-      next: () => this.snackBar.open('Starting ComfyUI...', '', { duration: 3000 }),
-      error: () => { this.runTriggered = false; this.snackBar.open('Failed to run command', '', { duration: 3000 }); },
-    });
-  }
-
   addLora(): void {
     this.manualLoras.push({ name: '', strengthModel: 0.7, strengthClip: 0.7 });
   }
@@ -217,7 +197,6 @@ export class GenerateDialog {
   }
 
   send(front = false): void {
-    this.connState.comfy.url = this.comfyUrl;
     this.saveParams();
     this.sending = true;
     const lmstudioUrl = this.connState.lmstudio.url;
@@ -249,7 +228,7 @@ export class GenerateDialog {
         this.removeEmptyLoraNodes(this.applyParams(this.data.workflow, this.params)),
         this.manualLoras.filter(l => l.name)
       );
-      this.photoService.sendToComfy(this.comfyUrl, workflow, this.copyResult, front).subscribe({
+      this.photoService.sendToComfy(this.comfy.comfyUrl, workflow, this.copyResult, front).subscribe({
         next: () => notifySuccess(1),
         error: (err) => {
           this.sending = false;
@@ -270,7 +249,7 @@ export class GenerateDialog {
         }
       });
       return this.photoService.sendToComfy(
-        this.comfyUrl,
+        this.comfy.comfyUrl,
         this.injectManualLoras(
           this.removeEmptyLoraNodes(workflow),
           this.manualLoras.filter(l => l.name)
@@ -300,21 +279,21 @@ export class GenerateDialog {
   }
 
   private fetchLoras(): void {
-    this.photoService.getComfyLoras(this.comfyUrl).subscribe({
+    this.photoService.getComfyLoras(this.comfy.comfyUrl).subscribe({
       next: (res) => { this.availableLoras = res.loras || []; this.connState.comfy.loras = [...this.availableLoras]; },
       error: () => this.availableLoras = [],
     });
   }
 
   private fetchCheckpoints(): void {
-    this.photoService.getComfyCheckpoints(this.comfyUrl).subscribe({
+    this.photoService.getComfyCheckpoints(this.comfy.comfyUrl).subscribe({
       next: (res) => { this.availableCheckpoints = res.checkpoints || []; this.connState.comfy.checkpoints = [...this.availableCheckpoints]; },
       error: () => this.availableCheckpoints = [],
     });
   }
 
   private fetchSamplers(): void {
-    this.photoService.getComfySamplers(this.comfyUrl).subscribe({
+    this.photoService.getComfySamplers(this.comfy.comfyUrl).subscribe({
       next: (res) => {
         this.availableSamplers = res.samplers || [];
         this.availableSchedulers = res.schedulers || [];

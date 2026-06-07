@@ -1,6 +1,8 @@
 import { Component, inject } from '@angular/core';
 import { CdkDrag, CdkDragHandle } from '@angular/cdk/drag-drop';
 import { FormsModule } from '@angular/forms';
+import { ComfyConnectionService } from '../../services/comfy-connection.service';
+import { ComfyUrlRowComponent } from '../comfy-url-row/comfy-url-row';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
@@ -91,7 +93,7 @@ interface OutpaintParams {
 
 @Component({
   selector: 'pp-outpaint-dialog',
-  imports: [CdkDrag, CdkDragHandle, FormsModule, MatDialogModule, MatFormFieldModule, MatInputModule, MatSelectModule, MatButtonModule, MatIconModule, MatCheckboxModule],
+  imports: [CdkDrag, CdkDragHandle, FormsModule, MatDialogModule, MatFormFieldModule, MatInputModule, MatSelectModule, MatButtonModule, MatIconModule, MatCheckboxModule, ComfyUrlRowComponent],
   templateUrl: './outpaint-dialog.html',
   styleUrl: './outpaint-dialog.scss',
 })
@@ -101,13 +103,10 @@ export class OutpaintDialog {
   private photoService = inject(PhotoService);
   private snackBar = inject(MatSnackBar);
   private connState = inject(ConnectionStateService);
+  comfy = inject(ComfyConnectionService);
 
-  comfyUrl = '';
   sending = false;
   copyResult = false;
-  checkStatus: 'idle' | 'checking' | 'ok' | 'error' = 'idle';
-  hasRunComfyCommand = false;
-  runTriggered = false;
 
   availableModels: string[] = [];
   selectedModel = 'flux1-fill-dev.safetensors';
@@ -131,60 +130,27 @@ export class OutpaintDialog {
   };
 
   constructor() {
-    this.comfyUrl = this.connState.comfy.url || '';
+    this.comfy.init();
 
-    if (this.comfyUrl && this.connState.comfy.status === 'ok') {
-      this.checkStatus = 'ok';
+    if (this.comfy.checkStatus === 'ok') {
       this.availableSamplers = [...this.connState.comfy.samplers];
       this.availableSchedulers = [...this.connState.comfy.schedulers];
       this.fetchUnetModels();
     }
 
     this.randomizeSeed();
-
-    this.photoService.getConfig().subscribe(cfg => {
-      this.hasRunComfyCommand = !!cfg.has_run_comfy_command;
-      if (!this.comfyUrl) this.comfyUrl = cfg.comfy_url || '';
-    });
   }
 
-  onUrlChange(): void {
-    if (this.comfyUrl !== this.connState.comfy.url) this.checkStatus = 'idle';
-  }
-
-  checkConnection(): void {
-    this.checkStatus = 'checking';
-    this.runTriggered = false;
-    this.connState.comfy.url = this.comfyUrl;
-    this.connState.comfy.status = 'checking';
-    this.photoService.checkComfy(this.comfyUrl).subscribe({
-      next: () => {
-        this.checkStatus = 'ok';
-        this.connState.comfy.status = 'ok';
-        this.fetchUnetModels();
-        this.fetchSamplers();
-      },
-      error: () => {
-        this.checkStatus = 'error';
-        this.connState.comfy.status = 'error';
-      },
-    });
+  onConnected(): void {
+    this.fetchUnetModels();
+    this.fetchSamplers();
   }
 
   randomizeSeed(): void {
     this.params.seed = Math.floor(Math.random() * 2 ** 32);
   }
 
-  runService(): void {
-    this.runTriggered = true;
-    this.photoService.runCommand('comfy').subscribe({
-      next: () => this.snackBar.open('Starting ComfyUI...', '', { duration: 3000 }),
-      error: () => { this.runTriggered = false; this.snackBar.open('Failed to run command', '', { duration: 3000 }); },
-    });
-  }
-
   send(): void {
-    this.connState.comfy.url = this.comfyUrl;
     this.sending = true;
 
     const lmstudioUrl = this.connState.lmstudio.url;
@@ -193,7 +159,7 @@ export class OutpaintDialog {
       : of(null);
 
     unload$.pipe(
-      switchMap(() => this.photoService.uploadToComfy(this.comfyUrl, this.data.filename, this.data.folder))
+      switchMap(() => this.photoService.uploadToComfy(this.comfy.comfyUrl, this.data.filename, this.data.folder))
     ).subscribe({
       next: (res) => this._doSend(res.name),
       error: (err) => {
@@ -206,7 +172,7 @@ export class OutpaintDialog {
 
   private _doSend(uploadedImageName: string): void {
     const workflow = this.buildWorkflow(uploadedImageName);
-    this.photoService.sendToComfy(this.comfyUrl, workflow, this.copyResult).subscribe({
+    this.photoService.sendToComfy(this.comfy.comfyUrl, workflow, this.copyResult).subscribe({
       next: () => {
         this.sending = false;
         this.snackBar.open('Outpaint queued', '', { duration: 3000 });
@@ -263,7 +229,7 @@ export class OutpaintDialog {
   }
 
   private fetchUnetModels(): void {
-    this.photoService.getComfyModels(this.comfyUrl).subscribe({
+    this.photoService.getComfyModels(this.comfy.comfyUrl).subscribe({
       next: (res) => {
         this.availableModels = (res.models || [])
           .filter(m => m.type === 'unet')
@@ -274,7 +240,7 @@ export class OutpaintDialog {
   }
 
   private fetchSamplers(): void {
-    this.photoService.getComfySamplers(this.comfyUrl).subscribe({
+    this.photoService.getComfySamplers(this.comfy.comfyUrl).subscribe({
       next: (res) => {
         this.availableSamplers = res.samplers || [];
         this.availableSchedulers = res.schedulers || [];

@@ -10,9 +10,11 @@ import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { catchError, of, switchMap } from 'rxjs';
+import { ComfyConnectionService } from '../../services/comfy-connection.service';
 import { ConnectionStateService } from '../../services/connection-state.service';
 import { PhotoService } from '../../services/photo.service';
 import { STORAGE_KEYS } from '../../constants';
+import { ComfyUrlRowComponent } from '../comfy-url-row/comfy-url-row';
 import { PrompterDialog } from '../prompter-dialog/prompter-dialog';
 
 export interface GenerateFromDialogData {
@@ -121,7 +123,7 @@ const DEFAULT_NEGATIVE_PROMPT = 'worst quality, low quality, bad anatomy, bad ha
 
 @Component({
   selector: 'pp-generate-from-dialog',
-  imports: [CdkDrag, CdkDragHandle, FormsModule, MatDialogModule, MatFormFieldModule, MatInputModule, MatSelectModule, MatButtonModule, MatIconModule, MatCheckboxModule],
+  imports: [CdkDrag, CdkDragHandle, FormsModule, MatDialogModule, MatFormFieldModule, MatInputModule, MatSelectModule, MatButtonModule, MatIconModule, MatCheckboxModule, ComfyUrlRowComponent],
   templateUrl: './generate-from-dialog.html',
   styleUrl: './generate-from-dialog.scss',
 })
@@ -132,14 +134,11 @@ export class GenerateFromDialog {
   private photoService = inject(PhotoService);
   private snackBar = inject(MatSnackBar);
   private connState = inject(ConnectionStateService);
+  comfy = inject(ComfyConnectionService);
 
-  comfyUrl = '';
   params: FullFlowParams;
   sending = false;
   copyResult = false;
-  checkStatus: 'idle' | 'checking' | 'ok' | 'error' = 'idle';
-  hasRunComfyCommand = false;
-  runTriggered = false;
 
   availableModels: { name: string; type: 'checkpoint' | 'unet' }[] = [];
   selectedModel = '';
@@ -159,25 +158,21 @@ export class GenerateFromDialog {
   constructor() {
     this.dialogRef.disableClose = true;
     this.dialogRef.keydownEvents().subscribe(e => { if (e.key === 'Escape') this.dialogRef.close(); });
-    this.comfyUrl = this.connState.comfy.url || '';
+    this.comfy.init();
 
-    if (this.comfyUrl && this.connState.comfy.status === 'ok') {
-      this.checkStatus = 'ok';
+    if (this.comfy.checkStatus === 'ok') {
       this.availableLoras = [...this.connState.comfy.loras];
       this.availableSamplers = [...this.connState.comfy.samplers];
       this.availableSchedulers = [...this.connState.comfy.schedulers];
-      // Rebuild combined model list from cached state
       this.availableModels = [
         ...this.connState.comfy.checkpoints.map(n => ({ name: n, type: 'checkpoint' as const })),
       ];
-      this.fetchModels(); // refresh to also get unets
+      this.fetchModels();
     }
 
-    // Extract params from the base workflow, then override from image's ComfyUI prompt if present
     const baseWorkflow = this.data.imageComfyPrompt ?? FULL_FLOW_WORKFLOW;
     this.params = this.extractParams(baseWorkflow);
 
-    // Pre-fill model from the image's workflow (trace KSampler → model chain)
     if (this.data.imageComfyPrompt) {
       const modelInfo = this.extractModelFromWorkflow(this.data.imageComfyPrompt);
       if (modelInfo) {
@@ -186,48 +181,19 @@ export class GenerateFromDialog {
       }
     }
 
-    // Preload image dimensions
     this.originalWidth  = this.data.imageWidth;
     this.originalHeight = this.data.imageHeight;
     if (this.data.imageWidth  != null) this.params.width  = this.data.imageWidth;
     if (this.data.imageHeight != null) this.params.height = this.data.imageHeight;
 
-    // Always start with a random seed
     this.randomizeSeed();
-
-    // Extract LoRA nodes from the fixed workflow
     this.loraNodes = this.extractVariableNodes(FULL_FLOW_WORKFLOW, 'lora_name');
-
-    this.photoService.getConfig().subscribe(cfg => {
-      this.hasRunComfyCommand = !!cfg.has_run_comfy_command;
-      if (!this.comfyUrl) this.comfyUrl = cfg.comfy_url || '';
-    });
   }
 
-  onUrlChange(): void {
-    if (this.comfyUrl !== this.connState.comfy.url) {
-      this.checkStatus = 'idle';
-    }
-  }
-
-  checkConnection(): void {
-    this.checkStatus = 'checking';
-    this.runTriggered = false;
-    this.connState.comfy.url = this.comfyUrl;
-    this.connState.comfy.status = 'checking';
-    this.photoService.checkComfy(this.comfyUrl).subscribe({
-      next: () => {
-        this.checkStatus = 'ok';
-        this.connState.comfy.status = 'ok';
-        this.fetchModels();
-        this.fetchLoras();
-        this.fetchSamplers();
-      },
-      error: () => {
-        this.checkStatus = 'error';
-        this.connState.comfy.status = 'error';
-      },
-    });
+  onConnected(): void {
+    this.fetchModels();
+    this.fetchLoras();
+    this.fetchSamplers();
   }
 
   randomizeSeed(): void {
@@ -272,16 +238,7 @@ export class GenerateFromDialog {
     URL.revokeObjectURL(url);
   }
 
-  runService(): void {
-    this.runTriggered = true;
-    this.photoService.runCommand('comfy').subscribe({
-      next: () => this.snackBar.open('Starting ComfyUI...', '', { duration: 3000 }),
-      error: () => { this.runTriggered = false; this.snackBar.open('Failed to run command', '', { duration: 3000 }); },
-    });
-  }
-
   send(front = false): void {
-    this.connState.comfy.url = this.comfyUrl;
     this.sending = true;
 
     const lmstudioUrl = this.connState.lmstudio.url;
@@ -292,7 +249,7 @@ export class GenerateFromDialog {
     if (this.params.denoise < 1) {
       // img2img: upload current image to ComfyUI first
       unload$.pipe(
-        switchMap(() => this.photoService.uploadToComfy(this.comfyUrl, this.data.filename, this.data.folder))
+        switchMap(() => this.photoService.uploadToComfy(this.comfy.comfyUrl, this.data.filename, this.data.folder))
       ).subscribe({
         next: (res) => this._doSend(res.name, front),
         error: (err) => {
@@ -318,7 +275,7 @@ export class GenerateFromDialog {
       this.manualLoras.filter(l => l.name),
     );
 
-    this.photoService.sendToComfy(this.comfyUrl, finalWorkflow, this.copyResult, front).subscribe({
+    this.photoService.sendToComfy(this.comfy.comfyUrl, finalWorkflow, this.copyResult, front).subscribe({
       next: () => {
         this.sending = false;
         this.snackBar.open('Prompt queued', '', { duration: 3000 });
@@ -572,7 +529,7 @@ export class GenerateFromDialog {
   }
 
   private fetchModels(): void {
-    this.photoService.getComfyModels(this.comfyUrl).subscribe({
+    this.photoService.getComfyModels(this.comfy.comfyUrl).subscribe({
       next: (res) => {
         this.availableModels = res.models || [];
         // Update shared cache with checkpoints only
@@ -585,14 +542,14 @@ export class GenerateFromDialog {
   }
 
   private fetchLoras(): void {
-    this.photoService.getComfyLoras(this.comfyUrl).subscribe({
+    this.photoService.getComfyLoras(this.comfy.comfyUrl).subscribe({
       next: (res) => { this.availableLoras = res.loras || []; this.connState.comfy.loras = [...this.availableLoras]; },
       error: () => this.availableLoras = [],
     });
   }
 
   private fetchSamplers(): void {
-    this.photoService.getComfySamplers(this.comfyUrl).subscribe({
+    this.photoService.getComfySamplers(this.comfy.comfyUrl).subscribe({
       next: (res) => {
         this.availableSamplers = res.samplers || [];
         this.availableSchedulers = res.schedulers || [];
