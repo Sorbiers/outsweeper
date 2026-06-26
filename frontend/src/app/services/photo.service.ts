@@ -5,8 +5,11 @@ import { SPECIAL_FOLDERS } from '../constants';
 import {
   PhotoListItem, PhotoInfo, MoveResponse, UndoResponse,
   ExiftoolCapabilities, ExiftoolMetadata, EditableFields, StripGroup,
-  BatchEditResult, ComfyQueueJob,
+  BatchEditResult, ComfyQueueJob, CollectionsResponse,
 } from '../models/photo.model';
+
+/** Path prefix understood by the backend resolver for the local flows collection. */
+export const COLLECTION_PREFIX = '%collection%';
 import { AppConfig } from '../models/config.model';
 
 @Injectable({ providedIn: 'root' })
@@ -170,6 +173,31 @@ export class PhotoService {
     const { folder, ...body } = params;
     return this.http.post<{ ok: boolean; count: number; errors: string[] }>(
       '/api/batch', body, { params: { path: folder } });
+  }
+
+  collectionPath(collection: string, set: string): string {
+    return `${COLLECTION_PREFIX}/${collection}/${set}`;
+  }
+
+  listCollections(): Observable<CollectionsResponse> {
+    return this.http.get<CollectionsResponse>('/api/collections');
+  }
+
+  addToCollection(
+    filenames: string[], sourceFolder: string, collection: string, set: string,
+  ): Observable<{ ok: boolean; count: number; errors: string[] }> {
+    return this.batchOperation({
+      filenames,
+      operation:   'copy',
+      destination: this.collectionPath(collection, set),
+      zip:         false,
+      folder:      sourceFolder,
+    });
+  }
+
+  deleteFromCollection(relPath: string): Observable<{ ok: boolean; error?: string }> {
+    return this.http.post<{ ok: boolean; error?: string }>(
+      '/api/collections/delete', { path: relPath });
   }
 
   downloadFile(filename: string, folder: string): void {

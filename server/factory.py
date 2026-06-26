@@ -80,11 +80,15 @@ def create_app(
     exiftool_path: str = 'exiftool',
     run_comfy_command: str = '',
     run_lmstudio_command: str = '',
+    collection_dir: str = '',
 ) -> Flask:
     static_dir = Path(__file__).parent.parent / 'static'
     root_dir = Path(root_dir)
     root_resolved = root_dir.resolve()
     co_resolved = Path(comfy_output).resolve() if comfy_output else None
+    collection_resolved = (
+        Path(collection_dir).resolve() if collection_dir else root_resolved / 'collection'
+    )
 
     state = AppState(
         root_dir=root_dir,
@@ -104,6 +108,8 @@ def create_app(
         tools_cfg=config.get('tools', {}),
         validation_interval=validation_interval,
         comfy_output_str=str(co_resolved) if co_resolved else '',
+        collection_resolved=collection_resolved,
+        collection_str=str(collection_resolved),
     )
 
     app = Flask(__name__, static_folder=None)
@@ -154,6 +160,14 @@ def create_app(
             suffix = rel[len('%comfy_output%'):].lstrip('/')
             target = (state.co_resolved / suffix).resolve() if suffix else state.co_resolved
             if not target.is_relative_to(state.co_resolved):
+                abort(400, 'invalid path')
+            return target
+        if rel.startswith('%collection%'):
+            if not state.collection_resolved:
+                abort(404, 'collection not configured')
+            suffix = rel[len('%collection%'):].lstrip('/')
+            target = (state.collection_resolved / suffix).resolve() if suffix else state.collection_resolved
+            if not target.is_relative_to(state.collection_resolved):
                 abort(400, 'invalid path')
             return target
         target = (root_resolved / rel).resolve() if rel else root_resolved
@@ -1064,6 +1078,57 @@ def create_app(
                     errors.append(str(e))
 
         return jsonify({'ok': True, 'count': len(processed), 'errors': errors})
+
+    @app.route('/api/collections')
+    def list_collections():
+        root = state.collection_resolved
+        result: list[dict] = []
+        if root is not None:
+            try:
+                root.mkdir(parents=True, exist_ok=True)
+            except Exception:
+                pass
+            try:
+                for col in sorted(root.iterdir(), key=lambda p: p.name.lower()):
+                    if not col.is_dir() or col.name.startswith(('.', '_')):
+                        continue
+                    sets: list[dict] = []
+                    for st in sorted(col.iterdir(), key=lambda p: p.name.lower()):
+                        if not st.is_dir() or st.name.startswith(('.', '_')):
+                            continue
+                        count = sum(
+                            1 for f in st.iterdir()
+                            if f.is_file() and f.suffix.lower() == '.png' and not f.name.startswith(('.', '_'))
+                        )
+                        sets.append({'name': st.name, 'count': count})
+                    result.append({'name': col.name, 'sets': sets})
+            except Exception:
+                pass
+        return jsonify({
+            'root_name': root.name if root is not None else '',
+            'collections': result,
+        })
+
+    @app.route('/api/collections/delete', methods=['POST'])
+    def delete_collection_item():
+        # Removes a single image, an (empty or non-empty) set, or a whole collection.
+        target = resolve_path('%collection%/' + request.get_json().get('path', '').lstrip('/'))
+        if state.collection_resolved is None or target == state.collection_resolved:
+            return jsonify({'ok': False, 'error': 'invalid target'}), 400
+        try:
+            if target.is_file():
+                cache = cache_for(target.parent)
+                if cache is not None:
+                    cache.pop(target.name, None)
+                target.unlink()
+            elif target.is_dir():
+                shutil.rmtree(target)
+                state.folder_caches.pop(str(target.resolve()), None)
+            else:
+                return jsonify({'ok': False, 'error': 'not found'}), 404
+        except Exception as e:
+            return jsonify({'ok': False, 'error': str(e)}), 500
+        return jsonify({'ok': True})
 
     @app.route('/api/zip', methods=['POST'])
     def zip_files():

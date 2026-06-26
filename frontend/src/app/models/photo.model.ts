@@ -95,3 +95,18 @@ export interface ComfyQueueJob {
   steps: number | null;
   prompt: string | null;
 }
+
+export interface CollectionSet {
+  name: string;
+  count: number;
+}
+
+export interface Collection {
+  name: string;
+  sets: CollectionSet[];
+}
+
+export interface CollectionsResponse {
+  root_name: string;
+  collections: Collection[];
+}

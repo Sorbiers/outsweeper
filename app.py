@@ -48,6 +48,7 @@ def main() -> None:
     comfy_url            = defaults.get('comfy_url', 'http://127.0.0.1:8188')
     lmstudio_url         = defaults.get('lmstudio_url', 'http://localhost:1234/v1')
     comfy_output         = defaults.get('comfy_output', '')
+    collection_dir       = defaults.get('collection_dir', '')
     raw_interval         = defaults.get('index_validation_interval')
     validation_interval  = None if raw_interval is None else int(raw_interval)
     thumb_cache_days     = defaults.get('thumb_cache_days', 3)
@@ -64,6 +65,7 @@ def main() -> None:
         monitor_enabled, comfy_queue_enabled,
         validation_interval, thumb_cache_days,
         exiftool_path, run_comfy_command, run_lmstudio_command,
+        collection_dir,
     )
 
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:

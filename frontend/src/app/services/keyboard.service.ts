@@ -22,6 +22,8 @@ export type PhotoAction =
   | 'selectSelectedFolder'
   | 'selectDustFolder'
   | 'openComfyQueue'
+  | 'addToCollection'
+  | 'openCollections'
   | 'refresh';
 
 @Injectable({ providedIn: 'root' })
@@ -58,10 +60,12 @@ export class KeyboardService {
           else if (event.key === ' ') action = 'toggleSelection';
           else if (event.key === '=') action = 'selectSourceFolder';
           else if (event.key === 'q') action = 'openComfyQueue';
+          else if (event.key === 'c') action = 'addToCollection';
           else if (event.key === 'r') action = 'refresh';
         } else if (!(event.ctrlKey || event.metaKey || event.altKey)) {
           if (event.key === 'PageDown' && event.shiftKey) action = 'pageForward10';
           else if (event.key === 'PageUp' && event.shiftKey) action = 'pageBackward10';
+          else if (event.key === 'C' && event.shiftKey) action = 'openCollections';
         } else if (!(event.shiftKey || event.metaKey || event.altKey)) {
           if (event.key === 'z' && event.ctrlKey) action = 'undo';
           else if (event.key === 's' && event.ctrlKey) action = 'download';

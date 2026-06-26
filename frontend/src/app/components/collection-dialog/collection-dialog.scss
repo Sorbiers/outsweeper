@@ -1,0 +1,278 @@
+:host {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+/* Fill the space between title and actions instead of a fragile fixed height,
+   so the dialog surface never grows its own scrollbar. */
+mat-dialog-content {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: auto;
+  max-height: unset;
+}
+
+.title-path {
+  font-size: 13px;
+  font-weight: 400;
+  color: #9ad;
+}
+
+.browser {
+  display: flex;
+  flex-direction: row;
+  height: 100%;
+}
+
+.col {
+  border-radius: 4px;
+  min-height: 0;
+
+  &--tree {
+    flex: none;
+    overflow-y: auto;
+    //background: rgba(255, 255, 255, 0.03);
+  }
+
+  &--grid {
+    flex: 1;
+    min-width: 0;
+    overflow-y: auto;
+  }
+
+  &--preview {
+    flex: none;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    //background: rgba(255, 255, 255, 0.03);
+  }
+}
+
+/* --- resizable dividers --- */
+.divider-v {
+  flex: none;
+  width: 4px;
+  margin: 0 2px;
+  border-radius: 2px;
+  background: #333;
+  cursor: col-resize;
+
+  &:hover,
+  &:active { background: #666; }
+}
+
+.divider-h {
+  flex: none;
+  height: 4px;
+  margin: 2px 0;
+  border-radius: 2px;
+  background: #333;
+  cursor: row-resize;
+
+  &:hover,
+  &:active { background: #666; }
+}
+
+/* --- preview split: image (top) / prompt (bottom) --- */
+.preview-top {
+  flex: none;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.preview-bottom {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-height: 0;
+}
+
+/* --- tree --- */
+.tree {
+  background: transparent;
+  padding: 4px;
+}
+
+.tree-node {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding-right: 8px;
+  cursor: pointer;
+  border-radius: 4px;
+
+  &:hover { background: rgba(255, 255, 255, 0.05); }
+  &.leaf.is-selected { background: rgba(79, 195, 247, 0.18); }
+
+  .toggle-icon,
+  .node-icon {
+    color: #888;
+    flex-shrink: 0;
+    font-size: 20px;
+    width: 20px;
+    height: 20px;
+  }
+}
+
+.node-label {
+  flex: 1;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.row-count {
+  font-size: 11px;
+  color: #888;
+  background: rgba(255, 255, 255, 0.07);
+  border-radius: 10px;
+  padding: 1px 7px;
+}
+
+/* --- grid --- */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 8px;
+  padding: 4px;
+}
+
+.thumb {
+  position: relative;
+  border-radius: 4px;
+  overflow: hidden;
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.03);
+  border: 2px solid transparent;
+
+  &.is-selected { border-color: #4fc3f7; }
+
+  img {
+    display: block;
+    width: 100%;
+    height: 120px;
+    object-fit: cover;
+  }
+
+  &:hover .thumb-overlay { opacity: 1; }
+}
+
+.thumb-overlay {
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  background: rgba(0, 0, 0, 0.5);
+  border-bottom-left-radius: 4px;
+  opacity: 0;
+  transition: opacity 0.15s;
+
+  .mat-icon { color: #fff; }
+}
+
+.thumb-name {
+  display: block;
+  font-size: 10px;
+  color: #bbb;
+  padding: 3px 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* --- flow preview --- */
+.preview-top { padding: 10px; display: flex; flex-direction: column; }
+.preview-bottom { padding: 10px; }
+
+.preview-img {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  border-radius: 4px;
+  overflow: hidden;
+  //background: rgba(0, 0, 0, 0.25);
+
+  img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+}
+
+.preview-name {
+  flex: none;
+  font-size: 12px;
+  color: #ddd;
+  margin: 8px 0 0;
+  word-break: break-all;
+}
+
+.flow-row {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+
+  &.column { flex-direction: column; gap: 4px; }
+}
+
+.flow-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #888;
+  flex-shrink: 0;
+  min-width: 54px;
+}
+
+.flow-value {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  color: #eee;
+  word-break: break-word;
+}
+
+.flow-chips {
+  min-width: 0;
+  --mdc-chip-container-height: 24px;
+}
+
+.flow-prompt {
+  font-size: 12px;
+  line-height: 1.45;
+  color: #ddd;
+  white-space: pre-wrap;
+  max-height: 30vh;
+  overflow-y: auto;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+  padding: 8px;
+}
+
+.regen-btn {
+  width: 100%;
+  margin-top: 8px;
+}
+
+.center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 0;
+}
+
+.hint {
+  color: #888;
+  font-size: 13px;
+
+  &.pad { padding: 12px; }
+}

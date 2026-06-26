@@ -1,0 +1,56 @@
+<h2 mat-dialog-title cdkDrag cdkDragRootElement=".cdk-overlay-pane" cdkDragHandle style="cursor: move; user-select: none">
+  Add to Collection
+</h2>
+
+<mat-dialog-content>
+  @if (phase === 'select') {
+    @if (pngFilenames.length === 0) {
+      <p class="hint">No PNG images to add. Only PNG files carry an embedded ComfyUI flow.</p>
+    } @else {
+      <p class="count-line">
+        Adding {{ pngFilenames.length }} image(s)
+        @if (skipped > 0) {
+          <span class="skip"> · {{ skipped }} non-PNG skipped</span>
+        }
+      </p>
+
+      <mat-form-field appearance="outline" class="field">
+        <mat-label>Collection</mat-label>
+        <input matInput [ngModel]="collectionName()" (ngModelChange)="collectionName.set($event)"
+               [matAutocomplete]="colAuto" placeholder="name or new…" />
+        <mat-autocomplete #colAuto="matAutocomplete">
+          @for (name of collectionNames(); track name) {
+            <mat-option [value]="name">{{ name }}</mat-option>
+          }
+        </mat-autocomplete>
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" class="field">
+        <mat-label>Set</mat-label>
+        <input matInput [ngModel]="setName()" (ngModelChange)="setName.set($event)"
+               [matAutocomplete]="setAuto" placeholder="set name…" />
+        <mat-autocomplete #setAuto="matAutocomplete">
+          @for (name of setNames(); track name) {
+            <mat-option [value]="name">{{ name }}</mat-option>
+          }
+        </mat-autocomplete>
+      </mat-form-field>
+    }
+  } @else if (phase === 'progress') {
+    <div class="center">
+      <mat-spinner diameter="48"></mat-spinner>
+      <p>Adding {{ pngFilenames.length }} image(s)…</p>
+    </div>
+  } @else {
+    <p class="result-msg">{{ resultMessage }}</p>
+  }
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  @if (phase === 'select') {
+    <button mat-button mat-dialog-close>Cancel</button>
+    <button mat-raised-button color="primary" [disabled]="!canApply" (click)="apply()">Add</button>
+  } @else if (phase === 'done') {
+    <button mat-button mat-dialog-close>Close</button>
+  }
+</mat-dialog-actions>

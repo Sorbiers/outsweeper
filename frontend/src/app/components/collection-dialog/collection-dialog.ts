@@ -1,0 +1,232 @@
+import { CdkDrag, CdkDragHandle } from '@angular/cdk/drag-drop';
+import { afterNextRender, Component, computed, effect, ElementRef, inject, signal, viewChild } from '@angular/core';
+import { MatButtonModule } from '@angular/material/button';
+import { MatChipsModule } from '@angular/material/chips';
+import { MatDialog, MatDialogModule } from '@angular/material/dialog';
+import { MatIconModule } from '@angular/material/icon';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatSnackBar } from '@angular/material/snack-bar';
+import { MatTooltipModule } from '@angular/material/tooltip';
+import { MatTree, MatTreeModule } from '@angular/material/tree';
+import { Collection, PhotoInfo, PhotoListItem } from '../../models/photo.model';
+import { PhotoService } from '../../services/photo.service';
+import { GenerateDialog } from '../generate-dialog/generate-dialog';
+
+interface TreeNode {
+  kind: 'collection' | 'set';
+  name: string;
+  collection: string;
+  count: number;
+  children?: TreeNode[];
+}
+
+@Component({
+  selector: 'pp-collection-dialog',
+  imports: [CdkDrag, CdkDragHandle, MatDialogModule, MatButtonModule, MatIconModule,
+            MatChipsModule, MatTreeModule, MatProgressSpinnerModule, MatTooltipModule],
+  templateUrl: './collection-dialog.html',
+  styleUrl: './collection-dialog.scss',
+})
+export class CollectionDialog {
+  private photoService = inject(PhotoService);
+  private dialog       = inject(MatDialog);
+  private snackBar     = inject(MatSnackBar);
+
+  private tree    = viewChild(MatTree);
+  private content = viewChild('content', { read: ElementRef });
+
+  collections = signal<Collection[]>([]);
+  loading     = signal(true);
+
+  // Resizable layout: column widths (px) and the preview's image/prompt split height (px).
+  treeWidth        = signal(240);
+  previewWidth     = signal(320);
+  previewTopHeight = signal(240);
+
+  private resizeKind: 'tree' | 'preview' | 'split' | null = null;
+  private boundResize    = (e: MouseEvent) => this.onResize(e);
+  private boundResizeEnd = () => this.onResizeEnd();
+
+  treeData = computed<TreeNode[]>(() =>
+    this.collections().map(c => ({
+      kind: 'collection' as const,
+      name: c.name,
+      collection: c.name,
+      count: c.sets.length,
+      children: c.sets.map(s => ({
+        kind: 'set' as const, name: s.name, collection: c.name, count: s.count,
+      })),
+    })),
+  );
+
+  childrenAccessor = (node: TreeNode) => node.children ?? [];
+  hasChild = (_: number, node: TreeNode) => node.kind === 'collection';
+
+  selectedCollection = signal('');
+  selectedSet        = signal('');
+
+  photos        = signal<PhotoListItem[]>([]);
+  photosLoading = signal(false);
+  selectedPhoto = signal<PhotoListItem | null>(null);
+  selectedInfo  = signal<PhotoInfo | null>(null);
+  infoLoading   = signal(false);
+
+  constructor() {
+    this.reloadCollections();
+    // Keep the tree expanded so sets are visible without an extra click.
+    effect(() => {
+      this.treeData();
+      queueMicrotask(() => this.tree()?.expandAll());
+    });
+    // Seed initial column widths at the 20% minimum once the dialog is laid out.
+    afterNextRender(() => {
+      const w = this.contentWidth();
+      if (w) {
+        this.treeWidth.set(w * 0.2);
+        this.previewWidth.set(w * 0.2);
+      }
+    });
+  }
+
+  private contentWidth(): number {
+    // offsetWidth ignores the dialog's open-animation transform (scale), unlike
+    // getBoundingClientRect, so the 20% seed is computed against the real width.
+    return this.content()?.nativeElement.offsetWidth ?? 0;
+  }
+
+  reloadCollections(): void {
+    this.loading.set(true);
+    this.photoService.listCollections().subscribe({
+      next: res => {
+        this.collections.set(res.collections);
+        this.loading.set(false);
+      },
+      error: () => this.loading.set(false),
+    });
+  }
+
+  private get folderPath(): string {
+    return this.photoService.collectionPath(this.selectedCollection(), this.selectedSet());
+  }
+
+  isSetSelected(node: TreeNode): boolean {
+    return node.collection === this.selectedCollection() && node.name === this.selectedSet();
+  }
+
+  selectSetNode(node: TreeNode): void {
+    this.selectedCollection.set(node.collection);
+    this.selectedSet.set(node.name);
+    this.selectedPhoto.set(null);
+    this.selectedInfo.set(null);
+    this.loadPhotos();
+  }
+
+  private loadPhotos(): void {
+    this.photosLoading.set(true);
+    this.photoService.listPhotos(this.folderPath, { limit: 1000 }).subscribe({
+      next: res => {
+        this.photos.set(res.photos);
+        this.photosLoading.set(false);
+      },
+      error: () => this.photosLoading.set(false),
+    });
+  }
+
+  thumbUrl(photo: PhotoListItem): string {
+    return this.photoService.getThumbnailUrl(photo.filename, this.folderPath, photo.modified_token);
+  }
+
+  selectPhoto(photo: PhotoListItem): void {
+    this.selectedPhoto.set(photo);
+    this.selectedInfo.set(null);
+    this.infoLoading.set(true);
+    this.photoService.getInfo(photo.filename, this.folderPath).subscribe({
+      next: info => {
+        this.selectedInfo.set(info);
+        this.infoLoading.set(false);
+      },
+      error: () => this.infoLoading.set(false),
+    });
+  }
+
+  regenerate(photo: PhotoListItem): void {
+    const cached = this.selectedInfo();
+    if (this.selectedPhoto()?.filename === photo.filename && cached) {
+      this.openGenerate(photo, cached);
+      return;
+    }
+    this.photoService.getInfo(photo.filename, this.folderPath).subscribe({
+      next: info => this.openGenerate(photo, info),
+      error: () => this.snackBar.open('Failed to read image metadata', '', { duration: 3000 }),
+    });
+  }
+
+  private openGenerate(photo: PhotoListItem, info: PhotoInfo): void {
+    const raw = info.png_metadata?.['prompt'];
+    if (!raw) {
+      this.snackBar.open('No embedded ComfyUI flow in this image', '', { duration: 3000 });
+      return;
+    }
+    let workflow: Record<string, any>;
+    try {
+      workflow = JSON.parse(raw);
+    } catch {
+      this.snackBar.open('Embedded flow is not valid JSON', '', { duration: 3000 });
+      return;
+    }
+    this.dialog.open(GenerateDialog, {
+      data: { workflow, title: `Re-generate · ${photo.filename}` },
+      width: '90vw',
+      maxWidth: '800px',
+    });
+  }
+
+  deletePhoto(photo: PhotoListItem): void {
+    const col = this.selectedCollection();
+    const set = this.selectedSet();
+    this.photoService.deleteFromCollection(`${col}/${set}/${photo.filename}`).subscribe({
+      next: () => {
+        this.photos.update(list => list.filter(p => p.filename !== photo.filename));
+        if (this.selectedPhoto()?.filename === photo.filename) {
+          this.selectedPhoto.set(null);
+          this.selectedInfo.set(null);
+        }
+        this.reloadCollections();
+      },
+      error: err => this.snackBar.open(err.error?.error || 'Failed to delete', '', { duration: 3000 }),
+    });
+  }
+
+  loraName(name: string): string {
+    return name.replace(/\.[^.]+$/, '').replace(/^.*[\\/]/, '');
+  }
+
+  startResize(e: MouseEvent, kind: 'tree' | 'preview' | 'split'): void {
+    e.preventDefault();
+    this.resizeKind = kind;
+    document.addEventListener('mousemove', this.boundResize);
+    document.addEventListener('mouseup', this.boundResizeEnd);
+  }
+
+  private onResize(e: MouseEvent): void {
+    const rect = this.content()?.nativeElement.getBoundingClientRect();
+    if (!rect) return;
+
+    const minW = rect.width * 0.2; // each section keeps >= 20% of the visible width
+    if (this.resizeKind === 'tree') {
+      const max = rect.width - this.previewWidth() - minW; // leave 20% for the grid
+      this.treeWidth.set(Math.min(max, Math.max(minW, e.clientX - rect.left)));
+    } else if (this.resizeKind === 'preview') {
+      const max = rect.width - this.treeWidth() - minW; // leave 20% for the grid
+      this.previewWidth.set(Math.min(max, Math.max(minW, rect.right - e.clientX)));
+    } else if (this.resizeKind === 'split') {
+      this.previewTopHeight.set(Math.min(rect.height - 120, Math.max(120, e.clientY - rect.top)));
+    }
+  }
+
+  private onResizeEnd(): void {
+    this.resizeKind = null;
+    document.removeEventListener('mousemove', this.boundResize);
+    document.removeEventListener('mouseup', this.boundResizeEnd);
+  }
+}

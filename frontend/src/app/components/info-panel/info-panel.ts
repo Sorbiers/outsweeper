@@ -13,6 +13,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { PhotoInfo } from '../../models/photo.model';
 import { ComfyConnectionService } from '../../services/comfy-connection.service';
 import { PhotoService } from '../../services/photo.service';
+import { CollectionAddDialog } from '../collection-add-dialog/collection-add-dialog';
 import { DescribeDialog } from '../describe-dialog/describe-dialog';
 import { DEFAULT_FLUX_WORKFLOW, GenerateDialog } from '../generate-dialog/generate-dialog';
 import { GenerateFromDialog, GenerateFromDialogData } from '../generate-from-dialog/generate-from-dialog';
@@ -174,6 +175,15 @@ export class InfoPanel implements OnInit {
       } satisfies GenerateFromDialogData,
       width: '90vw',
       maxWidth: '800px',
+    });
+  }
+
+  addToCollection(): void {
+    if (!this.info) return;
+    this.dialog.open(CollectionAddDialog, {
+      data: { filenames: [this.info.filename], sourceFolder: this.folder },
+      width: '90vw',
+      maxWidth: '480px',
     });
   }
 

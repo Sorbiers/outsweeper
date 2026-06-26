@@ -123,6 +123,13 @@ mat-card-header {
   flex-shrink: 0;
 }
 
+.section-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
 .source-image-row {
   margin-top: 8px;
 }

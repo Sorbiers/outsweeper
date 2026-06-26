@@ -1,0 +1,128 @@
+<h2 mat-dialog-title cdkDrag cdkDragRootElement=".cdk-overlay-pane" cdkDragHandle style="cursor: move; user-select: none">
+  Collections
+  <span class="title-path">
+    @if (selectedCollection()) { · {{ selectedCollection() }} }
+    @if (selectedSet()) { / {{ selectedSet() }} }
+  </span>
+</h2>
+
+<mat-dialog-content #content>
+  @if (loading()) {
+    <div class="center"><mat-spinner diameter="36"></mat-spinner></div>
+  } @else if (collections().length === 0) {
+    <p class="hint">No collections yet. Use “Add to Collection” on an image or a favorited group to create one.</p>
+  } @else {
+    <div class="browser">
+      <div class="col col--tree" [style.width.px]="treeWidth()">
+        <mat-tree [dataSource]="treeData()" [childrenAccessor]="childrenAccessor">
+          <mat-tree-node *matTreeNodeDef="let node" matTreeNodePadding
+                         class="tree-node leaf" [class.is-selected]="isSetSelected(node)"
+                         (click)="selectSetNode(node)">
+            <mat-icon class="node-icon">photo_library</mat-icon>
+            <span class="node-label">{{ node.name }}</span>
+            <span class="row-count">{{ node.count }}</span>
+          </mat-tree-node>
+
+          <mat-tree-node *matTreeNodeDef="let node; when: hasChild" #treeNode="matTreeNode"
+                         matTreeNodePadding matTreeNodeToggle class="tree-node branch">
+            <mat-icon class="toggle-icon">{{ treeNode.isExpanded ? 'expand_more' : 'chevron_right' }}</mat-icon>
+            <mat-icon class="node-icon">folder</mat-icon>
+            <span class="node-label">{{ node.name }}</span>
+            <span class="row-count">{{ node.count }}</span>
+          </mat-tree-node>
+        </mat-tree>
+      </div>
+
+      <div class="divider-v" (mousedown)="startResize($event, 'tree')"></div>
+
+      <div class="col col--grid">
+        @if (!selectedSet()) {
+          <p class="hint pad">Select a set in the tree.</p>
+        } @else if (photosLoading()) {
+          <div class="center"><mat-spinner diameter="32"></mat-spinner></div>
+        } @else if (photos().length === 0) {
+          <p class="hint pad">This set is empty.</p>
+        } @else {
+          <div class="grid">
+            @for (photo of photos(); track photo.filename) {
+              <div class="thumb" [class.is-selected]="photo.filename === selectedPhoto()?.filename"
+                   (click)="selectPhoto(photo)">
+                <img [src]="thumbUrl(photo)" [alt]="photo.filename" loading="lazy" />
+                <div class="thumb-overlay">
+                  <button mat-icon-button matTooltip="Re-generate" (click)="regenerate(photo); $event.stopPropagation()">
+                    <mat-icon>bolt</mat-icon>
+                  </button>
+                  <button mat-icon-button matTooltip="Delete" (click)="deletePhoto(photo); $event.stopPropagation()">
+                    <mat-icon>delete</mat-icon>
+                  </button>
+                </div>
+                <span class="thumb-name">{{ photo.filename }}</span>
+              </div>
+            }
+          </div>
+        }
+      </div>
+
+      <div class="divider-v" (mousedown)="startResize($event, 'preview')"></div>
+
+      <div class="col col--preview" [style.width.px]="previewWidth()">
+        @if (!selectedPhoto()) {
+          <p class="hint pad">Select an image to preview its flow.</p>
+        } @else if (infoLoading()) {
+          <div class="center"><mat-spinner diameter="28"></mat-spinner></div>
+        } @else if (selectedInfo(); as info) {
+          <div class="preview-top" [style.height.px]="previewTopHeight()">
+            <div class="preview-img">
+              <img [src]="thumbUrl(selectedPhoto()!)" [alt]="selectedPhoto()!.filename" />
+            </div>
+            <div class="preview-name">{{ selectedPhoto()!.filename }}</div>
+          </div>
+
+          <div class="divider-h" (mousedown)="startResize($event, 'split')"></div>
+
+          <div class="preview-bottom">
+            @if (info.comfyui?.found) {
+              <div class="flow">
+                <div class="flow-row">
+                  <span class="flow-label">Model</span>
+                  <span class="flow-value">{{ info.comfyui!.model || '—' }}</span>
+                </div>
+
+                <div class="flow-row">
+                  <span class="flow-label">LoRAs</span>
+                  @if (info.comfyui!.loras?.length) {
+                    <mat-chip-set class="flow-chips">
+                      @for (lora of info.comfyui!.loras!; track lora.name) {
+                        <mat-chip [matTooltip]="lora.name + ' · m ' + lora.strength_model + ' / c ' + lora.strength_clip">
+                          {{ loraName(lora.name) }}
+                        </mat-chip>
+                      }
+                    </mat-chip-set>
+                  } @else {
+                    <span class="flow-value">—</span>
+                  }
+                </div>
+
+                <div class="flow-row column">
+                  <span class="flow-label">Positive prompt</span>
+                  <div class="flow-prompt">{{ info.comfyui!.prompt || '—' }}</div>
+                </div>
+              </div>
+
+              <button mat-flat-button class="regen-btn" (click)="regenerate(selectedPhoto()!)">
+                <mat-icon>bolt</mat-icon> Re-generate
+              </button>
+            } @else {
+              <p class="hint pad">No embedded ComfyUI flow in this image.</p>
+            }
+          </div>
+        }
+      </div>
+    </div>
+  }
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button mat-button (click)="reloadCollections()"><mat-icon>refresh</mat-icon> Refresh</button>
+  <button mat-button mat-dialog-close>Close</button>
+</mat-dialog-actions>

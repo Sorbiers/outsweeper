@@ -25,6 +25,10 @@
             <mat-icon>open_with</mat-icon>
             <span class="menu-label">Outpaint</span>
           </button>
+          <button mat-menu-item (click)="addToCollection()">
+            <mat-icon>collections_bookmark</mat-icon>
+            <span class="menu-label">Add to Collection <kbd>c</kbd></span>
+          </button>
           <button mat-menu-item (click)="download()">
             <mat-icon>download</mat-icon>
             <span class="menu-label">Download <kbd>Ctrl+S</kbd></span>
@@ -126,9 +130,15 @@
             <div class="section-header">
               <h3>ComfyUI Workflow</h3>
               @if (comfyui.prompt) {
-                <button mat-flat-button class="generate-btn" (click)="openGenerate()">
-                  <mat-icon>play_arrow</mat-icon> Generate
-                </button>
+                <div class="section-actions">
+                  <button mat-stroked-button class="collection-btn" (click)="addToCollection()"
+                          matTooltip="Add this image to a collection">
+                    <mat-icon>add</mat-icon> Collection
+                  </button>
+                  <button mat-flat-button class="generate-btn" (click)="openGenerate()">
+                    <mat-icon>play_arrow</mat-icon> Generate
+                  </button>
+                </div>
               }
             </div>
             <div class="meta-grid">

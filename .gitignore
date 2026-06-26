@@ -12,6 +12,8 @@ __pycache__/
 *.pyc
 Screenshot *.png
 test_folder/**/_*/
+test_folder/collection/
+collection/
 config.toml
 outsweeper.zip
 

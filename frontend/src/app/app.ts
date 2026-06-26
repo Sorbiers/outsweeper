@@ -30,6 +30,8 @@ import {
   GenerateDialog,
   GenerateDialogData,
 } from './components/generate-dialog/generate-dialog';
+import { CollectionAddDialog } from './components/collection-add-dialog/collection-add-dialog';
+import { CollectionDialog } from './components/collection-dialog/collection-dialog';
 import { GpuMonitorWidget } from './components/gpu-monitor/gpu-monitor';
 import { ImageStrip } from './components/image-strip/image-strip';
 import { InfoPanel } from './components/info-panel/info-panel';
@@ -352,6 +354,23 @@ export class App implements OnInit, OnDestroy {
     });
   }
 
+  openFavoritesCollectionAdd(): void {
+    this.openCollectionAdd([...this.favorites]);
+  }
+
+  openCollectionAdd(filenames: string[]): void {
+    if (!filenames.length) return;
+    this.dialog.open(CollectionAddDialog, {
+      data: { filenames, sourceFolder: this.currentPath },
+      width: '90vw',
+      maxWidth: '480px',
+    });
+  }
+
+  openCollectionDialog(): void {
+    this.dialog.open(CollectionDialog, { width: '90vw', maxWidth: '90vw', height: '80vh' });
+  }
+
   openLmPrompt(): void {
     this.dialog.open(LmPromptDialog, { width: '600px', maxWidth: '95vw' })
       .afterClosed()
@@ -480,6 +499,13 @@ export class App implements OnInit, OnDestroy {
       }
       case 'openComfyQueue':
         this.openComfyQueueDialog();
+        break;
+      case 'addToCollection':
+        if (this.favorites.size > 0) this.openCollectionAdd([...this.favorites]);
+        else if (this.currentInfo) this.openCollectionAdd([this.currentInfo.filename]);
+        break;
+      case 'openCollections':
+        this.openCollectionDialog();
         break;
       case 'refresh':
         this.refresh();
