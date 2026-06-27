@@ -1,0 +1,67 @@
+:host { display: block; }
+
+.title-hint {
+  font-size: 12px;
+  font-weight: 400;
+  color: #888;
+  margin-left: 8px;
+}
+
+mat-dialog-content {
+  max-height: 60vh;
+}
+
+.prompt-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px 0;
+}
+
+.prompt-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 8px 4px 8px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid transparent;
+  user-select: none;
+
+  &:hover { background: rgba(79, 195, 247, 0.12); }
+  &.is-selected {
+    background: rgba(79, 195, 247, 0.22);
+    border-color: #4fc3f7;
+  }
+}
+
+.prompt-text {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  line-height: 1.4;
+  color: #ddd;
+  /* Show a few lines, then ellipsis */
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.prompt-del {
+  flex: none;
+  margin-top: -4px;
+  .mat-icon { color: #999; font-size: 18px; width: 18px; height: 18px; }
+}
+
+.spacer { flex: 1; }
+
+.clear-btn { color: #e57373; }
+
+.hint {
+  color: #888;
+  font-size: 13px;
+
+  &.pad { padding: 12px; }
+}

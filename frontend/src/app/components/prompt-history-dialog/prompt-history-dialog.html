@@ -1,0 +1,33 @@
+<h2 mat-dialog-title cdkDrag cdkDragRootElement=".cdk-overlay-pane" cdkDragHandle
+    style="cursor: move; user-select: none">
+  Prompt History
+  <span class="title-hint">select a prompt, then Reuse (or double-click)</span>
+</h2>
+
+<mat-dialog-content>
+  @if (history.prompts().length === 0) {
+    <p class="hint pad">No prompts yet. Sent positive prompts are remembered here.</p>
+  } @else {
+    <div class="prompt-list">
+      @for (prompt of history.prompts(); track prompt) {
+        <div class="prompt-item" [class.is-selected]="prompt === selected"
+             (click)="select(prompt)" (dblclick)="reuseNow(prompt)">
+          <span class="prompt-text">{{ prompt }}</span>
+          <button mat-icon-button class="prompt-del" matTooltip="Remove"
+                  (click)="remove(prompt, $event)">
+            <mat-icon>close</mat-icon>
+          </button>
+        </div>
+      }
+    </div>
+  }
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button mat-button class="clear-btn" [disabled]="history.prompts().length === 0" (click)="clear()">
+    <mat-icon>delete_sweep</mat-icon> Clear all
+  </button>
+  <span class="spacer"></span>
+  <button mat-button mat-dialog-close>Close</button>
+  <button mat-flat-button color="primary" [disabled]="!selected" (click)="reuse()">Reuse</button>
+</mat-dialog-actions>

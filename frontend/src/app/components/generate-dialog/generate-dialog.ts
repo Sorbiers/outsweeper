@@ -18,8 +18,10 @@ import { ComfyConnectionService } from '../../services/comfy-connection.service'
 import { ConnectionStateService } from '../../services/connection-state.service';
 import { DictionaryService } from '../../services/dictionary.service';
 import { PhotoService } from '../../services/photo.service';
+import { PromptHistoryService } from '../../services/prompt-history.service';
 import { ComfyUrlRowComponent } from '../comfy-url-row/comfy-url-row';
 import { DictionaryDialog } from '../dictionary-dialog/dictionary-dialog';
+import { PromptHistoryDialog } from '../prompt-history-dialog/prompt-history-dialog';
 import { PrompterDialog } from '../prompter-dialog/prompter-dialog';
 
 export interface GenerateDialogData {
@@ -90,6 +92,7 @@ export class GenerateDialog {
   private snackBar = inject(MatSnackBar);
   private connState = inject(ConnectionStateService);
   private dictionaries = inject(DictionaryService);
+  private promptHistory = inject(PromptHistoryService);
   comfy = inject(ComfyConnectionService);
 
   params: WorkflowParams;
@@ -169,6 +172,15 @@ export class GenerateDialog {
     this.dialog.open(DictionaryDialog, { width: '70vw', maxWidth: '1000px' });
   }
 
+  openPromptHistory(): void {
+    this.dialog.open(PromptHistoryDialog, { width: '600px', maxWidth: '90vw' })
+      .afterClosed().subscribe((picked?: string) => {
+        // Only a picked prompt (always non-empty) is applied; Close emits '' and
+        // Escape/backdrop emit undefined — both are ignored.
+        if (picked) this.params.positivePrompt = picked;
+      });
+  }
+
   /**
    * A copy of the current params with `{{name}}` placeholders resolved against
    * the dictionaries. Called per queued prompt so batches vary independently.
@@ -217,6 +229,7 @@ export class GenerateDialog {
 
   send(front = false): void {
     this.saveParams();
+    this.promptHistory.add(this.params.positivePrompt);
     this.sending = true;
     const lmstudioUrl = this.connState.lmstudio.url;
     const unload$ = lmstudioUrl

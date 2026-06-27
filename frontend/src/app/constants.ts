@@ -18,6 +18,7 @@ export const STORAGE_KEYS = {
   GEN_LORA_STEP:      'pp_gen_lora_step',
   GEN_POS_PROMPT:     'pp_gen_positivePrompt',
   GEN_NEG_PROMPT:     'pp_gen_negativePrompt',
+  GEN_PROMPT_HISTORY: 'pp_gen_promptHistory',
   FAVORITES_PREFIX:   'pp_favorites:',
   COMFY_POS:          'pp_comfy_pos',
   WIDGET_POS:         'pp_widget_pos',
