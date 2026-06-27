@@ -7,6 +7,7 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { MatSnackBar } from '@angular/material/snack-bar';
 import { Dictionary, DictionaryService } from '../../services/dictionary.service';
 
 @Component({
@@ -18,6 +19,7 @@ import { Dictionary, DictionaryService } from '../../services/dictionary.service
 })
 export class DictionaryDialog {
   private dictService = inject(DictionaryService);
+  private snackBar = inject(MatSnackBar);
 
   // Working copy; changes are persisted on every edit.
   dicts: Dictionary[] = structuredClone(this.dictService.dictionaries());
@@ -72,6 +74,13 @@ export class DictionaryDialog {
 
   persist(): void {
     this.dictService.save(structuredClone(this.dicts));
+  }
+
+  /** Copy the selected dictionary's `{{name}}` token to the clipboard. */
+  copyToken(): void {
+    const token = this.usageToken;
+    navigator.clipboard?.writeText(token);
+    this.snackBar.open(`Copied ${token}`, '', { duration: 1500 });
   }
 
   private uniqueName(base: string): string {

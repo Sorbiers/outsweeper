@@ -33,9 +33,23 @@
   margin-top: 8px;
 }
 
+/* Top two-section layout: left = URL + LoRAs, right = options.
+   Wraps to a single column when the dialog is too narrow. */
+.gen-columns {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 0 24px;
+}
+
+.gen-col {
+  flex: 1 1 340px;
+  min-width: 0;
+}
+
 .params-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr 1fr;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 0 12px;
 }
 

@@ -166,7 +166,7 @@ export class GenerateDialog {
   }
 
   openDictionaries(): void {
-    this.dialog.open(DictionaryDialog, { width: '600px', maxWidth: '90vw' });
+    this.dialog.open(DictionaryDialog, { width: '70vw', maxWidth: '1000px' });
   }
 
   /**
@@ -229,6 +229,30 @@ export class GenerateDialog {
     this.send(true);
   }
 
+  /**
+   * Build a readable message from a failed send. ComfyUI returns validation
+   * errors as `{ error: { message, ... }, node_errors: {...} }` (an object),
+   * which would otherwise stringify to "[object Object]".
+   */
+  private formatSendError(err: any): string {
+    console.error('ComfyUI send failed', err);
+    const body = err?.error;
+    if (typeof body === 'string') return body;
+
+    const parts: string[] = [];
+    const inner = body?.error;
+    if (typeof inner === 'string') parts.push(inner);
+    else if (inner?.message) parts.push(inner.message);
+
+    for (const [nodeId, ne] of Object.entries<any>(body?.node_errors ?? {})) {
+      for (const e of ne?.errors ?? []) {
+        parts.push(`[${nodeId}] ${e.message}${e.details ? ': ' + e.details : ''}`);
+      }
+    }
+
+    return parts.join(' — ') || err?.message || 'Failed to send';
+  }
+
   private _doSend(front = false): void {
     const notifySuccess = (count: number) => {
       this.sending = false;
@@ -251,8 +275,8 @@ export class GenerateDialog {
         next: () => notifySuccess(1),
         error: (err) => {
           this.sending = false;
-          const msg = err.error?.error || err.message || 'Failed to send';
-          this.snackBar.open(`Error: ${msg}`, '', { duration: 5000 });
+          const msg = this.formatSendError(err);
+          this.snackBar.open(`Error: ${msg}`, 'Dismiss', { duration: 10000 });
         },
       });
       return;
@@ -282,8 +306,8 @@ export class GenerateDialog {
       next: () => notifySuccess(requests.length),
       error: (err) => {
         this.sending = false;
-        const msg = err.error?.error || err.message || 'Failed to send';
-        this.snackBar.open(`Error: ${msg}`, '', { duration: 5000 });
+        const msg = this.formatSendError(err);
+        this.snackBar.open(`Error: ${msg}`, 'Dismiss', { duration: 10000 });
       },
     });
   }

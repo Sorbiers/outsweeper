@@ -35,6 +35,10 @@
           <mat-label>Dictionary name</mat-label>
           <input matInput [(ngModel)]="dict.name" (ngModelChange)="persist()"
                  placeholder="e.g. waiter" autocomplete="off" />
+          <button mat-icon-button matSuffix (click)="copyToken()"
+                  [matTooltip]="'Copy ' + usageToken">
+            <mat-icon>content_copy</mat-icon>
+          </button>
         </mat-form-field>
 
         <div class="values-head">
@@ -67,6 +71,7 @@
         </button>
 
         <p class="usage">Use <code>{{ usageToken }}</code> in a prompt.</p>
+        <p class="usage">Inline (no dictionary needed): <code>{{ '{{' }}a|b|c{{ '}}' }}</code> picks one at random.</p>
       } @else {
         <p class="hint pad">Select or create a dictionary.</p>
       }

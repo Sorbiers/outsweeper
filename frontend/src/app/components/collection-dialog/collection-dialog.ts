@@ -177,7 +177,7 @@ export class CollectionDialog {
     this.dialog.open(GenerateDialog, {
       data: { workflow, title: `Re-generate · ${photo.filename}` },
       width: '90vw',
-      maxWidth: '800px',
+      maxWidth: '1500px',
     });
   }
 

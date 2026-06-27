@@ -334,7 +334,7 @@ export class App implements OnInit, OnDestroy {
   }
 
   private openGenerateDialog(data: GenerateDialogData): void {
-    this.dialog.open(GenerateDialog, { data, width: '90vw', maxWidth: '800px' })
+    this.dialog.open(GenerateDialog, { data, width: '90vw', maxWidth: '1500px' })
       .afterClosed()
       .subscribe((result: GenerateCloseResult | undefined) => {
         if (result?.copyResult) {
@@ -373,7 +373,7 @@ export class App implements OnInit, OnDestroy {
   }
 
   openDictionaryDialog(): void {
-    this.dialog.open(DictionaryDialog, { width: '600px', maxWidth: '90vw' });
+    this.dialog.open(DictionaryDialog, { width: '70vw', maxWidth: '1000px' });
   }
 
   openLmPrompt(): void {

@@ -125,14 +125,14 @@ export class InfoPanel implements OnInit {
         this.dialog.open(GenerateDialog, {
           data: { workflow: JSON.parse(JSON.stringify(DEFAULT_FLUX_WORKFLOW)), positivePromptOverride: result.prompt },
           width: '90vw',
-          maxWidth: '800px',
+          maxWidth: '1500px',
         });
       } else if (result.action === 'regenerate') {
         const workflow = JSON.parse(this.info!.png_metadata['prompt']);
         this.dialog.open(GenerateDialog, {
           data: { workflow, positivePromptOverride: result.prompt, title: 'Re-generate' },
           width: '90vw',
-          maxWidth: '800px',
+          maxWidth: '1500px',
         });
       }
     });
@@ -144,7 +144,7 @@ export class InfoPanel implements OnInit {
     this.dialog.open(GenerateDialog, {
       data: { workflow, title: 'Re-generate' },
       width: '90vw',
-      maxWidth: '800px',
+      maxWidth: '1500px',
     });
   }
 

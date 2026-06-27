@@ -3,7 +3,9 @@
     class="dialog-title">{{ dialogTitle }}</h2>
 
 <mat-dialog-content>
-  <pp-comfy-url-row (connected)="onConnected()"></pp-comfy-url-row>
+  <div class="gen-columns">
+    <div class="gen-col gen-col--left">
+      <pp-comfy-url-row (connected)="onConnected()"></pp-comfy-url-row>
 
   @if (checkpointNodes.length) {
     <div class="lora-section">
@@ -117,13 +119,15 @@
     </div>
   }
 
-  <div class="add-lora-row">
-    <button mat-stroked-button (click)="addLora()" [disabled]="comfy.checkStatus !== 'ok'">
-      <mat-icon>add</mat-icon> Add LoRA
-    </button>
-  </div>
+      <div class="add-lora-row">
+        <button mat-stroked-button (click)="addLora()" [disabled]="comfy.checkStatus !== 'ok'">
+          <mat-icon>add</mat-icon> Add LoRA
+        </button>
+      </div>
+    </div>
 
-  <div class="params-grid">
+    <div class="gen-col gen-col--right">
+      <div class="params-grid">
     <mat-form-field>
       <mat-label>Seed</mat-label>
       <input matInput type="number" [(ngModel)]="params.seed" />
@@ -181,6 +185,8 @@
         }
       </mat-select>
     </mat-form-field>
+      </div>
+    </div>
   </div>
 
   <div class="prompt-row">

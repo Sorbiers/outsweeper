@@ -45,12 +45,18 @@ export class DictionaryService {
   }
 
   /**
-   * Replace every `{{name}}` with a weighted-random value from the matching
-   * dictionary. Unknown or empty dictionaries are removed (token dropped).
+   * Resolve every `{{...}}` placeholder:
+   *  - `{{a|b|c}}` — pick one of the pipe-separated options at random (equal odds).
+   *  - `{{name}}`  — pick a weighted-random value from the matching dictionary.
+   * Unknown/empty dictionaries (and empty option lists) are removed.
    */
   substitute(text: string): string {
     if (!text) return text;
     const replaced = text.replace(DictionaryService.TOKEN, (_match, raw: string) => {
+      if (raw.includes('|')) {
+        const options = raw.split('|').map(s => s.trim()).filter(Boolean);
+        return options.length ? options[Math.floor(Math.random() * options.length)] : '';
+      }
       const dict = this.get(raw);
       if (!dict || !dict.values.length) return '';
       return this.pickWeighted(dict.values);
