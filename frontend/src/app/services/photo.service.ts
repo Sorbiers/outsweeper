@@ -260,10 +260,10 @@ export class PhotoService {
     );
   }
 
-  writeMeta(filename: string, folder: string, description: string): Observable<{ ok: boolean }> {
+  writeMeta(filename: string, folder: string, description: string, key?: string): Observable<{ ok: boolean }> {
     return this.http.post<{ ok: boolean }>(
       '/api/write-meta',
-      { description },
+      key ? { description, key } : { description },
       { params: { path: this.filePath(filename, folder) } },
     );
   }

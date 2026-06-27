@@ -103,15 +103,51 @@
                   }
                 </div>
 
-                <div class="flow-row column">
-                  <span class="flow-label">Positive prompt</span>
-                  <div class="flow-prompt">{{ info.comfyui!.prompt || '—' }}</div>
-                </div>
               </div>
 
-              <button mat-flat-button class="regen-btn" (click)="regenerate(selectedPhoto()!)">
-                <mat-icon>bolt</mat-icon> Re-generate
-              </button>
+              <!-- Original prompt -->
+              <div class="prompt-block">
+                <div class="prompt-head">
+                  <span class="flow-label">Prompt</span>
+                  <button mat-flat-button class="gen-btn" (click)="generateWith(info.comfyui!.prompt || '')">
+                    <mat-icon>bolt</mat-icon> Generate
+                  </button>
+                </div>
+                <div class="flow-prompt">{{ info.comfyui!.prompt || '—' }}</div>
+              </div>
+
+              <!-- Alternative prompt template -->
+              @if (editingAlt()) {
+                <div class="prompt-block">
+                  <span class="flow-label">Alternative prompt</span>
+                  <mat-form-field class="alt-field">
+                    <textarea matInput rows="5" [(ngModel)]="altDraft"
+                              placeholder="Alternative prompt template…"></textarea>
+                  </mat-form-field>
+                  <div class="alt-actions">
+                    <button mat-button (click)="cancelEditAlt()">Cancel</button>
+                    <button mat-flat-button [disabled]="savingAlt()" (click)="saveAlt()">Save</button>
+                  </div>
+                </div>
+              } @else if (altPrompt()) {
+                <div class="prompt-block">
+                  <div class="prompt-head">
+                    <span class="flow-label">Alternative</span>
+                    <div class="prompt-head-actions">
+                      <button mat-icon-button matTooltip="Edit" (click)="startEditAlt()"><mat-icon>edit</mat-icon></button>
+                      <button mat-icon-button matTooltip="Remove" (click)="deleteAlt()"><mat-icon>delete</mat-icon></button>
+                      <button mat-flat-button class="gen-btn" (click)="generateWith(altPrompt())">
+                        <mat-icon>bolt</mat-icon> Generate
+                      </button>
+                    </div>
+                  </div>
+                  <div class="flow-prompt">{{ altPrompt() }}</div>
+                </div>
+              } @else {
+                <button mat-stroked-button class="add-alt-btn" (click)="startEditAlt()">
+                  <mat-icon>add</mat-icon> Add prompt template
+                </button>
+              }
             } @else {
               <p class="hint pad">No embedded ComfyUI flow in this image.</p>
             }

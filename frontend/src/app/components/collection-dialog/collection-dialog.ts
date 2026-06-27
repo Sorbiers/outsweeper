@@ -1,6 +1,9 @@
 import { CdkDrag, CdkDragHandle } from '@angular/cdk/drag-drop';
 import { afterNextRender, Component, computed, effect, ElementRef, inject, signal, viewChild } from '@angular/core';
+import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatInputModule } from '@angular/material/input';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
@@ -22,8 +25,9 @@ interface TreeNode {
 
 @Component({
   selector: 'pp-collection-dialog',
-  imports: [CdkDrag, CdkDragHandle, MatDialogModule, MatButtonModule, MatIconModule,
-            MatChipsModule, MatTreeModule, MatProgressSpinnerModule, MatTooltipModule],
+  imports: [CdkDrag, CdkDragHandle, FormsModule, MatDialogModule, MatButtonModule, MatIconModule,
+            MatChipsModule, MatTreeModule, MatProgressSpinnerModule, MatTooltipModule,
+            MatFormFieldModule, MatInputModule],
   templateUrl: './collection-dialog.html',
   styleUrl: './collection-dialog.scss',
 })
@@ -70,6 +74,16 @@ export class CollectionDialog {
   selectedPhoto = signal<PhotoListItem | null>(null);
   selectedInfo  = signal<PhotoInfo | null>(null);
   infoLoading   = signal(false);
+
+  /** PNG text-chunk key holding the alternative prompt template. */
+  private static readonly ALT_KEY = 'alt_prompt';
+
+  /** Alternative prompt stored on the selected image (empty when none). */
+  altPrompt = computed(() => this.selectedInfo()?.png_metadata?.[CollectionDialog.ALT_KEY]?.trim() || '');
+
+  editingAlt = signal(false);
+  savingAlt  = signal(false);
+  altDraft   = '';
 
   constructor() {
     this.reloadCollections();
@@ -139,6 +153,7 @@ export class CollectionDialog {
   selectPhoto(photo: PhotoListItem): void {
     this.selectedPhoto.set(photo);
     this.selectedInfo.set(null);
+    this.editingAlt.set(false);
     this.infoLoading.set(true);
     this.photoService.getInfo(photo.filename, this.folderPath).subscribe({
       next: info => {
@@ -161,7 +176,7 @@ export class CollectionDialog {
     });
   }
 
-  private openGenerate(photo: PhotoListItem, info: PhotoInfo): void {
+  private openGenerate(photo: PhotoListItem, info: PhotoInfo, promptOverride?: string): void {
     const raw = info.png_metadata?.['prompt'];
     if (!raw) {
       this.snackBar.open('No embedded ComfyUI flow in this image', '', { duration: 3000 });
@@ -175,9 +190,54 @@ export class CollectionDialog {
       return;
     }
     this.dialog.open(GenerateDialog, {
-      data: { workflow, title: `Re-generate · ${photo.filename}` },
+      data: { workflow, title: `Re-generate · ${photo.filename}`, positivePromptOverride: promptOverride },
       width: '90vw',
       maxWidth: '1500px',
+    });
+  }
+
+  /** Generate using a specific positive prompt (original or alternative). */
+  generateWith(prompt: string): void {
+    const photo = this.selectedPhoto();
+    const info  = this.selectedInfo();
+    if (photo && info) this.openGenerate(photo, info, prompt || undefined);
+  }
+
+  startEditAlt(): void {
+    // Seed a new template from the existing alternative or the original prompt.
+    this.altDraft = this.altPrompt() || this.selectedInfo()?.comfyui?.prompt || '';
+    this.editingAlt.set(true);
+  }
+
+  cancelEditAlt(): void {
+    this.editingAlt.set(false);
+  }
+
+  saveAlt(): void {
+    const photo = this.selectedPhoto();
+    if (!photo) return;
+    this.savingAlt.set(true);
+    this.photoService.writeMeta(photo.filename, this.folderPath, this.altDraft.trim(), CollectionDialog.ALT_KEY)
+      .subscribe({
+        next: () => { this.savingAlt.set(false); this.editingAlt.set(false); this.refreshSelectedInfo(); },
+        error: () => { this.savingAlt.set(false); this.snackBar.open('Failed to save prompt template', '', { duration: 3000 }); },
+      });
+  }
+
+  deleteAlt(): void {
+    const photo = this.selectedPhoto();
+    if (!photo) return;
+    this.photoService.writeMeta(photo.filename, this.folderPath, '', CollectionDialog.ALT_KEY).subscribe({
+      next: () => this.refreshSelectedInfo(),
+      error: () => this.snackBar.open('Failed to remove prompt template', '', { duration: 3000 }),
+    });
+  }
+
+  private refreshSelectedInfo(): void {
+    const photo = this.selectedPhoto();
+    if (!photo) return;
+    this.photoService.getInfo(photo.filename, this.folderPath).subscribe({
+      next: info => this.selectedInfo.set(info),
     });
   }
 

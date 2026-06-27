@@ -258,9 +258,46 @@ mat-dialog-content {
   padding: 8px;
 }
 
-.regen-btn {
+/* --- prompt blocks (original + alternative template) --- */
+.prompt-block {
+  margin-top: 12px;
+}
+
+.prompt-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  margin-bottom: 4px;
+}
+
+.prompt-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.gen-btn {
+  flex: none;
+  --mdc-filled-button-container-height: 30px;
+}
+
+.alt-field {
   width: 100%;
-  margin-top: 8px;
+
+  textarea { font-size: 12px; line-height: 1.45; }
+}
+
+.alt-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.add-alt-btn {
+  width: 100%;
+  margin-top: 12px;
 }
 
 .center {
