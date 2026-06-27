@@ -44,7 +44,7 @@ export class ImageStrip implements AfterViewInit, OnDestroy {
   @Output() pageChange = new EventEmitter<number>();
   @Output() pageSizeChange = new EventEmitter<number>();
   @Output() colsChange = new EventEmitter<number>();
-  @Output() favoriteToggled = new EventEmitter<string>();
+  @Output() favoriteToggled = new EventEmitter<{ index: number; shiftKey: boolean }>();
 
   thumbSize = 100;
   pageCapacity = 0; // 0 means not yet measured
@@ -88,9 +88,9 @@ export class ImageStrip implements AfterViewInit, OnDestroy {
     return this.favorites.has(filename);
   }
 
-  onFavoriteClick(event: MouseEvent, filename: string): void {
+  onFavoriteClick(event: MouseEvent, localIndex: number): void {
     event.stopPropagation();
-    this.favoriteToggled.emit(filename);
+    this.favoriteToggled.emit({ index: this.pageOffset + localIndex, shiftKey: event.shiftKey });
   }
 
   onImageLoad(photo: PhotoListItem): void {

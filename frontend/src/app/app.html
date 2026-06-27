@@ -103,7 +103,7 @@
       (pageChange)="onPageChange($event)"
       (pageSizeChange)="onPageSizeChange($event)"
       (colsChange)="stripCols = $event"
-      (favoriteToggled)="toggleFavorite($event)"
+      (favoriteToggled)="onFavoriteToggled($event)"
     >
     </pp-image-strip>
   </div>
@@ -183,10 +183,19 @@
     </button>
   }
   <mat-divider></mat-divider>
-  <button mat-menu-item (click)="openGenerator()"><mat-icon>bolt</mat-icon> Generator</button>
+  <button mat-menu-item (click)="openGenerator()">
+    <mat-icon>bolt</mat-icon>
+    <span class="menu-label">Generator <kbd>Shift+G</kbd></span>
+  </button>
   <button mat-menu-item (click)="openLmPrompt()"><mat-icon>psychology</mat-icon> LM Prompt</button>
-  <button mat-menu-item (click)="openComfyQueueDialog()"><mat-icon>queue</mat-icon> ComfyUI Queue</button>
-  <button mat-menu-item (click)="openCollectionDialog()"><mat-icon>collections_bookmark</mat-icon> Collections</button>
+  <button mat-menu-item (click)="openComfyQueueDialog()">
+    <mat-icon>queue</mat-icon>
+    <span class="menu-label">ComfyUI Queue <kbd>q</kbd></span>
+  </button>
+  <button mat-menu-item (click)="openCollectionDialog()">
+    <mat-icon>collections_bookmark</mat-icon>
+    <span class="menu-label">Collections <kbd>Shift+C</kbd></span>
+  </button>
   <button mat-menu-item (click)="openDictionaryDialog()"><mat-icon>menu_book</mat-icon> Dictionaries</button>
   <mat-divider></mat-divider>
   <button
@@ -195,7 +204,7 @@
     [style.color]="sourceChangedPending() ? 'orange' : null"
   >
     <mat-icon [style.color]="sourceChangedPending() ? 'orange' : null">refresh</mat-icon>
-    Refresh
+    <span class="menu-label">Refresh <kbd>r</kbd></span>
     @if (sourceChangedPending()) {
       <span class="refresh-badge refresh-badge--menu">{{ sourceChangedPending() }}</span>
     }

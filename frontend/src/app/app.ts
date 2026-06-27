@@ -119,6 +119,8 @@ export class App implements OnInit, OnDestroy {
     return this.favorites.size;
   }
   showFavoritesOnly = false;
+  /** Local index of the last plain heart-click, anchor for shift-range select. */
+  private lastFavoriteIndex = -1;
 
   // Resizable layout percentages
   stripHeight = 25;
@@ -186,6 +188,7 @@ export class App implements OnInit, OnDestroy {
   loadPhotos(): void {
     if (this.pageSize <= 0) return;
     this.loading = true;
+    this.lastFavoriteIndex = -1; // new page invalidates the range-select anchor
     const opts = {
       sortBy: this.sortBy,
       sortAsc: this.sortAsc,
@@ -331,6 +334,23 @@ export class App implements OnInit, OnDestroy {
 
   openGenerator(): void {
     this.openGenerateDialog({ workflow: DEFAULT_FLUX_WORKFLOW });
+  }
+
+  /** Re-generate the currently selected image from its embedded ComfyUI flow. */
+  regenerateCurrent(): void {
+    const raw = this.currentInfo?.png_metadata?.['prompt'];
+    if (!raw) {
+      this.snackBar.open('No embedded ComfyUI flow in this image', '', { duration: 3000 });
+      return;
+    }
+    let workflow: Record<string, any>;
+    try {
+      workflow = JSON.parse(raw);
+    } catch {
+      this.snackBar.open('Embedded flow is not valid JSON', '', { duration: 3000 });
+      return;
+    }
+    this.openGenerateDialog({ workflow, title: 'Re-generate' });
   }
 
   private openGenerateDialog(data: GenerateDialogData): void {
@@ -512,6 +532,12 @@ export class App implements OnInit, OnDestroy {
       case 'openCollections':
         this.openCollectionDialog();
         break;
+      case 'regenerate':
+        this.regenerateCurrent();
+        break;
+      case 'generate':
+        this.openGenerator();
+        break;
       case 'refresh':
         this.refresh();
         break;
@@ -595,6 +621,29 @@ export class App implements OnInit, OnDestroy {
 
   toggleFavorite(filename: string): void {
     this.favorites = this.favoritesSvc.toggle(this.currentPath, filename);
+  }
+
+  /**
+   * Heart-icon click. Shift-click sets every image between the anchor (last
+   * plain click) and this one to the anchor's current favorite state, limited
+   * to the visible page. A plain click toggles one image and becomes the anchor.
+   */
+  onFavoriteToggled(e: { index: number; shiftKey: boolean }): void {
+    const local = e.index - this.pageOffset;
+    const photos = this.photos;
+    if (local < 0 || local >= photos.length) return;
+
+    if (e.shiftKey && this.lastFavoriteIndex >= 0 && this.lastFavoriteIndex < photos.length) {
+      const anchor = this.lastFavoriteIndex;
+      const targetState = this.favorites.has(photos[anchor].filename);
+      const start = Math.min(anchor, local);
+      const end = Math.max(anchor, local);
+      const range = photos.slice(start, end + 1).map(p => p.filename);
+      this.favorites = this.favoritesSvc.setAll(this.currentPath, range, targetState);
+    } else {
+      this.toggleFavorite(photos[local].filename);
+      this.lastFavoriteIndex = local;
+    }
   }
 
   private toggleFavoriteCurrent(): void {

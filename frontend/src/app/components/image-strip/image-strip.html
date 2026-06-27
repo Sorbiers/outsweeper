@@ -16,7 +16,7 @@
         [alt]="photo.filename"
         [class.visible]="photo.loaded || isImageReady(imgRef)"
         (load)="onImageLoad(photo)" />
-      <div class="selection-overlay" (click)="onFavoriteClick($event, photo.filename)">
+      <div class="selection-overlay" (click)="onFavoriteClick($event, i)">
         <mat-icon>{{ isFavorite(photo.filename) ? 'favorite' : 'favorite_border' }}</mat-icon>
       </div>
     </div>
