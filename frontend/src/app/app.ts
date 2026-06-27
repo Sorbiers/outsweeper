@@ -32,6 +32,7 @@ import {
 } from './components/generate-dialog/generate-dialog';
 import { CollectionAddDialog } from './components/collection-add-dialog/collection-add-dialog';
 import { CollectionDialog } from './components/collection-dialog/collection-dialog';
+import { DictionaryDialog } from './components/dictionary-dialog/dictionary-dialog';
 import { GpuMonitorWidget } from './components/gpu-monitor/gpu-monitor';
 import { ImageStrip } from './components/image-strip/image-strip';
 import { InfoPanel } from './components/info-panel/info-panel';
@@ -369,6 +370,10 @@ export class App implements OnInit, OnDestroy {
 
   openCollectionDialog(): void {
     this.dialog.open(CollectionDialog, { width: '90vw', maxWidth: '90vw', height: '80vh' });
+  }
+
+  openDictionaryDialog(): void {
+    this.dialog.open(DictionaryDialog, { width: '600px', maxWidth: '90vw' });
   }
 
   openLmPrompt(): void {

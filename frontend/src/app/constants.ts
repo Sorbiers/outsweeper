@@ -21,4 +21,5 @@ export const STORAGE_KEYS = {
   FAVORITES_PREFIX:   'pp_favorites:',
   COMFY_POS:          'pp_comfy_pos',
   WIDGET_POS:         'pp_widget_pos',
+  DICTIONARIES:       'pp_dictionaries',
 } as const;

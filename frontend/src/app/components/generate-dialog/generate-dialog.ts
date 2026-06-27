@@ -16,8 +16,10 @@ import { catchError } from 'rxjs/operators';
 import { STORAGE_KEYS } from '../../constants';
 import { ComfyConnectionService } from '../../services/comfy-connection.service';
 import { ConnectionStateService } from '../../services/connection-state.service';
+import { DictionaryService } from '../../services/dictionary.service';
 import { PhotoService } from '../../services/photo.service';
 import { ComfyUrlRowComponent } from '../comfy-url-row/comfy-url-row';
+import { DictionaryDialog } from '../dictionary-dialog/dictionary-dialog';
 import { PrompterDialog } from '../prompter-dialog/prompter-dialog';
 
 export interface GenerateDialogData {
@@ -87,6 +89,7 @@ export class GenerateDialog {
   private photoService = inject(PhotoService);
   private snackBar = inject(MatSnackBar);
   private connState = inject(ConnectionStateService);
+  private dictionaries = inject(DictionaryService);
   comfy = inject(ComfyConnectionService);
 
   params: WorkflowParams;
@@ -162,6 +165,22 @@ export class GenerateDialog {
     });
   }
 
+  openDictionaries(): void {
+    this.dialog.open(DictionaryDialog, { width: '600px', maxWidth: '90vw' });
+  }
+
+  /**
+   * A copy of the current params with `{{name}}` placeholders resolved against
+   * the dictionaries. Called per queued prompt so batches vary independently.
+   */
+  private resolvedParams(): WorkflowParams {
+    return {
+      ...this.params,
+      positivePrompt: this.dictionaries.substitute(this.params.positivePrompt),
+      negativePrompt: this.dictionaries.substitute(this.params.negativePrompt),
+    };
+  }
+
   extractWorkflow(): void {
     const workflow = this.injectManualLoras(
       this.removeEmptyLoraNodes(this.applyParams(this.data.workflow, this.params)),
@@ -225,7 +244,7 @@ export class GenerateDialog {
 
     if (variableNodes.length === 0) {
       const workflow = this.injectManualLoras(
-        this.removeEmptyLoraNodes(this.applyParams(this.data.workflow, this.params)),
+        this.removeEmptyLoraNodes(this.applyParams(this.data.workflow, this.resolvedParams())),
         this.manualLoras.filter(l => l.name)
       );
       this.photoService.sendToComfy(this.comfy.comfyUrl, workflow, this.copyResult, front).subscribe({
@@ -241,7 +260,7 @@ export class GenerateDialog {
 
     const combinations = this.cartesian(variableNodes.map(n => n.selected));
     const requests = combinations.map(combo => {
-      const workflow = this.applyParams(this.data.workflow, this.params);
+      const workflow = this.applyParams(this.data.workflow, this.resolvedParams());
       combo.forEach((value, i) => {
         const node = variableNodes[i];
         if (workflow[node.nodeId]?.inputs) {

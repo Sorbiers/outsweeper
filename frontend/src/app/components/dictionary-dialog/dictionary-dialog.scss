@@ -1,0 +1,133 @@
+:host { display: block; }
+
+.title-hint {
+  font-size: 12px;
+  font-weight: 400;
+  color: #888;
+  margin-left: 8px;
+}
+
+mat-dialog-content {
+  max-height: unset;
+  height: 60vh;
+}
+
+.dict-browser {
+  display: flex;
+  gap: 10px;
+  height: 100%;
+}
+
+/* --- left: dictionary list --- */
+.dict-list {
+  flex: none;
+  width: 200px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 6px;
+}
+
+.add-dict-btn { margin-bottom: 4px; }
+
+.dict-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 0 2px 0 6px;
+  border-radius: 4px;
+  cursor: pointer;
+
+  &:hover { background: rgba(255, 255, 255, 0.05); }
+  &.is-selected { background: rgba(79, 195, 247, 0.18); }
+
+  .dict-icon { color: #888; font-size: 20px; width: 20px; height: 20px; flex-shrink: 0; }
+  .dict-del { flex-shrink: 0; }
+}
+
+.dict-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dict-count {
+  font-size: 11px;
+  color: #888;
+  background: rgba(255, 255, 255, 0.07);
+  border-radius: 10px;
+  padding: 1px 7px;
+}
+
+/* --- right: values editor --- */
+.dict-detail {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 8px 4px 0 2px;
+}
+
+.full-width { width: 100%; }
+
+.values-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #888;
+  margin-bottom: 2px;
+
+  .vh-value { flex: 1; }
+  .vh-weight { width: 90px; }
+  .vh-pct { width: 48px; text-align: right; }
+  .vh-del { width: 40px; }
+}
+
+.value-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+
+  .value-field { flex: 1; min-width: 0; }
+  .weight-field { width: 90px; flex: none; }
+  .value-del { flex: none; }
+}
+
+.value-pct {
+  width: 48px;
+  flex: none;
+  text-align: right;
+  font-size: 12px;
+  color: #9ad;
+}
+
+.add-value-btn { margin-top: 4px; }
+
+.usage {
+  margin-top: 14px;
+  font-size: 12px;
+  color: #888;
+
+  code {
+    color: #9ad;
+    background: rgba(0, 0, 0, 0.25);
+    padding: 1px 5px;
+    border-radius: 3px;
+  }
+}
+
+.hint {
+  color: #888;
+  font-size: 13px;
+
+  &.pad { padding: 12px; }
+}

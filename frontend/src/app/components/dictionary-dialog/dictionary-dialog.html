@@ -1,0 +1,79 @@
+<h2 mat-dialog-title cdkDrag cdkDragRootElement=".cdk-overlay-pane" cdkDragHandle
+    style="cursor: move; user-select: none">
+  Dictionaries
+  <span class="title-hint">weighted random substitution for {{ '{{' }}name{{ '}}' }} in prompts</span>
+</h2>
+
+<mat-dialog-content>
+  <div class="dict-browser">
+    <div class="dict-list">
+      <button mat-stroked-button class="add-dict-btn" (click)="addDictionary()">
+        <mat-icon>add</mat-icon> New dictionary
+      </button>
+
+      @for (d of dicts; track $index) {
+        <div class="dict-item" [class.is-selected]="$index === selectedIndex"
+             (click)="selectedIndex = $index">
+          <mat-icon class="dict-icon">menu_book</mat-icon>
+          <span class="dict-name">{{ d.name || '(unnamed)' }}</span>
+          <span class="dict-count">{{ d.values.length }}</span>
+          <button mat-icon-button class="dict-del" matTooltip="Delete dictionary"
+                  (click)="deleteDictionary($index); $event.stopPropagation()">
+            <mat-icon>delete</mat-icon>
+          </button>
+        </div>
+      }
+
+      @if (!dicts.length) {
+        <p class="hint pad">No dictionaries yet. Create one to use {{ '{{' }}name{{ '}}' }} in prompts.</p>
+      }
+    </div>
+
+    <div class="dict-detail">
+      @if (selected; as dict) {
+        <mat-form-field class="full-width">
+          <mat-label>Dictionary name</mat-label>
+          <input matInput [(ngModel)]="dict.name" (ngModelChange)="persist()"
+                 placeholder="e.g. waiter" autocomplete="off" />
+        </mat-form-field>
+
+        <div class="values-head">
+          <span class="vh-value">Value</span>
+          <span class="vh-weight">Weight</span>
+          <span class="vh-pct">Chance</span>
+          <span class="vh-del"></span>
+        </div>
+
+        @for (v of dict.values; track $index) {
+          <div class="value-row">
+            <mat-form-field class="value-field">
+              <input matInput [(ngModel)]="v.value" (ngModelChange)="persist()"
+                     placeholder="value" autocomplete="off" />
+            </mat-form-field>
+            <mat-form-field class="weight-field">
+              <input matInput type="number" min="0" step="1"
+                     [(ngModel)]="v.weight" (ngModelChange)="persist()" />
+            </mat-form-field>
+            <span class="value-pct">{{ percent(v.weight) }}%</span>
+            <button mat-icon-button class="value-del" matTooltip="Remove value"
+                    (click)="deleteValue($index)">
+              <mat-icon>remove_circle_outline</mat-icon>
+            </button>
+          </div>
+        }
+
+        <button mat-stroked-button class="add-value-btn" (click)="addValue()">
+          <mat-icon>add</mat-icon> Add value
+        </button>
+
+        <p class="usage">Use <code>{{ usageToken }}</code> in a prompt.</p>
+      } @else {
+        <p class="hint pad">Select or create a dictionary.</p>
+      }
+    </div>
+  </div>
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button mat-button mat-dialog-close>Close</button>
+</mat-dialog-actions>
