@@ -11,8 +11,9 @@ import { MatDividerModule } from '@angular/material/divider';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatSelectModule } from '@angular/material/select';
 import { MatSnackBar } from '@angular/material/snack-bar';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import { forkJoin, of } from 'rxjs';
-import { catchError } from 'rxjs/operators';
+import { catchError, switchMap } from 'rxjs/operators';
 import { STORAGE_KEYS } from '../../constants';
 import { ComfyConnectionService } from '../../services/comfy-connection.service';
 import { ConnectionStateService } from '../../services/connection-state.service';
@@ -28,6 +29,9 @@ export interface GenerateDialogData {
   workflow: Record<string, any>;
   positivePromptOverride?: string;
   title?: string;
+  /** When set, the dialog runs in "Generate from" mode: shows Denoise and, when
+   *  denoise < 1, uploads this image and rewires the flow to img2img. */
+  sourceImage?: { filename: string; folder: string; width: number | null; height: number | null };
 }
 
 export interface GenerateCloseResult {
@@ -80,7 +84,7 @@ const DEFAULT_NEGATIVE_PROMPT = 'worst quality, low quality, bad anatomy, bad ha
 
 @Component({
   selector: 'pp-generate-dialog',
-  imports: [FormsModule, CdkDrag, CdkDragHandle, MatDialogModule, MatFormFieldModule, MatInputModule, MatSelectModule, MatButtonModule, MatIconModule, MatCheckboxModule, MatMenuModule, MatDividerModule, ComfyUrlRowComponent],
+  imports: [FormsModule, CdkDrag, CdkDragHandle, MatDialogModule, MatFormFieldModule, MatInputModule, MatSelectModule, MatButtonModule, MatIconModule, MatCheckboxModule, MatMenuModule, MatDividerModule, MatTooltipModule, ComfyUrlRowComponent],
   templateUrl: './generate-dialog.html',
   styleUrl: './generate-dialog.scss',
 })
@@ -127,6 +131,11 @@ export class GenerateDialog {
     this.hasDenoise = Object.values(this.data.workflow).some(
       n => 'denoise' in (n.inputs || {}) && n.inputs.denoise !== 1.0,
     );
+    // "Generate from" mode: surface a usable denoise default and a fresh seed.
+    if (this.data.sourceImage) {
+      if (this.params.denoise == null) this.params.denoise = 0.5;
+      this.randomizeSeed();
+    }
     this.loraNodes = this.extractVariableNodes(this.data.workflow, 'lora_name');
     this.checkpointNodes = this.extractVariableNodes(this.data.workflow, 'ckpt_name');
 
@@ -154,6 +163,11 @@ export class GenerateDialog {
 
   get dialogTitle(): string {
     return this.data.title ?? 'Generate with ComfyUI';
+  }
+
+  /** True when launched from "Generate from" with a source image. */
+  get sourceMode(): boolean {
+    return !!this.data.sourceImage;
   }
 
   randomizeSeed(): void {
@@ -235,7 +249,22 @@ export class GenerateDialog {
     const unload$ = lmstudioUrl
       ? this.photoService.unloadLmStudio(lmstudioUrl).pipe(catchError(() => of(null)))
       : of(null);
-    unload$.subscribe(() => this._doSend(front));
+
+    const src = this.data.sourceImage;
+    if (src && this.params.denoise != null && this.params.denoise < 1) {
+      // img2img: upload the source image to ComfyUI before building the flow.
+      unload$.pipe(
+        switchMap(() => this.photoService.uploadToComfy(this.comfy.comfyUrl, src.filename, src.folder)),
+      ).subscribe({
+        next: res => this._doSend(front, res.name),
+        error: err => {
+          this.sending = false;
+          this.snackBar.open(`Upload error: ${this.formatSendError(err)}`, 'Dismiss', { duration: 10000 });
+        },
+      });
+    } else {
+      unload$.subscribe(() => this._doSend(front));
+    }
   }
 
   sendFront(): void {
@@ -266,12 +295,19 @@ export class GenerateDialog {
     return parts.join(' — ') || err?.message || 'Failed to send';
   }
 
-  private _doSend(front = false): void {
+  private _doSend(front = false, uploadedImageName: string | null = null): void {
     const notifySuccess = (count: number) => {
       this.sending = false;
       const msg = count > 1 ? `Queued ${count} prompts` : 'Prompt queued';
       const suffix = this.copyResult ? ' — will copy to folder' : '';
       this.snackBar.open(msg + suffix, '', { duration: 4000 });
+    };
+
+    // Build the final flow for one combo: loras, then (in source mode) img2img.
+    const finalize = (wf: Record<string, any>) => {
+      let out = this.injectManualLoras(this.removeEmptyLoraNodes(wf), this.manualLoras.filter(l => l.name));
+      if (uploadedImageName) out = this.toImg2Img(out, uploadedImageName);
+      return out;
     };
 
     const variableNodes = [
@@ -280,10 +316,7 @@ export class GenerateDialog {
     ];
 
     if (variableNodes.length === 0) {
-      const workflow = this.injectManualLoras(
-        this.removeEmptyLoraNodes(this.applyParams(this.data.workflow, this.resolvedParams())),
-        this.manualLoras.filter(l => l.name)
-      );
+      const workflow = finalize(this.applyParams(this.data.workflow, this.resolvedParams()));
       this.photoService.sendToComfy(this.comfy.comfyUrl, workflow, this.copyResult, front).subscribe({
         next: () => notifySuccess(1),
         error: (err) => {
@@ -304,15 +337,7 @@ export class GenerateDialog {
           workflow[node.nodeId].inputs[node.inputKey] = value;
         }
       });
-      return this.photoService.sendToComfy(
-        this.comfy.comfyUrl,
-        this.injectManualLoras(
-          this.removeEmptyLoraNodes(workflow),
-          this.manualLoras.filter(l => l.name)
-        ),
-        this.copyResult,
-        front,
-      );
+      return this.photoService.sendToComfy(this.comfy.comfyUrl, finalize(workflow), this.copyResult, front);
     });
 
     forkJoin(requests).subscribe({
@@ -618,5 +643,41 @@ export class GenerateDialog {
       (acc, arr) => acc.flatMap(combo => arr.map(item => [...combo, item])),
       [[]]
     );
+  }
+
+  /**
+   * Rewire a txt2img flow into img2img: feed the uploaded source image through
+   * LoadImage → VAEEncode (reusing the flow's VAE) into the sampler's latent,
+   * repeating it for batch sizes > 1. Denoise is already applied via applyParams.
+   * The now-unreferenced EmptyLatentImage node is simply ignored by ComfyUI.
+   */
+  private toImg2Img(workflow: Record<string, any>, imageName: string): Record<string, any> {
+    const entries = Object.entries(workflow);
+    const ksampler = entries.find(([, n]) => n.inputs && 'latent_image' in n.inputs && 'denoise' in n.inputs)?.[1];
+    if (!ksampler) return workflow;
+
+    // VAE source: prefer the decoder's VAE input, else any VAELoader.
+    let vaeRef: any = entries.find(([, n]) => n.class_type === 'VAEDecode' && Array.isArray(n.inputs?.vae))?.[1].inputs.vae;
+    if (!vaeRef) {
+      const vaeLoaderId = entries.find(([, n]) => n.class_type === 'VAELoader')?.[0];
+      if (vaeLoaderId) vaeRef = [vaeLoaderId, 0];
+    }
+    if (!vaeRef) return workflow; // can't encode without a VAE — leave as txt2img
+
+    let maxId = Math.max(...Object.keys(workflow).map(Number).filter(n => !isNaN(n)), 100);
+    const loadId = String(++maxId);
+    workflow[loadId] = { class_type: 'LoadImage', inputs: { image: imageName } };
+    const encId = String(++maxId);
+    workflow[encId] = { class_type: 'VAEEncode', inputs: { pixels: [loadId, 0], vae: [...vaeRef] } };
+
+    let latentRef: [string, number] = [encId, 0];
+    const batch = this.params.batchSize;
+    if (batch != null && batch > 1) {
+      const repId = String(++maxId);
+      workflow[repId] = { class_type: 'RepeatLatentBatch', inputs: { samples: [encId, 0], amount: batch } };
+      latentRef = [repId, 0];
+    }
+    ksampler.inputs.latent_image = latentRef;
+    return workflow;
   }
 }

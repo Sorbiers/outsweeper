@@ -146,10 +146,11 @@
       <input matInput type="number" [(ngModel)]="params.cfg" />
     </mat-form-field>
 
-    @if (hasDenoise) {
+    @if (hasDenoise || sourceMode) {
       <mat-form-field>
         <mat-label>Denoise</mat-label>
-        <input matInput type="number" [(ngModel)]="params.denoise" step="0.05" min="0" max="1" />
+        <input matInput type="number" [(ngModel)]="params.denoise" step="0.05" min="0" max="1"
+               [matTooltip]="sourceMode ? '< 1 uses the source image (img2img); 1 ignores it (txt2img)' : ''" />
       </mat-form-field>
     }
 

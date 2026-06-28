@@ -15,8 +15,7 @@ import { ComfyConnectionService } from '../../services/comfy-connection.service'
 import { PhotoService } from '../../services/photo.service';
 import { CollectionAddDialog } from '../collection-add-dialog/collection-add-dialog';
 import { DescribeDialog } from '../describe-dialog/describe-dialog';
-import { DEFAULT_FLUX_WORKFLOW, GenerateDialog } from '../generate-dialog/generate-dialog';
-import { GenerateFromDialog, GenerateFromDialogData } from '../generate-from-dialog/generate-from-dialog';
+import { DEFAULT_FLUX_WORKFLOW, GenerateDialog, GenerateDialogData } from '../generate-dialog/generate-dialog';
 import { OutpaintDialog, OutpaintDialogData } from '../outpaint-dialog/outpaint-dialog';
 import { MetadataEditDialog } from '../metadata-edit-dialog/metadata-edit-dialog';
 import { MetadataStripDialog } from '../metadata-strip-dialog/metadata-strip-dialog';
@@ -162,19 +161,21 @@ export class InfoPanel implements OnInit {
 
   openGenerateFrom(): void {
     if (!this.info) return;
-    const comfyPrompt = this.info.png_metadata?.['prompt']
-      ? JSON.parse(this.info.png_metadata['prompt'])
-      : undefined;
-    this.dialog.open(GenerateFromDialog, {
+    const raw = this.info.png_metadata?.['prompt'];
+    const workflow = raw ? JSON.parse(raw) : JSON.parse(JSON.stringify(DEFAULT_FLUX_WORKFLOW));
+    this.dialog.open(GenerateDialog, {
       data: {
-        filename: this.info.filename,
-        folder: this.folder,
-        imageWidth: this.info.width ?? null,
-        imageHeight: this.info.height ?? null,
-        imageComfyPrompt: comfyPrompt,
-      } satisfies GenerateFromDialogData,
+        workflow,
+        title: `Generate from · ${this.info.filename}`,
+        sourceImage: {
+          filename: this.info.filename,
+          folder: this.folder,
+          width: this.info.width ?? null,
+          height: this.info.height ?? null,
+        },
+      } satisfies GenerateDialogData,
       width: '90vw',
-      maxWidth: '800px',
+      maxWidth: '1500px',
     });
   }
 
