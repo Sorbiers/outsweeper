@@ -307,6 +307,13 @@ mat-dialog-content {
   margin-top: 12px;
 }
 
+.empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
 .center {
   display: flex;
   align-items: center;

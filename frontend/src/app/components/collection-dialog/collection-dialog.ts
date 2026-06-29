@@ -14,7 +14,9 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatTree, MatTreeModule } from '@angular/material/tree';
 import { Collection, PhotoInfo, PhotoListItem } from '../../models/photo.model';
 import { PhotoService } from '../../services/photo.service';
-import { GenerateDialog } from '../generate-dialog/generate-dialog';
+import { STORAGE_KEYS } from '../../constants';
+import { DEFAULT_FLUX_WORKFLOW, GenerateDialog } from '../generate-dialog/generate-dialog';
+import { DescribeDialog } from '../describe-dialog/describe-dialog';
 
 interface TreeNode {
   kind: 'collection' | 'set';
@@ -111,14 +113,39 @@ export class CollectionDialog {
       this.treeData();
       queueMicrotask(() => this.tree()?.expandAll());
     });
-    // Seed initial column widths at the 20% minimum once the dialog is laid out.
+    // Restore the session's saved layout, else seed widths at the 20% minimum.
     afterNextRender(() => {
-      const w = this.contentWidth();
-      if (w) {
-        this.treeWidth.set(w * 0.2);
-        this.previewWidth.set(w * 0.2);
+      const saved = this.loadLayout();
+      if (saved) {
+        this.treeWidth.set(saved.treeWidth);
+        this.previewWidth.set(saved.previewWidth);
+        this.previewTopHeight.set(saved.previewTopHeight);
+      } else {
+        const w = this.contentWidth();
+        if (w) {
+          this.treeWidth.set(w * 0.2);
+          this.previewWidth.set(w * 0.2);
+        }
       }
     });
+  }
+
+  private loadLayout(): { treeWidth: number; previewWidth: number; previewTopHeight: number } | null {
+    try {
+      const raw = sessionStorage.getItem(STORAGE_KEYS.COLLECTION_LAYOUT);
+      const v = raw ? JSON.parse(raw) : null;
+      return v && typeof v.treeWidth === 'number' ? v : null;
+    } catch {
+      return null;
+    }
+  }
+
+  private saveLayout(): void {
+    sessionStorage.setItem(STORAGE_KEYS.COLLECTION_LAYOUT, JSON.stringify({
+      treeWidth: this.treeWidth(),
+      previewWidth: this.previewWidth(),
+      previewTopHeight: this.previewTopHeight(),
+    }));
   }
 
   private contentWidth(): number {
@@ -219,11 +246,64 @@ export class CollectionDialog {
     });
   }
 
-  /** Generate using a specific positive prompt (original or alternative). */
+  /** Parse the image's embedded flow, or fall back to the default Flux flow. */
+  private workflowOrDefault(info: PhotoInfo | null): Record<string, any> {
+    const raw = info?.png_metadata?.['prompt'];
+    try {
+      return raw ? JSON.parse(raw) : JSON.parse(JSON.stringify(DEFAULT_FLUX_WORKFLOW));
+    } catch {
+      return JSON.parse(JSON.stringify(DEFAULT_FLUX_WORKFLOW));
+    }
+  }
+
+  /** Generate using a specific positive prompt (original or alternative template). */
   generateWith(prompt: string): void {
     const photo = this.selectedPhoto();
-    const info  = this.selectedInfo();
-    if (photo && info) this.openGenerate(photo, info, prompt || undefined);
+    if (!photo) return;
+    this.dialog.open(GenerateDialog, {
+      data: {
+        workflow: this.workflowOrDefault(this.selectedInfo()),
+        title: `Generate · ${photo.filename}`,
+        positivePromptOverride: prompt || undefined,
+      },
+      width: '90vw',
+      maxWidth: '1500px',
+    });
+  }
+
+  /** Describe the image (LM Studio) then optionally generate from the result. */
+  openDescribe(): void {
+    const photo = this.selectedPhoto();
+    if (!photo) return;
+    const info = this.selectedInfo();
+    this.dialog.open(DescribeDialog, {
+      data: { filename: photo.filename, folder: this.folderPath, hasImageWorkflow: !!info?.png_metadata?.['prompt'] },
+      width: '90vw',
+      maxWidth: '700px',
+    }).afterClosed().subscribe(result => {
+      if (result?.prompt) this.generateWith(result.prompt);
+    });
+  }
+
+  /** Open the Generate dialog in img2img "source image" mode for this image. */
+  openGenerateFrom(): void {
+    const photo = this.selectedPhoto();
+    if (!photo) return;
+    const info = this.selectedInfo();
+    this.dialog.open(GenerateDialog, {
+      data: {
+        workflow: this.workflowOrDefault(info),
+        title: `Generate from · ${photo.filename}`,
+        sourceImage: {
+          filename: photo.filename,
+          folder: this.folderPath,
+          width: info?.width ?? null,
+          height: info?.height ?? null,
+        },
+      },
+      width: '90vw',
+      maxWidth: '1500px',
+    });
   }
 
   startEditAlt(): void {
@@ -383,5 +463,6 @@ export class CollectionDialog {
     this.resizeKind = null;
     document.removeEventListener('mousemove', this.boundResize);
     document.removeEventListener('mouseup', this.boundResizeEnd);
+    this.saveLayout();
   }
 }

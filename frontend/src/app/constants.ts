@@ -23,4 +23,5 @@ export const STORAGE_KEYS = {
   COMFY_POS:          'pp_comfy_pos',
   WIDGET_POS:         'pp_widget_pos',
   DICTIONARIES:       'pp_dictionaries',
+  COLLECTION_LAYOUT:  'pp_collection_layout',
 } as const;
