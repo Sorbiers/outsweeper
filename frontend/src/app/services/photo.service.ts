@@ -200,6 +200,19 @@ export class PhotoService {
       '/api/collections/delete', { path: relPath });
   }
 
+  /** Move an image from one collection/set to another. */
+  moveBetweenCollections(
+    filename: string, fromCollection: string, fromSet: string, toCollection: string, toSet: string,
+  ): Observable<{ ok: boolean; count: number; errors: string[] }> {
+    return this.batchOperation({
+      filenames:   [filename],
+      operation:   'move',
+      destination: this.collectionPath(toCollection, toSet),
+      zip:         false,
+      folder:      this.collectionPath(fromCollection, fromSet),
+    });
+  }
+
   downloadFile(filename: string, folder: string): void {
     const a = document.createElement('a');
     a.href = this.getImageUrl(filename, folder);

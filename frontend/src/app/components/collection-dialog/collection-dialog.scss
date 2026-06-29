@@ -106,6 +106,12 @@ mat-dialog-content {
 
   &:hover { background: rgba(255, 255, 255, 0.05); }
   &.leaf.is-selected { background: rgba(79, 195, 247, 0.18); }
+  &.droppable { outline: 1px dashed rgba(79, 195, 247, 0.35); outline-offset: -2px; }
+  &.drop-target {
+    background: rgba(79, 195, 247, 0.32);
+    outline: 1px dashed #4fc3f7;
+    outline-offset: -2px;
+  }
 
   .toggle-icon,
   .node-icon {
@@ -145,7 +151,8 @@ mat-dialog-content {
   position: relative;
   border-radius: 4px;
   overflow: hidden;
-  cursor: pointer;
+  cursor: grab;
+  &:active { cursor: grabbing; }
   background: rgba(255, 255, 255, 0.03);
   border: 2px solid transparent;
 
@@ -312,4 +319,12 @@ mat-dialog-content {
   font-size: 13px;
 
   &.pad { padding: 12px; }
+}
+
+.move-menu-head {
+  padding: 6px 16px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #888;
 }

@@ -2,11 +2,12 @@ import { CdkDrag, CdkDragHandle } from '@angular/cdk/drag-drop';
 import { afterNextRender, Component, computed, effect, ElementRef, inject, signal, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
-import { MatFormFieldModule } from '@angular/material/form-field';
-import { MatInputModule } from '@angular/material/input';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
+import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
+import { MatInputModule } from '@angular/material/input';
+import { MatMenuModule } from '@angular/material/menu';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
@@ -27,7 +28,7 @@ interface TreeNode {
   selector: 'pp-collection-dialog',
   imports: [CdkDrag, CdkDragHandle, FormsModule, MatDialogModule, MatButtonModule, MatIconModule,
             MatChipsModule, MatTreeModule, MatProgressSpinnerModule, MatTooltipModule,
-            MatFormFieldModule, MatInputModule],
+            MatFormFieldModule, MatInputModule, MatMenuModule],
   templateUrl: './collection-dialog.html',
   styleUrl: './collection-dialog.scss',
 })
@@ -68,6 +69,24 @@ export class CollectionDialog {
 
   selectedCollection = signal('');
   selectedSet        = signal('');
+
+  // Move-to-another-set: shared menu source + drag-and-drop state.
+  moveSource    = signal<PhotoListItem | null>(null);
+  dragging      = signal(false);
+  dropTargetKey = signal<string | null>(null);
+  private draggedPhoto: PhotoListItem | null = null;
+
+  /** Every (collection, set) except the one currently shown — menu move targets. */
+  moveTargets = computed(() => {
+    const out: { key: string; collection: string; set: string }[] = [];
+    for (const c of this.collections()) {
+      for (const s of c.sets) {
+        if (c.name === this.selectedCollection() && s.name === this.selectedSet()) continue;
+        out.push({ key: `${c.name}/${s.name}`, collection: c.name, set: s.name });
+      }
+    }
+    return out;
+  });
 
   photos        = signal<PhotoListItem[]>([]);
   photosLoading = signal(false);
@@ -148,6 +167,10 @@ export class CollectionDialog {
 
   thumbUrl(photo: PhotoListItem): string {
     return this.photoService.getThumbnailUrl(photo.filename, this.folderPath, photo.modified_token);
+  }
+
+  imageUrl(photo: PhotoListItem): string {
+    return this.photoService.getImageUrl(photo.filename, this.folderPath, photo.modified_token);
   }
 
   selectPhoto(photo: PhotoListItem): void {
@@ -259,6 +282,78 @@ export class CollectionDialog {
 
   loraName(name: string): string {
     return name.replace(/\.[^.]+$/, '').replace(/^.*[\\/]/, '');
+  }
+
+  // --- Move to another collection/set ---
+
+  private nodeKey(node: TreeNode): string {
+    return `${node.collection}/${node.name}`;
+  }
+
+  private isSourceSet(node: TreeNode): boolean {
+    return node.kind === 'set'
+      && node.collection === this.selectedCollection()
+      && node.name === this.selectedSet();
+  }
+
+  /** A set node (not the source) is a valid drop target while dragging a photo. */
+  canDrop(node: TreeNode): boolean {
+    return node.kind === 'set' && !!this.draggedPhoto && !this.isSourceSet(node);
+  }
+
+  onDragStart(photo: PhotoListItem, e: DragEvent): void {
+    this.draggedPhoto = photo;
+    this.dragging.set(true);
+    e.dataTransfer?.setData('text/plain', photo.filename);
+    if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
+  }
+
+  onDragEnd(): void {
+    this.draggedPhoto = null;
+    this.dragging.set(false);
+    this.dropTargetKey.set(null);
+  }
+
+  onNodeDragOver(node: TreeNode, e: DragEvent): void {
+    if (!this.canDrop(node)) return;
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+    this.dropTargetKey.set(this.nodeKey(node));
+  }
+
+  onNodeDragLeave(node: TreeNode): void {
+    if (this.dropTargetKey() === this.nodeKey(node)) this.dropTargetKey.set(null);
+  }
+
+  onNodeDrop(node: TreeNode, e: DragEvent): void {
+    e.preventDefault();
+    const photo = this.draggedPhoto;
+    const valid = this.canDrop(node);
+    this.onDragEnd();
+    if (photo && valid) this.movePhotoToSet(photo, node.collection, node.name);
+  }
+
+  movePhotoToSet(photo: PhotoListItem | null, toCollection: string, toSet: string): void {
+    if (!photo) return;
+    const fromCol = this.selectedCollection();
+    const fromSet = this.selectedSet();
+    if (toCollection === fromCol && toSet === fromSet) return;
+    this.photoService.moveBetweenCollections(photo.filename, fromCol, fromSet, toCollection, toSet).subscribe({
+      next: res => {
+        if (res.count > 0) {
+          this.photos.update(list => list.filter(p => p.filename !== photo.filename));
+          if (this.selectedPhoto()?.filename === photo.filename) {
+            this.selectedPhoto.set(null);
+            this.selectedInfo.set(null);
+          }
+          this.reloadCollections();
+          this.snackBar.open(`Moved to ${toCollection} / ${toSet}`, '', { duration: 2500 });
+        } else {
+          this.snackBar.open(res.errors?.[0] || 'Move failed', '', { duration: 3000 });
+        }
+      },
+      error: err => this.snackBar.open(err.error?.error || 'Move failed', '', { duration: 3000 }),
+    });
   }
 
   startResize(e: MouseEvent, kind: 'tree' | 'preview' | 'split'): void {

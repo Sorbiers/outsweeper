@@ -17,7 +17,12 @@
         <mat-tree [dataSource]="treeData()" [childrenAccessor]="childrenAccessor">
           <mat-tree-node *matTreeNodeDef="let node" matTreeNodePadding
                          class="tree-node leaf" [class.is-selected]="isSetSelected(node)"
-                         (click)="selectSetNode(node)">
+                         [class.drop-target]="dropTargetKey() === node.collection + '/' + node.name"
+                         [class.droppable]="canDrop(node)"
+                         (click)="selectSetNode(node)"
+                         (dragover)="onNodeDragOver(node, $event)"
+                         (dragleave)="onNodeDragLeave(node)"
+                         (drop)="onNodeDrop(node, $event)">
             <mat-icon class="node-icon">photo_library</mat-icon>
             <span class="node-label">{{ node.name }}</span>
             <span class="row-count">{{ node.count }}</span>
@@ -46,9 +51,15 @@
           <div class="grid">
             @for (photo of photos(); track photo.filename) {
               <div class="thumb" [class.is-selected]="photo.filename === selectedPhoto()?.filename"
+                   draggable="true" (dragstart)="onDragStart(photo, $event)" (dragend)="onDragEnd()"
                    (click)="selectPhoto(photo)">
-                <img [src]="thumbUrl(photo)" [alt]="photo.filename" loading="lazy" />
+                <img [src]="thumbUrl(photo)" [alt]="photo.filename" loading="lazy" draggable="false" />
                 <div class="thumb-overlay">
+                  <button mat-icon-button matTooltip="Move to…" [matMenuTriggerFor]="moveMenu"
+                          [disabled]="moveTargets().length === 0"
+                          (click)="moveSource.set(photo); $event.stopPropagation()">
+                    <mat-icon>drive_file_move</mat-icon>
+                  </button>
                   <button mat-icon-button matTooltip="Re-generate" (click)="regenerate(photo); $event.stopPropagation()">
                     <mat-icon>bolt</mat-icon>
                   </button>
@@ -60,6 +71,16 @@
               </div>
             }
           </div>
+
+          <mat-menu #moveMenu="matMenu">
+            <div class="move-menu-head">Move to…</div>
+            @for (target of moveTargets(); track target.key) {
+              <button mat-menu-item (click)="movePhotoToSet(moveSource(), target.collection, target.set)">
+                <mat-icon>photo_library</mat-icon>
+                <span>{{ target.collection }} / {{ target.set }}</span>
+              </button>
+            }
+          </mat-menu>
         }
       </div>
 
@@ -73,7 +94,7 @@
         } @else if (selectedInfo(); as info) {
           <div class="preview-top" [style.height.px]="previewTopHeight()">
             <div class="preview-img">
-              <img [src]="thumbUrl(selectedPhoto()!)" [alt]="selectedPhoto()!.filename" />
+              <img [src]="imageUrl(selectedPhoto()!)" [alt]="selectedPhoto()!.filename" />
             </div>
             <div class="preview-name">{{ selectedPhoto()!.filename }}</div>
           </div>
