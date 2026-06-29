@@ -12,7 +12,7 @@ import { MatMenuModule } from '@angular/material/menu';
 import { MatSelectModule } from '@angular/material/select';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { forkJoin, of } from 'rxjs';
+import { forkJoin, Observable, of } from 'rxjs';
 import { catchError, switchMap } from 'rxjs/operators';
 import { STORAGE_KEYS } from '../../constants';
 import { ComfyConnectionService } from '../../services/comfy-connection.service';
@@ -102,6 +102,8 @@ export class GenerateDialog {
   params: WorkflowParams;
   sending = false;
   copyResult = false;
+  randomizeSeedOnSend = false;
+  jobsNumber = 1;
   hasDenoise = false;
 
   availableLoras: string[] = [];
@@ -314,31 +316,27 @@ export class GenerateDialog {
       ...this.checkpointNodes.filter(n => n.selected.length > 0),
       ...this.loraNodes.filter(n => n.selected.length > 0 && !n.removed),
     ];
+    const combinations = variableNodes.length
+      ? this.cartesian(variableNodes.map(n => n.selected))
+      : [[]];
 
-    if (variableNodes.length === 0) {
-      const workflow = finalize(this.applyParams(this.data.workflow, this.resolvedParams()));
-      this.photoService.sendToComfy(this.comfy.comfyUrl, workflow, this.copyResult, front).subscribe({
-        next: () => notifySuccess(1),
-        error: (err) => {
-          this.sending = false;
-          const msg = this.formatSendError(err);
-          this.snackBar.open(`Error: ${msg}`, 'Dismiss', { duration: 10000 });
-        },
+    // One job = the full Cartesian set; resolvedParams() re-rolls {{vars}} per combo.
+    const buildJob = (): Observable<any>[] =>
+      combinations.map(combo => {
+        const workflow = this.applyParams(this.data.workflow, this.resolvedParams());
+        combo.forEach((value, i) => {
+          const node = variableNodes[i];
+          if (workflow[node.nodeId]?.inputs) workflow[node.nodeId].inputs[node.inputKey] = value;
+        });
+        return this.photoService.sendToComfy(this.comfy.comfyUrl, finalize(workflow), this.copyResult, front);
       });
-      return;
+
+    // Re-randomize the seed and re-substitute template vars once per job.
+    const requests: Observable<any>[] = [];
+    for (let j = 0; j < this.jobCount; j++) {
+      if (this.randomizeSeedOnSend) this.randomizeSeed();
+      requests.push(...buildJob());
     }
-
-    const combinations = this.cartesian(variableNodes.map(n => n.selected));
-    const requests = combinations.map(combo => {
-      const workflow = this.applyParams(this.data.workflow, this.resolvedParams());
-      combo.forEach((value, i) => {
-        const node = variableNodes[i];
-        if (workflow[node.nodeId]?.inputs) {
-          workflow[node.nodeId].inputs[node.inputKey] = value;
-        }
-      });
-      return this.photoService.sendToComfy(this.comfy.comfyUrl, finalize(workflow), this.copyResult, front);
-    });
 
     forkJoin(requests).subscribe({
       next: () => notifySuccess(requests.length),
@@ -350,6 +348,12 @@ export class GenerateDialog {
     });
   }
 
+  /** Number of jobs to queue per send (>= 1). */
+  get jobCount(): number {
+    return Math.max(1, Math.floor(Number(this.jobsNumber) || 1));
+  }
+
+  /** Cartesian combinations for one job (checkpoints × LoRAs). */
   get totalPrompts(): number {
     const variableNodes = [
       ...this.checkpointNodes.filter(n => n.selected.length > 0),
@@ -357,6 +361,11 @@ export class GenerateDialog {
     ];
     if (variableNodes.length === 0) return 1;
     return variableNodes.reduce((acc, n) => acc * n.selected.length, 1);
+  }
+
+  /** Total prompts queued across all jobs. */
+  get totalSends(): number {
+    return this.jobCount * this.totalPrompts;
   }
 
   private fetchLoras(): void {

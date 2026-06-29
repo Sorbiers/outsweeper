@@ -29,8 +29,14 @@
 
 .extract-row {
   display: flex;
-  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 20px;
   margin-top: 8px;
+}
+
+.jobs-field {
+  width: 120px;
 }
 
 /* Top two-section layout: left = URL + LoRAs, right = options.
