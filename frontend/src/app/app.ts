@@ -376,13 +376,21 @@ export class App implements OnInit, OnDestroy {
   }
 
   openFavoritesCollectionAdd(): void {
-    this.openCollectionAdd([...this.favorites]);
+    this.openCollectionAdd(true);
   }
 
-  openCollectionAdd(filenames: string[]): void {
-    if (!filenames.length) return;
+  /** Open "Add to Collection" with the current image and the favorites set. */
+  openCollectionAdd(fromFavorites: boolean): void {
+    const current = this.currentInfo?.filename ?? null;
+    const favorites = [...this.favorites];
+    if (!current && favorites.length === 0) return;
     this.dialog.open(CollectionAddDialog, {
-      data: { filenames, sourceFolder: this.currentPath },
+      data: {
+        sourceFolder: this.currentPath,
+        currentFilename: current,
+        favoriteFilenames: favorites,
+        fromFavorites,
+      },
       width: '90vw',
       maxWidth: '480px',
     });
@@ -526,8 +534,8 @@ export class App implements OnInit, OnDestroy {
         this.openComfyQueueDialog();
         break;
       case 'addToCollection':
-        if (this.favorites.size > 0) this.openCollectionAdd([...this.favorites]);
-        else if (this.currentInfo) this.openCollectionAdd([this.currentInfo.filename]);
+        // 'c' historically favored the favorites set; treat it as the favorites entry.
+        this.openCollectionAdd(this.favorites.size > 0);
         break;
       case 'openCollections':
         this.openCollectionDialog();

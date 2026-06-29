@@ -4,8 +4,22 @@
 
 <mat-dialog-content>
   @if (phase === 'select') {
+    @if (hasFavorites) {
+      <div class="source-options">
+        @if (hasCurrent) {
+          <mat-checkbox [(ngModel)]="addCurrent">Add current image</mat-checkbox>
+        }
+        <mat-checkbox [(ngModel)]="addFavorites">Add favorite images ({{ favoriteCount }})</mat-checkbox>
+      </div>
+    }
     @if (pngFilenames.length === 0) {
-      <p class="hint">No PNG images to add. Only PNG files carry an embedded ComfyUI flow.</p>
+      <p class="hint">
+        @if (hasFavorites) {
+          Select at least one source above. Only PNG files carry an embedded ComfyUI flow.
+        } @else {
+          No PNG images to add. Only PNG files carry an embedded ComfyUI flow.
+        }
+      </p>
     } @else {
       <p class="count-line">
         Adding {{ pngFilenames.length }} image(s)
@@ -39,7 +53,7 @@
   } @else if (phase === 'progress') {
     <div class="center">
       <mat-spinner diameter="48"></mat-spinner>
-      <p>Adding {{ pngFilenames.length }} image(s)…</p>
+      <p>Adding {{ applyingCount }} image(s)…</p>
     </div>
   } @else {
     <p class="result-msg">{{ resultMessage }}</p>

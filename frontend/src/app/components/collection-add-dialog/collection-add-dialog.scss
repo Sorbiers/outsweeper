@@ -3,6 +3,13 @@
   width: 100%;
 }
 
+.source-options {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 12px;
+}
+
 .count-line {
   font-size: 13px;
   color: #ccc;

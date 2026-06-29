@@ -13,7 +13,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { PhotoInfo } from '../../models/photo.model';
 import { ComfyConnectionService } from '../../services/comfy-connection.service';
 import { PhotoService } from '../../services/photo.service';
-import { CollectionAddDialog } from '../collection-add-dialog/collection-add-dialog';
+import { CollectionAddDialog, CollectionAddDialogData } from '../collection-add-dialog/collection-add-dialog';
 import { DescribeDialog } from '../describe-dialog/describe-dialog';
 import { DEFAULT_FLUX_WORKFLOW, GenerateDialog, GenerateDialogData } from '../generate-dialog/generate-dialog';
 import { OutpaintDialog, OutpaintDialogData } from '../outpaint-dialog/outpaint-dialog';
@@ -34,6 +34,7 @@ export class InfoPanel implements OnInit {
   @Input() info: PhotoInfo | null = null;
   @Input() folder = '';
   @Input() folderType = 'source';
+  @Input() favorites: ReadonlySet<string> = new Set();
   @Output() move = new EventEmitter<'selected' | 'dust' | 'source'>();
   @Output() metadataChanged = new EventEmitter<void>();
 
@@ -182,7 +183,12 @@ export class InfoPanel implements OnInit {
   addToCollection(): void {
     if (!this.info) return;
     this.dialog.open(CollectionAddDialog, {
-      data: { filenames: [this.info.filename], sourceFolder: this.folder },
+      data: {
+        sourceFolder: this.folder,
+        currentFilename: this.info.filename,
+        favoriteFilenames: [...this.favorites],
+        fromFavorites: false,
+      } satisfies CollectionAddDialogData,
       width: '90vw',
       maxWidth: '480px',
     });
