@@ -581,10 +581,21 @@ export class GenerateDialog {
       insertAfterModel = [tailId, 0];
       insertAfterClip = [tailId, 1];
     } else {
-      const ckptEntry = Object.entries(workflow).find(([, n]) => n.class_type === 'CheckpointLoaderSimple');
-      if (!ckptEntry) return workflow;
-      insertAfterModel = [ckptEntry[0], 0];
-      insertAfterClip = [ckptEntry[0], 1];
+      // No existing LoRA: anchor to the live MODEL and CLIP sources so the LoRA
+      // sits between them and their consumers. Trace MODEL from the sampler's
+      // `model` input and CLIP from a CLIPTextEncode's `clip` input — for Flux
+      // the CLIP comes from DualCLIPLoader, not the checkpoint.
+      const sampler = Object.values(workflow).find(
+        n => Array.isArray(n.inputs?.model) && 'steps' in (n.inputs || {}) && 'cfg' in (n.inputs || {}),
+      );
+      const clipEnc = Object.values(workflow).find(
+        n => n.class_type === 'CLIPTextEncode' && Array.isArray(n.inputs?.clip),
+      );
+      const modelRef = sampler?.inputs?.model;
+      const clipRef  = clipEnc?.inputs?.clip;
+      if (!Array.isArray(modelRef) || !Array.isArray(clipRef)) return workflow;
+      insertAfterModel = [modelRef[0], modelRef[1]];
+      insertAfterClip  = [clipRef[0], clipRef[1]];
     }
 
     const originalNodeIds = new Set(Object.keys(workflow));
