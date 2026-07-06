@@ -1,4 +1,4 @@
-import { Component, inject } from '@angular/core';
+import { Component, ElementRef, inject, signal, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { CdkDrag, CdkDragHandle } from '@angular/cdk/drag-drop';
 import { MatButtonModule } from '@angular/material/button';
@@ -21,9 +21,14 @@ export class DictionaryDialog {
   private dictService = inject(DictionaryService);
   private snackBar = inject(MatSnackBar);
 
+  private fileInput = viewChild<ElementRef<HTMLInputElement>>('fileInput');
+
   // Working copy; changes are persisted on every edit.
   dicts: Dictionary[] = structuredClone(this.dictService.dictionaries());
   selectedIndex = this.dicts.length ? 0 : -1;
+
+  /** Parsed dictionaries awaiting the Add/Replace choice after an import. */
+  importPending = signal<Dictionary[] | null>(null);
 
   get selected(): Dictionary | null {
     return this.dicts[this.selectedIndex] ?? null;
@@ -89,5 +94,72 @@ export class DictionaryDialog {
     let i = 2;
     while (names.has(`${base} ${i}`)) i++;
     return `${base} ${i}`;
+  }
+
+  // --- Export / Import ---
+
+  exportJson(): void {
+    const blob = new Blob([JSON.stringify(this.dicts, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'dictionaries.json';
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  triggerImport(): void {
+    this.fileInput()?.nativeElement.click();
+  }
+
+  onFileSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = ''; // allow re-picking the same file
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const dicts = this.normalizeImport(JSON.parse(reader.result as string));
+        if (!dicts.length) {
+          this.snackBar.open('No dictionaries found in file', '', { duration: 3000 });
+          return;
+        }
+        this.importPending.set(dicts);
+      } catch {
+        this.snackBar.open('Invalid JSON file', '', { duration: 3000 });
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  /** Coerce arbitrary parsed JSON into a clean Dictionary[] (drops bad entries). */
+  private normalizeImport(parsed: unknown): Dictionary[] {
+    const arr = Array.isArray(parsed) ? parsed : [];
+    return arr
+      .filter((d: any) => d && typeof d.name === 'string' && Array.isArray(d.values))
+      .map((d: any) => ({
+        name: String(d.name),
+        values: d.values
+          .filter((v: any) => v && typeof v.value === 'string')
+          .map((v: any) => ({ value: String(v.value), weight: Number(v.weight) || 1 })),
+      }));
+  }
+
+  applyImport(mode: 'add' | 'replace'): void {
+    const incoming = this.importPending();
+    if (!incoming) return;
+    if (mode === 'replace') {
+      this.dicts = structuredClone(incoming);
+    } else {
+      // Union by name; imported entries override existing ones with the same name.
+      const byName = new Map(this.dicts.map(d => [d.name.trim().toLowerCase(), d]));
+      for (const d of incoming) byName.set(d.name.trim().toLowerCase(), structuredClone(d));
+      this.dicts = [...byName.values()];
+    }
+    this.importPending.set(null);
+    this.selectedIndex = this.dicts.length ? 0 : -1;
+    this.persist();
+    this.snackBar.open(mode === 'replace' ? 'Dictionaries replaced' : 'Dictionaries merged', '', { duration: 2000 });
   }
 }

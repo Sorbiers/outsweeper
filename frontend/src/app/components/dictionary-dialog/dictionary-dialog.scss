@@ -1,5 +1,23 @@
 :host { display: block; }
 
+.import-confirm {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  border-radius: 4px;
+  background: rgba(79, 195, 247, 0.12);
+  border: 1px solid rgba(79, 195, 247, 0.4);
+  font-size: 13px;
+  color: #ddd;
+
+  .mat-icon { color: #4fc3f7; flex-shrink: 0; }
+  .spacer { flex: 1; }
+}
+
+.actions-spacer { flex: 1; }
+
 .title-hint {
   font-size: 12px;
   font-weight: 400;
