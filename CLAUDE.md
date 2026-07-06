@@ -81,6 +81,7 @@ npm run release
 - `describe.py` — CLI for LM Studio vision image description. Usage: `python describe.py <image> [prompt] [model]`
 - `gen.py` — batch ComfyUI executor: reads PNG workflows, randomizes prompts/seeds, posts to ComfyUI. Usage: `python gen.py <folder>`
 - `run.py` — batch ComfyUI executor: re-sends PNG workflows with random seeds. Usage: `python run.py <folder>`
+- `generate_from_collection.py` — run a saved collection flow `.json` (`{ flow, dictionaries }`) N times, one job at a time, re-randomizing `{{tokens}}` and the seed per job and saving outputs to a folder. Usage: `python generate_from_collection.py <path_to_json> <jobs_number> <out_path>`
 - `prompt.py` — prints a single random prompt from preset arrays. Usage: `python prompt.py`
 
 ## Dependencies
