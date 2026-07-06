@@ -11,28 +11,28 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { Subject } from 'rxjs';
 import { debounceTime, distinctUntilChanged, finalize } from 'rxjs/operators';
 import { AboutDialog } from './components/about-dialog/about-dialog';
-import { ComfyQueueDialog } from './components/comfy-queue-dialog/comfy-queue-dialog';
 import { BatchDialog } from './components/batch-dialog/batch-dialog';
-import { ComfyQueueWidget } from './components/comfy-queue/comfy-queue';
-import {
-  ActiveFilters,
-  emptyFilters,
-  FilterDialog,
-  hasActiveFilters,
-} from './components/filter-dialog/filter-dialog';
-import {
-  FolderSelectDialog,
-  FolderSelectResult,
-} from './components/folder-select-dialog/folder-select-dialog';
-import {
-  DEFAULT_FLUX_WORKFLOW,
-  GenerateCloseResult,
-  GenerateDialog,
-  GenerateDialogData,
-} from './components/generate-dialog/generate-dialog';
 import { CollectionAddDialog } from './components/collection-add-dialog/collection-add-dialog';
 import { CollectionDialog } from './components/collection-dialog/collection-dialog';
+import { ComfyQueueDialog } from './components/comfy-queue-dialog/comfy-queue-dialog';
+import { ComfyQueueWidget } from './components/comfy-queue/comfy-queue';
 import { DictionaryDialog } from './components/dictionary-dialog/dictionary-dialog';
+import {
+    ActiveFilters,
+    emptyFilters,
+    FilterDialog,
+    hasActiveFilters,
+} from './components/filter-dialog/filter-dialog';
+import {
+    FolderSelectDialog,
+    FolderSelectResult,
+} from './components/folder-select-dialog/folder-select-dialog';
+import {
+    DEFAULT_FLUX_WORKFLOW,
+    GenerateCloseResult,
+    GenerateDialog,
+    GenerateDialogData,
+} from './components/generate-dialog/generate-dialog';
 import { GpuMonitorWidget } from './components/gpu-monitor/gpu-monitor';
 import { ImageStrip } from './components/image-strip/image-strip';
 import { InfoPanel } from './components/info-panel/info-panel';
@@ -371,7 +371,7 @@ export class App implements OnInit, OnDestroy {
     this.dialog.open(ComfyQueueDialog, {
       data: { comfyUrl: this.connState.comfy.url },
       width: '90vw',
-      maxWidth: '640px',
+      maxWidth: '780px',
     });
   }
 

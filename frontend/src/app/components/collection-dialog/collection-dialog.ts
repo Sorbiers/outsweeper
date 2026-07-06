@@ -12,11 +12,11 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatTree, MatTreeModule } from '@angular/material/tree';
+import { STORAGE_KEYS } from '../../constants';
 import { Collection, PhotoInfo, PhotoListItem } from '../../models/photo.model';
 import { PhotoService } from '../../services/photo.service';
-import { STORAGE_KEYS } from '../../constants';
-import { DEFAULT_FLUX_WORKFLOW, GenerateDialog } from '../generate-dialog/generate-dialog';
 import { DescribeDialog } from '../describe-dialog/describe-dialog';
+import { DEFAULT_FLUX_WORKFLOW, GenerateDialog } from '../generate-dialog/generate-dialog';
 
 interface TreeNode {
   kind: 'collection' | 'set';
@@ -447,12 +447,12 @@ export class CollectionDialog {
     const rect = this.content()?.nativeElement.getBoundingClientRect();
     if (!rect) return;
 
-    const minW = rect.width * 0.2; // each section keeps >= 20% of the visible width
+    const minW = rect.width * 0.1; // each section keeps >= 10% of the visible width
     if (this.resizeKind === 'tree') {
-      const max = rect.width - this.previewWidth() - minW; // leave 20% for the grid
+      const max = rect.width - this.previewWidth() - minW; // leave 10% for the grid
       this.treeWidth.set(Math.min(max, Math.max(minW, e.clientX - rect.left)));
     } else if (this.resizeKind === 'preview') {
-      const max = rect.width - this.treeWidth() - minW; // leave 20% for the grid
+      const max = rect.width - this.treeWidth() - minW; // leave 10% for the grid
       this.previewWidth.set(Math.min(max, Math.max(minW, rect.right - e.clientX)));
     } else if (this.resizeKind === 'split') {
       this.previewTopHeight.set(Math.min(rect.height - 120, Math.max(120, e.clientY - rect.top)));
