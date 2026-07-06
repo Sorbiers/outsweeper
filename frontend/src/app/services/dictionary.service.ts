@@ -44,6 +44,25 @@ export class DictionaryService {
     return this.dictionaries().find(d => d.name.trim().toLowerCase() === n);
   }
 
+  /** Names of dictionaries referenced by `{{name}}` tokens (ignores inline `{{a|b|c}}`). */
+  referencedNames(text: string): string[] {
+    const names = new Set<string>();
+    if (text) {
+      for (const m of text.matchAll(DictionaryService.TOKEN)) {
+        if (!m[1].includes('|')) names.add(m[1].trim());
+      }
+    }
+    return [...names];
+  }
+
+  /** Add dictionaries not already present (by name) to the in-memory signal only,
+   *  without persisting to localStorage — used when generating from a saved flow. */
+  mergeInMemory(incoming: Dictionary[]): void {
+    const have = new Set(this.dictionaries().map(d => d.name.trim().toLowerCase()));
+    const add = incoming.filter(d => d?.name && !have.has(d.name.trim().toLowerCase()));
+    if (add.length) this.dictionaries.set([...this.dictionaries(), ...add]);
+  }
+
   /**
    * Resolve every `{{...}}` placeholder:
    *  - `{{a|b|c}}` — pick one of the pipe-separated options at random (equal odds).

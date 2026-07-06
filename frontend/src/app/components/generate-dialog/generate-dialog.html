@@ -236,6 +236,9 @@
     <button mat-menu-item (click)="extractApi()">
       <mat-icon>code</mat-icon> Extract API
     </button>
+    <button mat-menu-item (click)="saveToCollection()">
+      <mat-icon>collections_bookmark</mat-icon> Save to collection
+    </button>
     <mat-divider></mat-divider>
     <button mat-menu-item (click)="sendFront()" [disabled]="sending || comfy.checkStatus !== 'ok'">
       <mat-icon>vertical_align_top</mat-icon>

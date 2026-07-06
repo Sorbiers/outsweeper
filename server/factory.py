@@ -3,7 +3,9 @@ from __future__ import annotations
 import base64
 import fnmatch
 import io
+import json
 import mimetypes
+import re
 import queue
 import shlex
 import shutil
@@ -1129,6 +1131,50 @@ def create_app(
         except Exception as e:
             return jsonify({'ok': False, 'error': str(e)}), 500
         return jsonify({'ok': True})
+
+    @app.route('/api/collections/save-flow', methods=['POST'])
+    def save_collection_flow():
+        # Save a { flow, dictionaries } document as <name>.json into a collection set.
+        data    = request.get_json() or {}
+        folder  = resolve_path(request.args.get('path', ''))
+        content = data.get('content')
+        if content is None:
+            return jsonify({'ok': False, 'error': 'no content'}), 400
+        name = re.sub(r'[<>:"/\\|?*]', '_', (data.get('name') or 'flow').strip()) or 'flow'
+        if not name.lower().endswith('.json'):
+            name += '.json'
+        try:
+            folder.mkdir(parents=True, exist_ok=True)
+            (folder / name).write_text(json.dumps(content, indent=2, ensure_ascii=False), encoding='utf-8')
+        except Exception as e:
+            return jsonify({'ok': False, 'error': str(e)}), 500
+        return jsonify({'ok': True, 'filename': name})
+
+    @app.route('/api/collections/flows')
+    def list_collection_flows():
+        folder = resolve_path(request.args.get('path', ''))
+        flows: list[dict] = []
+        if folder.is_dir():
+            for f in sorted(folder.iterdir(), key=lambda p: p.name.lower()):
+                if f.is_file() and f.suffix.lower() == '.json' and not f.name.startswith(('.', '_')):
+                    st = f.stat()
+                    flows.append({
+                        'filename': f.name,
+                        'size': st.st_size,
+                        'modified': datetime.fromtimestamp(st.st_mtime).isoformat(),
+                        'modified_token': str(int(st.st_mtime)),
+                    })
+        return jsonify({'flows': flows})
+
+    @app.route('/api/collections/flow')
+    def read_collection_flow():
+        f = resolve_path(request.args.get('path', ''))
+        if not f.is_file() or f.suffix.lower() != '.json':
+            return jsonify({'error': 'not found'}), 404
+        try:
+            return jsonify(json.loads(f.read_text(encoding='utf-8')))
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
 
     @app.route('/api/zip', methods=['POST'])
     def zip_files():

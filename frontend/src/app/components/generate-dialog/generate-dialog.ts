@@ -24,6 +24,7 @@ import { ComfyUrlRowComponent } from '../comfy-url-row/comfy-url-row';
 import { DictionaryDialog } from '../dictionary-dialog/dictionary-dialog';
 import { PromptHistoryDialog } from '../prompt-history-dialog/prompt-history-dialog';
 import { PrompterDialog } from '../prompter-dialog/prompter-dialog';
+import { SaveFlowDialog } from '../save-flow-dialog/save-flow-dialog';
 
 export interface GenerateDialogData {
   workflow: Record<string, any>;
@@ -223,6 +224,28 @@ export class GenerateDialog {
       this.manualLoras.filter(l => l.name)
     );
     this.downloadJson(workflow, 'workflow_api.json');
+  }
+
+  /** Build the { flow, dictionaries } document — prompts keep their {{tokens}}. */
+  private buildFlowContent(): { flow: Record<string, any>; dictionaries: Record<string, { value: string; weight: number }[]> } {
+    let flow = this.applyParams(this.data.workflow, this.params);
+    flow = this.normalizeLoraClip(this.injectManualLoras(this.removeEmptyLoraNodes(flow), this.manualLoras.filter(l => l.name)));
+
+    const dictionaries: Record<string, { value: string; weight: number }[]> = {};
+    for (const name of this.dictionaries.referencedNames(`${this.params.positivePrompt}\n${this.params.negativePrompt}`)) {
+      const d = this.dictionaries.get(name);
+      if (d) dictionaries[d.name] = d.values;
+    }
+    return { flow, dictionaries };
+  }
+
+  saveToCollection(): void {
+    const stamp = new Date().toISOString().replace(/[:T]/g, '-').slice(0, 16);
+    this.dialog.open(SaveFlowDialog, {
+      data: { content: this.buildFlowContent(), defaultName: `flow_${stamp}` },
+      width: '90vw',
+      maxWidth: '480px',
+    });
   }
 
   private downloadJson(data: object, filename: string): void {

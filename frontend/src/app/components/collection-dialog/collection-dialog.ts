@@ -13,7 +13,8 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatTree, MatTreeModule } from '@angular/material/tree';
 import { STORAGE_KEYS } from '../../constants';
-import { Collection, PhotoInfo, PhotoListItem } from '../../models/photo.model';
+import { Collection, CollectionFlow, FlowDocument, PhotoInfo, PhotoListItem } from '../../models/photo.model';
+import { DictionaryService } from '../../services/dictionary.service';
 import { PhotoService } from '../../services/photo.service';
 import { DescribeDialog } from '../describe-dialog/describe-dialog';
 import { DEFAULT_FLUX_WORKFLOW, GenerateDialog } from '../generate-dialog/generate-dialog';
@@ -38,6 +39,7 @@ export class CollectionDialog {
   private photoService = inject(PhotoService);
   private dialog       = inject(MatDialog);
   private snackBar     = inject(MatSnackBar);
+  private dictionaries = inject(DictionaryService);
 
   private tree    = viewChild(MatTree);
   private content = viewChild('content', { read: ElementRef });
@@ -95,6 +97,17 @@ export class CollectionDialog {
   selectedPhoto = signal<PhotoListItem | null>(null);
   selectedInfo  = signal<PhotoInfo | null>(null);
   infoLoading   = signal(false);
+
+  // Saved flow documents (.json) — shown first in each set.
+  flows        = signal<CollectionFlow[]>([]);
+  selectedFlow = signal<CollectionFlow | null>(null);
+  flowDoc      = signal<FlowDocument | null>(null);
+  flowLoading  = signal(false);
+
+  /** Positive prompt read from the selected flow's workflow. */
+  flowPrompt = computed(() => this.extractPositivePrompt(this.flowDoc()?.flow));
+  /** Names of the dictionaries bundled with the selected flow. */
+  flowDictNames = computed(() => Object.keys(this.flowDoc()?.dictionaries ?? {}));
 
   /** PNG text-chunk key holding the alternative prompt template. */
   private static readonly ALT_KEY = 'alt_prompt';
@@ -176,9 +189,15 @@ export class CollectionDialog {
   selectSetNode(node: TreeNode): void {
     this.selectedCollection.set(node.collection);
     this.selectedSet.set(node.name);
+    this.clearSelection();
+    this.loadPhotos();
+  }
+
+  private clearSelection(): void {
     this.selectedPhoto.set(null);
     this.selectedInfo.set(null);
-    this.loadPhotos();
+    this.selectedFlow.set(null);
+    this.flowDoc.set(null);
   }
 
   private loadPhotos(): void {
@@ -189,6 +208,10 @@ export class CollectionDialog {
         this.photosLoading.set(false);
       },
       error: () => this.photosLoading.set(false),
+    });
+    this.photoService.listCollectionFlows(this.folderPath).subscribe({
+      next: res => this.flows.set(res.flows),
+      error: () => this.flows.set([]),
     });
   }
 
@@ -201,6 +224,8 @@ export class CollectionDialog {
   }
 
   selectPhoto(photo: PhotoListItem): void {
+    this.selectedFlow.set(null);
+    this.flowDoc.set(null);
     this.selectedPhoto.set(photo);
     this.selectedInfo.set(null);
     this.editingAlt.set(false);
@@ -212,6 +237,66 @@ export class CollectionDialog {
       },
       error: () => this.infoLoading.set(false),
     });
+  }
+
+  // --- Saved flows (.json) ---
+
+  private flowPath(flow: CollectionFlow): string {
+    return `${this.folderPath}/${flow.filename}`;
+  }
+
+  selectFlow(flow: CollectionFlow): void {
+    this.selectedPhoto.set(null);
+    this.selectedInfo.set(null);
+    this.selectedFlow.set(flow);
+    this.flowDoc.set(null);
+    this.flowLoading.set(true);
+    this.photoService.readCollectionFlow(this.flowPath(flow)).subscribe({
+      next: doc => { this.flowDoc.set(doc); this.flowLoading.set(false); },
+      error: () => { this.flowLoading.set(false); this.snackBar.open('Failed to read flow', '', { duration: 3000 }); },
+    });
+  }
+
+  /** Generate from a saved flow: merge its dictionaries in memory, then open Generate. */
+  generateFlow(): void {
+    const doc = this.flowDoc();
+    const flow = this.selectedFlow();
+    if (!doc || !flow) return;
+    const dicts = Object.entries(doc.dictionaries ?? {}).map(([name, values]) => ({ name, values }));
+    this.dictionaries.mergeInMemory(dicts);
+    this.dialog.open(GenerateDialog, {
+      data: { workflow: doc.flow, title: `Generate · ${flow.filename}` },
+      width: '90vw',
+      maxWidth: '1500px',
+    });
+  }
+
+  deleteFlow(flow: CollectionFlow): void {
+    const rel = `${this.selectedCollection()}/${this.selectedSet()}/${flow.filename}`;
+    this.photoService.deleteFromCollection(rel).subscribe({
+      next: () => {
+        this.flows.update(list => list.filter(f => f.filename !== flow.filename));
+        if (this.selectedFlow()?.filename === flow.filename) { this.selectedFlow.set(null); this.flowDoc.set(null); }
+      },
+      error: err => this.snackBar.open(err.error?.error || 'Failed to delete', '', { duration: 3000 }),
+    });
+  }
+
+  /** Trace the KSampler's positive input to its CLIPTextEncode text. */
+  private extractPositivePrompt(flow: Record<string, any> | undefined): string {
+    if (!flow) return '';
+    const ks = Object.values(flow).find((n: any) => n?.inputs && 'steps' in n.inputs && 'cfg' in n.inputs) as any;
+    let nodeId = Array.isArray(ks?.inputs?.positive) ? ks.inputs.positive[0] : null;
+    const visited = new Set<string>();
+    while (nodeId && !visited.has(nodeId)) {
+      visited.add(nodeId);
+      const node = flow[nodeId];
+      if (!node) break;
+      if (node.class_type === 'CLIPTextEncode') return node.inputs?.text ?? '';
+      const next = Object.values(node.inputs ?? {}).find(v => Array.isArray(v)) as any[] | undefined;
+      nodeId = next ? next[0] : null;
+    }
+    return '';
   }
 
   regenerate(photo: PhotoListItem): void {

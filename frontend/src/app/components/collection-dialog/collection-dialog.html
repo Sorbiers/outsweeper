@@ -45,10 +45,22 @@
           <p class="hint pad">Select a set in the tree.</p>
         } @else if (photosLoading()) {
           <div class="center"><mat-spinner diameter="32"></mat-spinner></div>
-        } @else if (photos().length === 0) {
+        } @else if (photos().length === 0 && flows().length === 0) {
           <p class="hint pad">This set is empty.</p>
         } @else {
           <div class="grid">
+            @for (flow of flows(); track flow.filename) {
+              <div class="thumb flow-thumb" [class.is-selected]="flow.filename === selectedFlow()?.filename"
+                   (click)="selectFlow(flow)">
+                <div class="flow-icon"><mat-icon>data_object</mat-icon></div>
+                <div class="thumb-overlay">
+                  <button mat-icon-button matTooltip="Delete" (click)="deleteFlow(flow); $event.stopPropagation()">
+                    <mat-icon>delete</mat-icon>
+                  </button>
+                </div>
+                <span class="thumb-name">{{ flow.filename }}</span>
+              </div>
+            }
             @for (photo of photos(); track photo.filename) {
               <div class="thumb" [class.is-selected]="photo.filename === selectedPhoto()?.filename"
                    draggable="true" (dragstart)="onDragStart(photo, $event)" (dragend)="onDragEnd()"
@@ -87,8 +99,39 @@
       <div class="divider-v" (mousedown)="startResize($event, 'preview')"></div>
 
       <div class="col col--preview" [style.width.px]="previewWidth()">
-        @if (!selectedPhoto()) {
-          <p class="hint pad">Select an image to preview its flow.</p>
+        @if (selectedFlow(); as flow) {
+          <div class="preview-top" [style.height.px]="previewTopHeight()">
+            <div class="preview-img flow-preview"><mat-icon>data_object</mat-icon></div>
+            <div class="preview-name">{{ flow.filename }}</div>
+          </div>
+
+          <div class="divider-h" (mousedown)="startResize($event, 'split')"></div>
+
+          <div class="preview-bottom">
+            @if (flowLoading()) {
+              <div class="center"><mat-spinner diameter="28"></mat-spinner></div>
+            } @else if (flowDoc()) {
+              <div class="prompt-block">
+                <div class="prompt-head">
+                  <span class="flow-label">Prompt</span>
+                  <button mat-flat-button class="gen-btn" (click)="generateFlow()">
+                    <mat-icon>bolt</mat-icon> Generate
+                  </button>
+                </div>
+                <div class="flow-prompt">{{ flowPrompt() || '—' }}</div>
+              </div>
+              @if (flowDictNames().length) {
+                <div class="flow-row column">
+                  <span class="flow-label">Dictionaries</span>
+                  <span class="flow-value">{{ flowDictNames().join(', ') }}</span>
+                </div>
+              }
+            } @else {
+              <p class="hint pad">Could not read this flow.</p>
+            }
+          </div>
+        } @else if (!selectedPhoto()) {
+          <p class="hint pad">Select an image or flow to preview.</p>
         } @else if (infoLoading()) {
           <div class="center"><mat-spinner diameter="28"></mat-spinner></div>
         } @else if (selectedInfo(); as info) {

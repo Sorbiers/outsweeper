@@ -1,0 +1,42 @@
+<h2 mat-dialog-title cdkDrag cdkDragRootElement=".cdk-overlay-pane" cdkDragHandle
+    style="cursor: move; user-select: none">
+  Save flow to Collection
+</h2>
+
+<mat-dialog-content>
+  <p class="hint">Saves the full flow and its dictionaries as a .json in a collection set.</p>
+
+  <mat-form-field appearance="outline" class="field">
+    <mat-label>Collection</mat-label>
+    <input matInput [ngModel]="collectionName()" (ngModelChange)="collectionName.set($event)"
+           [matAutocomplete]="colAuto" placeholder="name or new…" autocomplete="off" />
+    <mat-autocomplete #colAuto="matAutocomplete">
+      @for (name of collectionNames(); track name) {
+        <mat-option [value]="name">{{ name }}</mat-option>
+      }
+    </mat-autocomplete>
+  </mat-form-field>
+
+  <mat-form-field appearance="outline" class="field">
+    <mat-label>Set</mat-label>
+    <input matInput [ngModel]="setName()" (ngModelChange)="setName.set($event)"
+           [matAutocomplete]="setAuto" placeholder="set name…" autocomplete="off" />
+    <mat-autocomplete #setAuto="matAutocomplete">
+      @for (name of setNames(); track name) {
+        <mat-option [value]="name">{{ name }}</mat-option>
+      }
+    </mat-autocomplete>
+  </mat-form-field>
+
+  <mat-form-field appearance="outline" class="field">
+    <mat-label>File name</mat-label>
+    <input matInput [ngModel]="fileName()" (ngModelChange)="fileName.set($event)"
+           placeholder="flow name" autocomplete="off" />
+    <span matTextSuffix>.json</span>
+  </mat-form-field>
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button mat-button mat-dialog-close>Cancel</button>
+  <button mat-raised-button color="primary" [disabled]="!canSave" (click)="save()">Save</button>
+</mat-dialog-actions>

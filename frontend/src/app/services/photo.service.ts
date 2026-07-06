@@ -5,7 +5,7 @@ import { SPECIAL_FOLDERS } from '../constants';
 import {
   PhotoListItem, PhotoInfo, MoveResponse, UndoResponse,
   ExiftoolCapabilities, ExiftoolMetadata, EditableFields, StripGroup,
-  BatchEditResult, ComfyQueueJob, CollectionsResponse,
+  BatchEditResult, ComfyQueueJob, CollectionsResponse, CollectionFlow, FlowDocument,
 } from '../models/photo.model';
 
 /** Path prefix understood by the backend resolver for the local flows collection. */
@@ -198,6 +198,23 @@ export class PhotoService {
   deleteFromCollection(relPath: string): Observable<{ ok: boolean; error?: string }> {
     return this.http.post<{ ok: boolean; error?: string }>(
       '/api/collections/delete', { path: relPath });
+  }
+
+  /** Save a { flow, dictionaries } document as <name>.json into a collection set. */
+  saveFlowToCollection(collectionPath: string, name: string, content: unknown): Observable<{ ok: boolean; filename?: string; error?: string }> {
+    return this.http.post<{ ok: boolean; filename?: string; error?: string }>(
+      '/api/collections/save-flow', { name, content }, { params: { path: collectionPath } });
+  }
+
+  /** List the .json flow documents in a collection set. */
+  listCollectionFlows(collectionPath: string): Observable<{ flows: CollectionFlow[] }> {
+    return this.http.get<{ flows: CollectionFlow[] }>(
+      '/api/collections/flows', { params: { path: collectionPath } });
+  }
+
+  /** Read a saved flow document. `filePath` is the full %collection% path to the .json. */
+  readCollectionFlow(filePath: string): Observable<FlowDocument> {
+    return this.http.get<FlowDocument>('/api/collections/flow', { params: { path: filePath } });
   }
 
   /** Move an image from one collection/set to another. */

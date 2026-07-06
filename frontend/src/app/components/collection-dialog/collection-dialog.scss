@@ -168,6 +168,40 @@ mat-dialog-content {
   &:hover .thumb-overlay { opacity: 1; }
 }
 
+/* --- saved flow (.json) thumbs & preview --- */
+.flow-thumb {
+  cursor: pointer;
+  &:active { cursor: pointer; }
+}
+
+.flow-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 120px;
+  background: rgba(79, 195, 247, 0.10);
+
+  mat-icon {
+    font-size: 44px;
+    width: 44px;
+    height: 44px;
+    color: #4fc3f7;
+  }
+}
+
+.flow-preview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  mat-icon {
+    font-size: 64px;
+    width: 64px;
+    height: 64px;
+    color: #4fc3f7;
+  }
+}
+
 .thumb-overlay {
   position: absolute;
   top: 0;

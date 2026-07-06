@@ -110,3 +110,17 @@ export interface CollectionsResponse {
   root_name: string;
   collections: Collection[];
 }
+
+/** A saved flow document (.json) inside a collection set. */
+export interface CollectionFlow {
+  filename: string;
+  size: number;
+  modified: string;
+  modified_token?: string;
+}
+
+/** Contents of a saved flow: the full ComfyUI workflow plus the dictionaries it references. */
+export interface FlowDocument {
+  flow: Record<string, any>;
+  dictionaries: Record<string, { value: string; weight: number }[]>;
+}
