@@ -305,9 +305,10 @@ export class GenerateDialog {
       this.snackBar.open(msg + suffix, '', { duration: 4000 });
     };
 
-    // Build the final flow for one combo: loras, then (in source mode) img2img.
+    // Build the final flow for one combo: loras, normalize CLIP, then img2img.
     const finalize = (wf: Record<string, any>) => {
       let out = this.injectManualLoras(this.removeEmptyLoraNodes(wf), this.manualLoras.filter(l => l.name));
+      out = this.normalizeLoraClip(out);
       if (uploadedImageName) out = this.toImg2Img(out, uploadedImageName);
       return out;
     };
@@ -654,6 +655,44 @@ export class GenerateDialog {
         }
       }
       delete workflow[nodeId];
+    }
+    return workflow;
+  }
+
+  /**
+   * Repair the CLIP wiring of a Model-and-CLIP LoRA chain so the LoRA's clip
+   * comes from the real CLIP loader (DualCLIPLoader for Flux, else the
+   * checkpoint) and the prompt encoders read the LoRA's clip output. Idempotent
+   * on already-correct flows; fixes ones baked wrong by older code.
+   */
+  private normalizeLoraClip(workflow: Record<string, any>): Record<string, any> {
+    const entries = Object.entries(workflow);
+    const loras = entries.filter(
+      ([, n]) => n.class_type === 'LoraLoader' && Array.isArray(n.inputs?.clip) && Array.isArray(n.inputs?.model),
+    );
+    if (!loras.length) return workflow;
+    const loraIds = new Set(loras.map(([id]) => id));
+
+    // The true CLIP source: a dedicated CLIP loader, else the checkpoint's CLIP.
+    const clipLoader = entries.find(([, n]) => n.class_type === 'DualCLIPLoader' || n.class_type === 'CLIPLoader');
+    const checkpoint = entries.find(([, n]) => n.class_type === 'CheckpointLoaderSimple');
+    const clipSource: [string, number] | null =
+      clipLoader ? [clipLoader[0], 0] : checkpoint ? [checkpoint[0], 1] : null;
+    if (!clipSource) return workflow;
+
+    // Chain head (clip not fed by another LoRA) and tail (clip not consumed by another LoRA).
+    const head = loras.find(([, n]) => !loraIds.has(n.inputs.clip[0]));
+    const tail = loras.find(([id]) => !loras.some(([oid, on]) => oid !== id && on.inputs.clip[0] === id));
+    if (!head || !tail) return workflow;
+
+    // 1. Feed the chain head's CLIP from the real source.
+    head[1].inputs.clip = [...clipSource];
+    // 2. Route every prompt encoder that bypasses the chain through the tail's CLIP output.
+    const tailRef: [string, number] = [tail[0], 1];
+    for (const [, n] of entries) {
+      if (n.class_type === 'CLIPTextEncode' && Array.isArray(n.inputs?.clip) && !loraIds.has(n.inputs.clip[0])) {
+        n.inputs.clip = [...tailRef];
+      }
     }
     return workflow;
   }
