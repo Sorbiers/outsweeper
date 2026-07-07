@@ -17,13 +17,18 @@ Set COMFY_URL to target a non-default ComfyUI (default http://127.0.0.1:8188).
 """
 from __future__ import annotations
 
+import base64
 import json
 import os
 import random
 import re
+import socket
+import struct
 import sys
 import time
+import uuid
 from pathlib import Path
+from urllib.parse import urlparse
 
 import requests
 
@@ -68,9 +73,39 @@ def substitute(text: str, dictionaries: dict[str, list[dict]]) -> str:
     return out.strip()
 
 
-def prepare_job(flow: dict, dictionaries: dict[str, list[dict]]) -> dict:
-    """A fresh workflow copy with prompts substituted and seeds randomized."""
+def resolve_clip_text(ref, wf: dict) -> str:
+    """Follow a node reference chain until a CLIPTextEncode is found; return its text."""
+    visited: set[str] = set()
+    node_id = ref[0] if isinstance(ref, list) and ref else None
+    while node_id and node_id not in visited:
+        visited.add(node_id)
+        node = wf.get(node_id)
+        if not node:
+            break
+        if node.get("class_type") == "CLIPTextEncode":
+            return node.get("inputs", {}).get("text", "")
+        next_ref = next((v for v in (node.get("inputs") or {}).values() if isinstance(v, list)), None)
+        node_id = next_ref[0] if next_ref else None
+    return ""
+
+
+def find_positive_prompt(wf: dict) -> str:
+    """The sampler's resolved positive prompt text, for console logging."""
+    sampler = next(
+        (n for n in wf.values() if isinstance(n.get("inputs"), dict)
+         and "steps" in n["inputs"] and "cfg" in n["inputs"]),
+        None,
+    )
+    if not sampler:
+        return ""
+    return resolve_clip_text(sampler["inputs"].get("positive"), wf)
+
+
+def prepare_job(flow: dict, dictionaries: dict[str, list[dict]]) -> tuple[dict, dict]:
+    """A fresh workflow copy with prompts substituted and seeds randomized,
+    plus a dict describing the choices made (for console logging)."""
     wf = json.loads(json.dumps(flow))
+    info: dict = {"seed": None}
     for node in wf.values():
         inputs = node.get("inputs")
         if not isinstance(inputs, dict):
@@ -80,7 +115,10 @@ def prepare_job(flow: dict, dictionaries: dict[str, list[dict]]) -> dict:
         for key in ("seed", "noise_seed"):
             if key in inputs:
                 inputs[key] = random.randint(0, 2 ** 32 - 1)
-    return wf
+                if "steps" in inputs and "cfg" in inputs:
+                    info["seed"] = inputs[key]
+    info["prompt_text"] = find_positive_prompt(wf)
+    return wf, info
 
 
 def submit(wf: dict, client_id: str) -> str:
@@ -94,7 +132,7 @@ def submit(wf: dict, client_id: str) -> str:
     return resp.json()["prompt_id"]
 
 
-def wait_for(prompt_id: str, timeout: float = 1800) -> dict:
+def wait_for_history(prompt_id: str, timeout: float = 1800) -> dict:
     """Poll /history until the job appears (completed), then return its entry."""
     start = time.time()
     while time.time() - start < timeout:
@@ -124,6 +162,99 @@ def save_outputs(entry: dict, out_dir: Path, index: int) -> list[str]:
     return saved
 
 
+# --- minimal WebSocket client (for live progress, stdlib only) -------------
+def ws_connect(host: str, client_id: str, timeout: float = 5):
+    """Open a ComfyUI progress WebSocket. Returns a connected socket or None."""
+    p = urlparse(host)
+    hostname = p.hostname or "127.0.0.1"
+    port = p.port or 8188
+    try:
+        sock = socket.create_connection((hostname, port), timeout=timeout)
+    except OSError:
+        return None
+    key = base64.b64encode(os.urandom(16)).decode()
+    handshake = (
+        f"GET /ws?clientId={client_id} HTTP/1.1\r\n"
+        f"Host: {hostname}:{port}\r\n"
+        "Upgrade: websocket\r\n"
+        "Connection: Upgrade\r\n"
+        f"Sec-WebSocket-Key: {key}\r\n"
+        "Sec-WebSocket-Version: 13\r\n\r\n"
+    )
+    sock.sendall(handshake.encode())
+    resp = b""
+    while b"\r\n\r\n" not in resp:
+        chunk = sock.recv(1024)
+        if not chunk:
+            return None
+        resp += chunk
+    if b"101" not in resp.split(b"\r\n", 1)[0]:
+        return None
+    sock.settimeout(None)
+    return sock
+
+
+def ws_recv(sock):
+    """Read one WebSocket frame. Returns (opcode, payload_bytes)."""
+    def recvn(n):
+        data = b""
+        while len(data) < n:
+            chunk = sock.recv(n - len(data))
+            if not chunk:
+                raise ConnectionError("WebSocket closed")
+            data += chunk
+        return data
+
+    b1, b2 = recvn(2)
+    opcode = b1 & 0x0F
+    masked = b2 & 0x80
+    length = b2 & 0x7F
+    if length == 126:
+        length = struct.unpack(">H", recvn(2))[0]
+    elif length == 127:
+        length = struct.unpack(">Q", recvn(8))[0]
+    mask = recvn(4) if masked else b""
+    payload = recvn(length)
+    if masked:
+        payload = bytes(b ^ mask[i % 4] for i, b in enumerate(payload))
+    return opcode, payload
+
+
+def wait_with_progress(sock, prompt_id: str) -> bool:
+    """Consume WebSocket messages, render a step progress bar, return when the
+    given prompt_id finishes executing. Returns False if the socket dies."""
+    last_max = 0
+    try:
+        while True:
+            opcode, payload = ws_recv(sock)
+            if opcode == 0x8:        # close
+                return False
+            if opcode == 0x9:        # ping
+                continue
+            if opcode != 0x1:        # binary preview frames, etc.
+                continue
+            msg = json.loads(payload)
+            mtype = msg.get("type")
+            data = msg.get("data", {}) or {}
+            if data.get("prompt_id") not in (None, prompt_id):
+                continue
+            if mtype == "progress":
+                val, mx = data.get("value", 0), data.get("max", 0)
+                last_max = mx or last_max
+                if mx:
+                    filled = int(30 * val / mx)
+                    bar = "#" * filled + "-" * (30 - filled)
+                    sys.stdout.write(f"\r    [{bar}] {val}/{mx} steps")
+                    sys.stdout.flush()
+            elif mtype == "executing" and data.get("node") is None \
+                    and data.get("prompt_id") == prompt_id:
+                if last_max:
+                    sys.stdout.write("\n")
+                return True
+    except (ConnectionError, OSError):
+        return False
+
+
 def main() -> None:
     if len(sys.argv) < 4:
         print("Usage: python generate_from_collection.py <path_to_json> <jobs_number> <out_path>")
@@ -140,6 +271,9 @@ def main() -> None:
     if not json_path.is_file():
         print(f"Not a file: {json_path}")
         sys.exit(1)
+    if jobs <= 0:
+        print("Nothing to do (jobs_number <= 0).")
+        return
     out_dir.mkdir(parents=True, exist_ok=True)
 
     doc = json.loads(json_path.read_text(encoding="utf-8"))
@@ -149,28 +283,52 @@ def main() -> None:
         print("No workflow found in the .json (expected a 'flow' object).")
         sys.exit(1)
 
-    client_id = f"gfc-{random.randint(0, 1 << 31)}"
+    client_id = str(uuid.uuid4())
     print(f"ComfyUI: {COMFY}  |  jobs: {jobs}  |  out: {out_dir}")
 
+    ws = ws_connect(COMFY, client_id)
+    if ws is None:
+        print("(progress WebSocket unavailable; falling back to polling)")
+
     for i in range(1, jobs + 1):
-        wf = prepare_job(flow, dictionaries)
+        wf, info = prepare_job(flow, dictionaries)
+        print(f"\n[{i}/{jobs}] seed={info['seed']}")
+        print("    prompt:")
+        for line in (info["prompt_text"] or "(empty)").splitlines():
+            print(f"      {line}")
+
         try:
             prompt_id = submit(wf, client_id)
         except Exception as e:
-            print(f"[{i}/{jobs}] submit failed: {e}")
+            print(f"    ERROR: submit failed: {e}")
             continue
-        print(f"[{i}/{jobs}] queued {prompt_id} — waiting...")
-        try:
-            entry = wait_for(prompt_id)
-        except TimeoutError as e:
-            print(f"[{i}/{jobs}] {e}")
-            continue
-        saved = save_outputs(entry, out_dir, i)
-        status = entry.get("status", {}).get("status_str", "")
-        note = f" [{status}]" if status and status != "success" else ""
-        print(f"[{i}/{jobs}] done{note} -> {', '.join(saved) if saved else '(no images)'}")
+        print(f"    queued as {prompt_id}")
 
-    print("all done")
+        if ws is not None and not wait_with_progress(ws, prompt_id):
+            ws = None  # socket died; fall back to polling for the rest
+
+        try:
+            entry = wait_for_history(prompt_id)
+        except TimeoutError as e:
+            print(f"    WARNING: {e}")
+            continue
+
+        status = entry.get("status", {}).get("status_str", "")
+        if status and status != "success":
+            print(f"    WARNING: status={status}")
+
+        saved = save_outputs(entry, out_dir, i)
+        if not saved:
+            print("    WARNING: no images returned.")
+        for dest in saved:
+            print(f"    saved {dest}")
+
+    if ws is not None:
+        try:
+            ws.close()
+        except OSError:
+            pass
+    print(f"\nDone. Images in {out_dir}")
 
 
 if __name__ == "__main__":
