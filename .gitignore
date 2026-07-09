@@ -16,4 +16,6 @@ test_folder/collection/
 collection/
 config.toml
 outsweeper.zip
+flask_out.txt
+flask_err.txt
 
