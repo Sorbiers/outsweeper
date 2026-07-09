@@ -4,7 +4,14 @@
   <span class="title-hint">weighted random substitution for {{ '{{' }}name{{ '}}' }} in prompts</span>
 </h2>
 
-<mat-dialog-content>
+<mat-dialog-content (dragover)="onDragOver($event)" (dragleave)="onDragLeave($event)" (drop)="onDrop($event)">
+  @if (isDragOver()) {
+    <div class="dropzone-overlay">
+      <mat-icon>upload_file</mat-icon>
+      <span>Drop .json to import</span>
+    </div>
+  }
+
   @if (importPending(); as pend) {
     <div class="import-confirm">
       <mat-icon>upload_file</mat-icon>
@@ -93,6 +100,7 @@
 <mat-dialog-actions>
   <button mat-button (click)="exportJson()"><mat-icon>download</mat-icon> Export</button>
   <button mat-button (click)="triggerImport()"><mat-icon>upload</mat-icon> Import</button>
+  <button mat-button (click)="pasteFromClipboard()"><mat-icon>content_paste</mat-icon> Paste</button>
   <input #fileInput type="file" accept=".json,application/json" hidden (change)="onFileSelected($event)" />
   <span class="actions-spacer"></span>
   <button mat-button mat-dialog-close>Close</button>

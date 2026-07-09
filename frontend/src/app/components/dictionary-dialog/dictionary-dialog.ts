@@ -30,6 +30,9 @@ export class DictionaryDialog {
   /** Parsed dictionaries awaiting the Add/Replace choice after an import. */
   importPending = signal<Dictionary[] | null>(null);
 
+  /** True while a .json file is being dragged over the dialog. */
+  isDragOver = signal(false);
+
   get selected(): Dictionary | null {
     return this.dicts[this.selectedIndex] ?? null;
   }
@@ -116,26 +119,64 @@ export class DictionaryDialog {
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0];
     input.value = ''; // allow re-picking the same file
-    if (!file) return;
+    if (file) this.readFile(file);
+  }
+
+  /** Read from the OS clipboard and import it as dictionary JSON. */
+  async pasteFromClipboard(): Promise<void> {
+    let text: string;
+    try {
+      text = await navigator.clipboard.readText();
+    } catch {
+      this.snackBar.open('Could not read clipboard — check browser permission', '', { duration: 3000 });
+      return;
+    }
+    this.importFromText(text, 'clipboard');
+  }
+
+  onDragOver(event: DragEvent): void {
+    if (!event.dataTransfer?.types.includes('Files')) return;
+    event.preventDefault();
+    this.isDragOver.set(true);
+  }
+
+  onDragLeave(event: DragEvent): void {
+    if ((event.currentTarget as HTMLElement).contains(event.relatedTarget as Node)) return;
+    this.isDragOver.set(false);
+  }
+
+  onDrop(event: DragEvent): void {
+    event.preventDefault();
+    this.isDragOver.set(false);
+    const file = event.dataTransfer?.files?.[0];
+    if (file) this.readFile(file);
+  }
+
+  private readFile(file: File): void {
     const reader = new FileReader();
-    reader.onload = () => {
-      try {
-        const dicts = this.normalizeImport(JSON.parse(reader.result as string));
-        if (!dicts.length) {
-          this.snackBar.open('No dictionaries found in file', '', { duration: 3000 });
-          return;
-        }
-        this.importPending.set(dicts);
-      } catch {
-        this.snackBar.open('Invalid JSON file', '', { duration: 3000 });
-      }
-    };
+    reader.onload = () => this.importFromText(reader.result as string, 'file');
     reader.readAsText(file);
   }
 
-  /** Coerce arbitrary parsed JSON into a clean Dictionary[] (drops bad entries). */
+  /** Shared JSON import path for file, drop, and clipboard sources. */
+  private importFromText(text: string, source: 'file' | 'clipboard'): void {
+    let dicts: Dictionary[];
+    try {
+      dicts = this.normalizeImport(JSON.parse(text));
+    } catch {
+      this.snackBar.open(`Invalid JSON ${source === 'file' ? 'file' : 'on clipboard'}`, '', { duration: 3000 });
+      return;
+    }
+    if (!dicts.length) {
+      this.snackBar.open(`No dictionaries found ${source === 'file' ? 'in file' : 'on clipboard'}`, '', { duration: 3000 });
+      return;
+    }
+    this.importPending.set(dicts);
+  }
+
+  /** Coerce arbitrary parsed JSON into a clean Dictionary[] (drops bad entries). Accepts either a single dictionary object or an array of them. */
   private normalizeImport(parsed: unknown): Dictionary[] {
-    const arr = Array.isArray(parsed) ? parsed : [];
+    const arr = Array.isArray(parsed) ? parsed : [parsed];
     return arr
       .filter((d: any) => d && typeof d.name === 'string' && Array.isArray(d.values))
       .map((d: any) => ({
