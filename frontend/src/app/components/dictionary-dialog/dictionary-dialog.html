@@ -4,7 +4,7 @@
   <span class="title-hint">weighted random substitution for {{ '{{' }}name{{ '}}' }} in prompts</span>
 </h2>
 
-<mat-dialog-content (dragover)="onDragOver($event)" (dragleave)="onDragLeave($event)" (drop)="onDrop($event)">
+<mat-dialog-content #content (dragover)="onDragOver($event)" (dragleave)="onDragLeave($event)" (drop)="onDrop($event)">
   @if (isDragOver()) {
     <div class="dropzone-overlay">
       <mat-icon>upload_file</mat-icon>
@@ -24,7 +24,7 @@
   }
 
   <div class="dict-browser">
-    <div class="dict-list">
+    <div class="dict-list" [style.width.px]="listWidth()">
       <button mat-stroked-button class="add-dict-btn" (click)="addDictionary()">
         <mat-icon>add</mat-icon> New dictionary
       </button>
@@ -33,9 +33,17 @@
         <div class="dict-item" [class.is-selected]="$index === selectedIndex"
              (click)="selectedIndex = $index">
           <mat-icon class="dict-icon">menu_book</mat-icon>
-          <span class="dict-name">{{ d.name || '(unnamed)' }}</span>
+          <span class="dict-name" [matTooltip]="d.name || '(unnamed)'" [matTooltipShowDelay]="600">{{ d.name || '(unnamed)' }}</span>
           <span class="dict-count">{{ d.values.length }}</span>
-          <button mat-icon-button class="dict-del" matTooltip="Delete dictionary"
+          <button mat-icon-button class="dict-action" matTooltip="Copy {{ '{{' }}{{ d.name || 'name' }}{{ '}}' }}"
+                  (click)="copyToken(d); $event.stopPropagation()">
+            <mat-icon>content_copy</mat-icon>
+          </button>
+          <button mat-icon-button class="dict-action" matTooltip="Clone dictionary"
+                  (click)="cloneDictionary($index); $event.stopPropagation()">
+            <mat-icon>library_add</mat-icon>
+          </button>
+          <button mat-icon-button class="dict-action" matTooltip="Delete dictionary"
                   (click)="deleteDictionary($index); $event.stopPropagation()">
             <mat-icon>delete</mat-icon>
           </button>
@@ -46,6 +54,8 @@
         <p class="hint pad">No dictionaries yet. Create one to use {{ '{{' }}name{{ '}}' }} in prompts.</p>
       }
     </div>
+
+    <div class="divider-v" (mousedown)="startResize($event)"></div>
 
     <div class="dict-detail">
       @if (selected; as dict) {
@@ -90,6 +100,7 @@
 
         <p class="usage">Use <code>{{ usageToken }}</code> in a prompt.</p>
         <p class="usage">Inline (no dictionary needed): <code>{{ '{{' }}a|b|c{{ '}}' }}</code> picks one at random.</p>
+        <p class="usage">Values can reference other dictionaries too — circular references are ignored.</p>
       } @else {
         <p class="hint pad">Select or create a dictionary.</p>
       }
@@ -104,4 +115,7 @@
   <input #fileInput type="file" accept=".json,application/json" hidden (change)="onFileSelected($event)" />
   <span class="actions-spacer"></span>
   <button mat-button mat-dialog-close>Close</button>
+  <span class="resize-handle" matTooltip="Drag to resize" (mousedown)="startDialogResize($event)">
+    <mat-icon>south_east</mat-icon>
+  </span>
 </mat-dialog-actions>

@@ -11,6 +11,7 @@
       "name": "Angular Dev Server",
       "runtimeExecutable": "npx",
       "runtimeArgs": ["ng", "serve"],
+      "cwd": "frontend",
       "port": 4200
     }
   ]

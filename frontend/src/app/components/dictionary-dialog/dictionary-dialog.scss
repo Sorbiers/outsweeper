@@ -1,4 +1,8 @@
-:host { display: block; }
+:host {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
 
 .import-confirm {
   display: flex;
@@ -27,8 +31,26 @@
 
 mat-dialog-content {
   position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  height: auto;
   max-height: unset;
-  height: 60vh;
+}
+
+.resize-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin-left: 2px;
+  color: #666;
+  cursor: nwse-resize;
+  flex: none;
+
+  &:hover { color: #4fc3f7; }
+
+  .mat-icon { font-size: 18px; width: 18px; height: 18px; }
 }
 
 .dropzone-overlay {
@@ -58,13 +80,24 @@ mat-dialog-content {
 /* --- left: dictionary list --- */
 .dict-list {
   flex: none;
-  width: 200px;
   overflow-y: auto;
   overflow-x: hidden;
   display: flex;
   flex-direction: column;
   gap: 4px;
   padding-top: 6px;
+}
+
+.divider-v {
+  flex: none;
+  width: 4px;
+  margin: 0 2px;
+  border-radius: 2px;
+  background: #333;
+  cursor: col-resize;
+
+  &:hover,
+  &:active { background: #666; }
 }
 
 .add-dict-btn { margin-bottom: 4px; }
@@ -82,7 +115,16 @@ mat-dialog-content {
   &.is-selected { background: rgba(79, 195, 247, 0.18); }
 
   .dict-icon { color: #888; font-size: 20px; width: 20px; height: 20px; flex-shrink: 0; }
-  .dict-del { flex-shrink: 0; }
+}
+
+.dict-action {
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  line-height: 30px;
+
+  .mat-icon { font-size: 18px; width: 18px; height: 18px; }
 }
 
 .dict-name {

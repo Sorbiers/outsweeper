@@ -1,13 +1,14 @@
-import { Component, ElementRef, inject, signal, viewChild } from '@angular/core';
+import { afterNextRender, Component, ElementRef, inject, signal, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { CdkDrag, CdkDragHandle } from '@angular/cdk/drag-drop';
 import { MatButtonModule } from '@angular/material/button';
-import { MatDialogModule } from '@angular/material/dialog';
+import { MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSnackBar } from '@angular/material/snack-bar';
+import { STORAGE_KEYS } from '../../constants';
 import { Dictionary, DictionaryService } from '../../services/dictionary.service';
 
 @Component({
@@ -20,11 +21,15 @@ import { Dictionary, DictionaryService } from '../../services/dictionary.service
 export class DictionaryDialog {
   private dictService = inject(DictionaryService);
   private snackBar = inject(MatSnackBar);
+  private dialogRef = inject(MatDialogRef<DictionaryDialog>);
+  private hostEl = inject(ElementRef<HTMLElement>);
 
   private fileInput = viewChild<ElementRef<HTMLInputElement>>('fileInput');
+  private content = viewChild('content', { read: ElementRef });
 
-  // Working copy; changes are persisted on every edit.
-  dicts: Dictionary[] = structuredClone(this.dictService.dictionaries());
+  // Working copy, sorted by name once at open; changes are persisted on every edit.
+  dicts: Dictionary[] = structuredClone(this.dictService.dictionaries())
+    .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
   selectedIndex = this.dicts.length ? 0 : -1;
 
   /** Parsed dictionaries awaiting the Add/Replace choice after an import. */
@@ -32,6 +37,33 @@ export class DictionaryDialog {
 
   /** True while a .json file is being dragged over the dialog. */
   isDragOver = signal(false);
+
+  /** Resizable width (px) of the dictionary-name list, persisted across dialog opens. */
+  listWidth = signal(220);
+  private resizing = false;
+  private boundResize    = (e: MouseEvent) => this.onResize(e);
+  private boundResizeEnd = () => this.onResizeEnd();
+
+  // Whole-dialog resize (drag handle in the actions row).
+  private resizingDialog = false;
+  private dialogStart = { w: 0, h: 0, x: 0, y: 0 };
+  private boundDialogResize    = (e: MouseEvent) => this.onDialogResize(e);
+  private boundDialogResizeEnd = () => this.onDialogResizeEnd();
+
+  constructor() {
+    afterNextRender(() => {
+      const savedListWidth = Number(sessionStorage.getItem(STORAGE_KEYS.DICTIONARY_LIST_WIDTH));
+      if (savedListWidth) this.listWidth.set(savedListWidth);
+
+      const savedSize = sessionStorage.getItem(STORAGE_KEYS.DICTIONARY_DIALOG_SIZE);
+      if (savedSize) {
+        try {
+          const { w, h } = JSON.parse(savedSize);
+          if (w && h) this.dialogRef.updateSize(`${w}px`, `${h}px`);
+        } catch { /* ignore malformed saved size */ }
+      }
+    });
+  }
 
   get selected(): Dictionary | null {
     return this.dicts[this.selectedIndex] ?? null;
@@ -43,19 +75,16 @@ export class DictionaryDialog {
     return `{{${name}}}`;
   }
 
+  /** Sum of weights across active (weight > 0) values only — disabled values don't count. */
   totalWeight(): number {
     const vals = this.selected?.values ?? [];
-    const positive = vals.filter(v => (v.weight ?? 0) > 0);
-    return (positive.length ? positive : vals).reduce(
-      (sum, v) => sum + (positive.length ? v.weight : 1), 0,
-    );
+    return vals.filter(v => (v.weight ?? 0) > 0).reduce((sum, v) => sum + v.weight, 0);
   }
 
   percent(weight: number): number {
     const total = this.totalWeight();
-    const positive = (this.selected?.values ?? []).some(v => (v.weight ?? 0) > 0);
-    const w = positive ? (weight > 0 ? weight : 0) : 1;
-    return total ? Math.round((w / total) * 100) : 0;
+    if (!total || weight <= 0) return 0;
+    return Math.round((weight / total) * 100);
   }
 
   addDictionary(): void {
@@ -67,6 +96,15 @@ export class DictionaryDialog {
   deleteDictionary(index: number): void {
     this.dicts.splice(index, 1);
     if (this.selectedIndex >= this.dicts.length) this.selectedIndex = this.dicts.length - 1;
+    this.persist();
+  }
+
+  /** Duplicate a dictionary (unique name) and select the copy. */
+  cloneDictionary(index: number): void {
+    const clone = structuredClone(this.dicts[index]);
+    clone.name = this.uniqueName(`${clone.name || 'dictionary'} copy`);
+    this.dicts.splice(index + 1, 0, clone);
+    this.selectedIndex = index + 1;
     this.persist();
   }
 
@@ -84,9 +122,10 @@ export class DictionaryDialog {
     this.dictService.save(structuredClone(this.dicts));
   }
 
-  /** Copy the selected dictionary's `{{name}}` token to the clipboard. */
-  copyToken(): void {
-    const token = this.usageToken;
+  /** Copy a dictionary's `{{name}}` token to the clipboard (defaults to the selected one). */
+  copyToken(dict: Dictionary | null = this.selected): void {
+    if (!dict) return;
+    const token = `{{${(dict.name || 'name').trim()}}}`;
     navigator.clipboard?.writeText(token);
     this.snackBar.open(`Copied ${token}`, '', { duration: 1500 });
   }
@@ -202,5 +241,68 @@ export class DictionaryDialog {
     this.selectedIndex = this.dicts.length ? 0 : -1;
     this.persist();
     this.snackBar.open(mode === 'replace' ? 'Dictionaries replaced' : 'Dictionaries merged', '', { duration: 2000 });
+  }
+
+  // --- Resizable list column ---
+
+  startResize(e: MouseEvent): void {
+    e.preventDefault();
+    this.resizing = true;
+    document.addEventListener('mousemove', this.boundResize);
+    document.addEventListener('mouseup', this.boundResizeEnd);
+  }
+
+  private onResize(e: MouseEvent): void {
+    if (!this.resizing) return;
+    const rect = this.content()?.nativeElement.getBoundingClientRect();
+    if (!rect) return;
+    const min = 160;
+    const max = rect.width * 0.5;
+    this.listWidth.set(Math.min(max, Math.max(min, e.clientX - rect.left)));
+  }
+
+  private onResizeEnd(): void {
+    this.resizing = false;
+    document.removeEventListener('mousemove', this.boundResize);
+    document.removeEventListener('mouseup', this.boundResizeEnd);
+    sessionStorage.setItem(STORAGE_KEYS.DICTIONARY_LIST_WIDTH, String(this.listWidth()));
+  }
+
+  // --- Whole-dialog resize ---
+
+  private dialogPane(): HTMLElement | null {
+    return this.hostEl.nativeElement.closest('.cdk-overlay-pane');
+  }
+
+  startDialogResize(e: MouseEvent): void {
+    e.preventDefault();
+    e.stopPropagation();
+    const rect = this.dialogPane()?.getBoundingClientRect();
+    if (!rect) return;
+    this.dialogStart = { w: rect.width, h: rect.height, x: e.clientX, y: e.clientY };
+    this.resizingDialog = true;
+    document.addEventListener('mousemove', this.boundDialogResize);
+    document.addEventListener('mouseup', this.boundDialogResizeEnd);
+  }
+
+  private onDialogResize(e: MouseEvent): void {
+    if (!this.resizingDialog) return;
+    const minW = 780, minH = 400;
+    const maxW = window.innerWidth * 0.95;
+    const maxH = window.innerHeight * 0.95;
+    const w = Math.min(maxW, Math.max(minW, this.dialogStart.w + (e.clientX - this.dialogStart.x)));
+    const h = Math.min(maxH, Math.max(minH, this.dialogStart.h + (e.clientY - this.dialogStart.y)));
+    this.dialogRef.updateSize(`${w}px`, `${h}px`);
+  }
+
+  private onDialogResizeEnd(): void {
+    if (!this.resizingDialog) return;
+    this.resizingDialog = false;
+    document.removeEventListener('mousemove', this.boundDialogResize);
+    document.removeEventListener('mouseup', this.boundDialogResizeEnd);
+    const rect = this.dialogPane()?.getBoundingClientRect();
+    if (rect) {
+      sessionStorage.setItem(STORAGE_KEYS.DICTIONARY_DIALOG_SIZE, JSON.stringify({ w: rect.width, h: rect.height }));
+    }
   }
 }

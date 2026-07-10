@@ -401,7 +401,11 @@ export class App implements OnInit, OnDestroy {
   }
 
   openDictionaryDialog(): void {
-    this.dialog.open(DictionaryDialog, { width: '70vw', maxWidth: '1000px' });
+    this.dialog.open(DictionaryDialog, {
+      width: '80vw', height: '70vh',
+      minWidth: '780px', minHeight: '400px',
+      maxWidth: '95vw', maxHeight: '95vh',
+    });
   }
 
   openLmPrompt(): void {

@@ -20,6 +20,9 @@ export class DictionaryService {
   /** Matches `{{ name }}` placeholders (inner text without braces). */
   private static readonly TOKEN = /\{\{\s*([^{}]+?)\s*\}\}/g;
 
+  /** Hard cap on nesting depth, in case a chain of *distinct* dictionaries runs long. */
+  private static readonly MAX_DEPTH = 8;
+
   readonly dictionaries = signal<Dictionary[]>(this.load());
 
   private load(): Dictionary[] {
@@ -67,32 +70,50 @@ export class DictionaryService {
    * Resolve every `{{...}}` placeholder:
    *  - `{{a|b|c}}` — pick one of the pipe-separated options at random (equal odds).
    *  - `{{name}}`  — pick a weighted-random value from the matching dictionary.
-   * Unknown/empty dictionaries (and empty option lists) are removed.
+   * A picked value is itself resolved, so dictionary values may reference other
+   * dictionaries (nested substitution). Unknown/empty dictionaries, empty option
+   * lists, and dictionary self-references (direct or via a cycle) are removed.
    */
   substitute(text: string): string {
     if (!text) return text;
-    const replaced = text.replace(DictionaryService.TOKEN, (_match, raw: string) => {
-      if (raw.includes('|')) {
-        const options = raw.split('|').map(s => s.trim()).filter(Boolean);
-        return options.length ? options[Math.floor(Math.random() * options.length)] : '';
-      }
-      const dict = this.get(raw);
-      if (!dict || !dict.values.length) return '';
-      return this.pickWeighted(dict.values);
-    });
+    const replaced = this.resolve(text, new Set());
     // Tidy up spacing left behind by removed/empty substitutions.
     return replaced.replace(/[ \t]{2,}/g, ' ').replace(/ +([,.])/g, '$1').trim();
   }
 
+  /** Recursive resolver. `visited` holds dictionary names already expanded in the
+   *  current chain, so a cycle (A -> B -> A) collapses to '' instead of looping. */
+  private resolve(text: string, visited: Set<string>, depth = 0): string {
+    if (!text || depth >= DictionaryService.MAX_DEPTH) return text;
+    return text.replace(DictionaryService.TOKEN, (_match, raw: string) => {
+      if (raw.includes('|')) {
+        const options = raw.split('|').map(s => s.trim()).filter(Boolean);
+        if (!options.length) return '';
+        const picked = options[Math.floor(Math.random() * options.length)];
+        return this.resolve(picked, visited, depth + 1);
+      }
+      const key = raw.trim().toLowerCase();
+      if (visited.has(key)) {
+        console.warn(`[dictionaries] circular reference detected at {{${raw.trim()}}} — skipped`);
+        return '';
+      }
+      const dict = this.get(raw);
+      if (!dict || !dict.values.length) return '';
+      const picked = this.pickWeighted(dict.values);
+      if (!picked) return '';
+      return this.resolve(picked, new Set(visited).add(key), depth + 1);
+    });
+  }
+
+  /** Weighted-random pick. Values with weight <= 0 are temporarily disabled and
+   *  never chosen; if every value is disabled, resolves to '' (no substitution). */
   private pickWeighted(values: DictionaryValue[]): string {
-    const positive = values.filter(v => (v.weight ?? 0) > 0);
-    // Fall back to a uniform pick when no positive weights are defined.
-    const pool = positive.length ? positive : values;
-    const weightOf = (v: DictionaryValue) => (positive.length ? v.weight : 1);
-    const total = pool.reduce((sum, v) => sum + weightOf(v), 0);
+    const pool = values.filter(v => (v.weight ?? 0) > 0);
+    if (!pool.length) return '';
+    const total = pool.reduce((sum, v) => sum + v.weight, 0);
     let r = Math.random() * total;
     for (const v of pool) {
-      r -= weightOf(v);
+      r -= v.weight;
       if (r < 0) return v.value;
     }
     return pool[pool.length - 1].value;

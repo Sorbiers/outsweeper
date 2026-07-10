@@ -23,5 +23,7 @@ export const STORAGE_KEYS = {
   COMFY_POS:          'pp_comfy_pos',
   WIDGET_POS:         'pp_widget_pos',
   DICTIONARIES:       'pp_dictionaries',
+  DICTIONARY_LIST_WIDTH: 'pp_dictionary_list_width',
+  DICTIONARY_DIALOG_SIZE: 'pp_dictionary_dialog_size',
   COLLECTION_LAYOUT:  'pp_collection_layout',
 } as const;
