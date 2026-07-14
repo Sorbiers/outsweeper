@@ -1,0 +1,41 @@
+<h2 mat-dialog-title class="state-title">State</h2>
+
+<mat-dialog-content>
+  <section class="panel">
+    <div class="panel-head">System</div>
+    @if (metrics(); as m) {
+      <div class="row"><span class="lbl">CPU</span><span [ngClass]="cls(m.cpu)">{{ m.cpu | number:'1.0-0' }}%</span></div>
+      <div class="row"><span class="lbl">RAM</span><span [ngClass]="cls(m.ram)">{{ m.ram | number:'1.0-0' }}%</span></div>
+      @if (m.gpu != null) {
+        <div class="row"><span class="lbl">GPU</span><span [ngClass]="cls(m.gpu)">{{ m.gpu }}%</span></div>
+      }
+      @if (m.temp != null) {
+        <div class="row"><span class="lbl">Temp</span><span [ngClass]="cls(m.temp - 30)">{{ m.temp }}°C</span></div>
+      }
+      @if (m.vram != null) {
+        <div class="row"><span class="lbl">VRAM</span><span [ngClass]="cls(m.vram)">{{ m.vram | number:'1.0-0' }}%</span></div>
+      }
+    } @else {
+      <div class="row offline"><span>no metrics</span></div>
+    }
+  </section>
+
+  <section class="panel">
+    <div class="panel-head">ComfyUI Queue</div>
+    @if (queue.status(); as s) {
+      <div class="row"><span class="lbl">Running</span><span [class.active]="s.running > 0">{{ s.running }}</span></div>
+      <div class="row"><span class="lbl">Waiting</span><span>{{ s.pending }}</span></div>
+      <div class="row"><span class="lbl">Done</span><span>{{ s.done }}</span></div>
+      @if (s.progress && s.progress.max > 0) {
+        <div class="row"><span class="lbl">Step</span><span class="active">{{ (s.progress.value / s.progress.max * 100) | number:'1.0-0' }}%</span></div>
+        <div class="progress-row"><div class="progress-bar" [style.width.%]="s.progress.value / s.progress.max * 100"></div></div>
+      }
+    } @else {
+      <div class="row offline"><span>offline</span></div>
+    }
+  </section>
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button mat-button mat-dialog-close>Close</button>
+</mat-dialog-actions>

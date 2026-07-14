@@ -1,0 +1,145 @@
+:host {
+  display: block;
+  height: 100dvh;
+  background: #121212;
+  color: #eee;
+}
+
+.feed {
+  height: 100%;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.feed-header {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: rgba(18, 18, 18, 0.92);
+  backdrop-filter: blur(4px);
+  border-bottom: 1px solid #2a2a2a;
+
+  .count    { font-size: 12px; color: #888; }
+}
+
+.app-menu-btn {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  background: none;
+  border: none;
+  color: #eee;
+  padding: 4px 6px 4px 0;
+  cursor: pointer;
+
+  .app-name { font-weight: 600; letter-spacing: 0.02em; font-size: 16px; }
+  mat-icon { color: #888; }
+}
+
+.card {
+  margin: 0 0 14px;
+  background: #181818;
+}
+
+.card-img {
+  display: block;
+  width: 100%;
+  max-height: 80dvh;
+  object-fit: cover;
+  cursor: pointer;
+  background: #000;
+}
+
+.card-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 2px 6px 2px 12px;
+}
+
+.card-name {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  font-size: 13px;
+  color: #9ad;
+  background: none;
+  border: none;
+  padding: 8px 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.del-btn { color: #e57373; flex: none; }
+
+.hint {
+  color: #888;
+  font-size: 14px;
+  text-align: center;
+  padding: 40px 16px;
+}
+
+.center {
+  display: flex;
+  justify-content: center;
+  padding: 20px 0;
+}
+
+.sentinel { height: 1px; }
+
+.feed-fabs {
+  position: fixed;
+  right: 14px;
+  bottom: calc(14px + env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  z-index: 3;
+}
+
+/* --- fullscreen viewer --- */
+.viewer {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  touch-action: none;   /* gestures are handled by pointer events */
+}
+
+/* Full-viewport wrapper the gestures transform — its layout origin is the
+   viewport origin, so the pinch focal-point math is exact. */
+.viewer-canvas {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform-origin: 0 0;
+  will-change: transform;
+  pointer-events: none; /* the overlay owns all pointer gestures */
+}
+
+.viewer-img {
+  max-width: 100vw;
+  max-height: 100dvh;
+  user-select: none;
+}
+
+.viewer-close {
+  position: absolute;
+  top: calc(8px + env(safe-area-inset-top));
+  right: 8px;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.45);
+}

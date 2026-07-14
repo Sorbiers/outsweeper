@@ -49,7 +49,7 @@ import { KeyboardService, PhotoAction } from './services/keyboard.service';
 import { PhotoService } from './services/photo.service';
 
 @Component({
-  selector: 'pp-root',
+  selector: 'pp-desktop',
   imports: [
     MatSnackBarModule,
     MatFabButton,

@@ -1,0 +1,56 @@
+<div class="feed" #feed>
+  <header class="feed-header">
+    <button class="app-menu-btn" [matMenuTriggerFor]="mainMenu">
+      <span class="app-name">OutSweeper</span>
+      <mat-icon>arrow_drop_down</mat-icon>
+    </button>
+    <mat-menu #mainMenu="matMenu">
+      <button mat-menu-item (click)="openWorkspace()"><mat-icon>folder</mat-icon> Switch workspace</button>
+      <button mat-menu-item (click)="openQueue()"><mat-icon>queue</mat-icon> ComfyUI Queue</button>
+      <button mat-menu-item (click)="openState()"><mat-icon>monitor_heart</mat-icon> State</button>
+    </mat-menu>
+    <span class="count">{{ photos().length }} / {{ total() }}</span>
+  </header>
+
+  @for (photo of photos(); track photo.filename) {
+    <article class="card">
+      <img class="card-img" [src]="thumbUrl(photo)" [alt]="photo.filename"
+           loading="lazy" (click)="openViewer(photo)" />
+      <div class="card-bar">
+        <button class="card-name" (click)="openGenerate(photo, $event)">{{ photo.filename }}</button>
+        <button mat-icon-button class="del-btn" (click)="confirmDelete(photo, $event)" aria-label="Delete">
+          <mat-icon>delete</mat-icon>
+        </button>
+      </div>
+    </article>
+  } @empty {
+    @if (!loading()) {
+      <p class="hint">No images in the working folder.</p>
+    }
+  }
+
+  @if (loading()) {
+    <div class="center"><mat-spinner diameter="32"></mat-spinner></div>
+  }
+  <div class="sentinel" #sentinel></div>
+</div>
+
+<div class="feed-fabs">
+  <button mat-mini-fab (click)="goTop()" aria-label="Go top"><mat-icon>arrow_upward</mat-icon></button>
+  <button mat-mini-fab (click)="refresh()" aria-label="Refresh"><mat-icon>refresh</mat-icon></button>
+</div>
+
+@if (viewerPhoto(); as photo) {
+  <div class="viewer"
+       (pointerdown)="onPointerDown($event)"
+       (pointermove)="onPointerMove($event)"
+       (pointerup)="onPointerUp($event)"
+       (pointercancel)="onPointerUp($event)">
+    <div class="viewer-canvas" [style.transform]="transform()">
+      <img class="viewer-img" [src]="imageUrl(photo)" [alt]="photo.filename" draggable="false" />
+    </div>
+    <button mat-icon-button class="viewer-close" (click)="closeViewer()" aria-label="Close">
+      <mat-icon>close</mat-icon>
+    </button>
+  </div>
+}

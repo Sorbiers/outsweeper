@@ -45,6 +45,7 @@ def main() -> None:
     selected_name        = defaults.get('selected_dir_name', '__selected')
     dust_name            = defaults.get('dust_dir_name', '__dust')
     port                 = defaults.get('port', 1976)
+    host                 = defaults.get('host', '127.0.0.1')
     comfy_url            = defaults.get('comfy_url', 'http://127.0.0.1:8188')
     lmstudio_url         = defaults.get('lmstudio_url', 'http://localhost:1234/v1')
     comfy_output         = defaults.get('comfy_output', '')
@@ -74,7 +75,9 @@ def main() -> None:
             sys.exit(1)
 
     threading.Timer(1.0, webbrowser.open, args=[f'http://localhost:{port}']).start()
-    app.run(host='127.0.0.1', port=port, debug=False, threaded=True)
+    if host not in ('127.0.0.1', 'localhost'):
+        print(f'Listening on {host}:{port} (reachable from the network)')
+    app.run(host=host, port=port, debug=False, threaded=True)
 
 
 if __name__ == '__main__':

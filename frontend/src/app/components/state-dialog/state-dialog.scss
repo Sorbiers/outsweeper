@@ -1,0 +1,45 @@
+.state-title { margin: 0; }
+
+.panel {
+  margin-bottom: 16px;
+  border: 1px solid #2a2a2a;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.panel-head {
+  padding: 6px 12px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #9ad;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  font-size: 14px;
+
+  & + .row { border-top: 1px solid rgba(255, 255, 255, 0.05); }
+
+  .lbl { color: #888; }
+  .active { color: #4fc3f7; font-weight: 600; }
+  &.offline { color: #888; justify-content: center; }
+}
+
+.hot  { color: #e57373; font-weight: 600; }
+.warm { color: #ffb74d; }
+
+.progress-row {
+  height: 4px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.progress-bar {
+  height: 100%;
+  background: #4fc3f7;
+  transition: width 0.2s;
+}
