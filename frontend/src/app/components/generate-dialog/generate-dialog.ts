@@ -12,12 +12,13 @@ import { MatMenuModule } from '@angular/material/menu';
 import { MatSelectModule } from '@angular/material/select';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { forkJoin, Observable, of } from 'rxjs';
-import { catchError, switchMap } from 'rxjs/operators';
+import { forkJoin, from, Observable, of } from 'rxjs';
+import { catchError, concatMap, map, switchMap, toArray } from 'rxjs/operators';
 import { STORAGE_KEYS } from '../../constants';
 import { ComfyConnectionService } from '../../services/comfy-connection.service';
 import { ConnectionStateService } from '../../services/connection-state.service';
-import { DictionaryService } from '../../services/dictionary.service';
+import { DictionaryService, DictionaryValue, DictionaryValueLora } from '../../services/dictionary.service';
+import { LmStudioConnectionService } from '../../services/lmstudio-connection.service';
 import { PhotoService } from '../../services/photo.service';
 import { PromptHistoryService } from '../../services/prompt-history.service';
 import { ComfyUrlRowComponent } from '../comfy-url-row/comfy-url-row';
@@ -81,7 +82,23 @@ interface ManualLora {
   strengthClip: number;
 }
 
+/** One prepared prompt ready to build into a workflow: fully resolved params
+ *  (substitution + seed), the dict-triggered LoRAs it picked, and the
+ *  checkpoint/LoRA variable-node value assignments for its Cartesian combo. */
+interface PromptUnit {
+  resolved: WorkflowParams;
+  dictLoras: ManualLora[];
+  assign: { nodeId: string; inputKey: string; value: string }[];
+}
+
 const DEFAULT_NEGATIVE_PROMPT = 'worst quality, low quality, bad anatomy, bad hands, text, watermark, blurry, deformed';
+
+/** Instruction sent to LM Studio to enrich a prompt in "Improve then send". */
+const IMPROVE_PROMPT_INSTRUCTION =
+  'Improve and enrich the following text-to-image prompt. Keep its core subject ' +
+  'and intent, but make it more vivid and detailed by adding arbitrary details, ' +
+  'elements, or plot variations. Return ONLY the improved prompt text, ready to ' +
+  'use, with no explanations, preamble, or quotation marks.';
 
 @Component({
   selector: 'pp-generate-dialog',
@@ -98,14 +115,23 @@ export class GenerateDialog {
   private connState = inject(ConnectionStateService);
   private dictionaries = inject(DictionaryService);
   private promptHistory = inject(PromptHistoryService);
+  private lmStudio = inject(LmStudioConnectionService);
   comfy = inject(ComfyConnectionService);
 
   params: WorkflowParams;
   sending = false;
+  /** Progress line shown while "Improve then send" runs its multi-phase flow. */
+  sendStatus = '';
   copyResult = false;
   randomizeSeedOnSend = false;
   jobsNumber = 1;
   hasDenoise = false;
+  /** When enabled, the positive prompt is split into several prompts (each
+   *  queued as its own separate send) on lines matching the delimiter. */
+  multiplePrompts = false;
+  /** Delimiter line for splitting. Empty (the default) splits on empty lines;
+   *  otherwise a line whose trimmed text equals this is the separator. */
+  promptDelimiter = '';
 
   availableLoras: string[] = [];
   loraNodes: VariableNode[] = [];
@@ -119,6 +145,7 @@ export class GenerateDialog {
     this.dialogRef.disableClose = true;
     this.dialogRef.keydownEvents().subscribe(e => { if (e.key === 'Escape') this.dialogRef.close(); });
     this.comfy.init();
+    this.lmStudio.init();
 
     if (this.comfy.checkStatus === 'ok') {
       this.availableLoras = [...this.connState.comfy.loras];
@@ -204,14 +231,50 @@ export class GenerateDialog {
 
   /**
    * A copy of the current params with `{{name}}` placeholders resolved against
-   * the dictionaries. Called per queued prompt so batches vary independently.
+   * the dictionaries, plus any LoRAs attached to the values picked along the way
+   * (deduped by name — a LoRA is added at most once per resolution). Called per
+   * queued prompt so batches vary independently.
    */
-  private resolvedParams(): WorkflowParams {
-    return {
-      ...this.params,
-      positivePrompt: this.dictionaries.substitute(this.params.positivePrompt),
-      negativePrompt: this.dictionaries.substitute(this.params.negativePrompt),
-    };
+  private resolvedParams(positiveTemplate: string): { params: WorkflowParams; loras: ManualLora[] } {
+    const loraSink: DictionaryValueLora[] = [];
+    const positivePrompt = this.dictionaries.substitute(positiveTemplate, loraSink);
+    const negativePrompt = this.dictionaries.substitute(this.params.negativePrompt, loraSink);
+    const seen = new Set<string>();
+    const loras = loraSink.filter(l => l.name && !seen.has(l.name) && seen.add(l.name));
+    return { params: { ...this.params, positivePrompt, negativePrompt }, loras };
+  }
+
+  /**
+   * When "Multiple prompts" is on, split the positive prompt into separate
+   * prompts on delimiter lines (whole-line match). An empty delimiter — the
+   * default — splits on empty lines; otherwise a line whose trimmed text equals
+   * the delimiter is the separator. Off, or with no separator present, returns
+   * the prompt unchanged as a single part. Blank parts are dropped. Splitting
+   * happens on the template, so each part keeps and independently resolves its
+   * own {{tokens}}.
+   */
+  private positivePromptParts(): string[] {
+    if (!this.multiplePrompts) return [this.params.positivePrompt];
+    const sep = this.promptDelimiter.trim();
+    const parts: string[] = [];
+    let current: string[] = [];
+    for (const line of this.params.positivePrompt.split(/\r?\n/)) {
+      const isDelimiter = sep ? line.trim() === sep : line.trim() === '';
+      if (isDelimiter) {
+        parts.push(current.join('\n'));
+        current = [];
+      } else {
+        current.push(line);
+      }
+    }
+    parts.push(current.join('\n'));
+    const trimmed = parts.map(p => p.trim()).filter(Boolean);
+    return trimmed.length ? trimmed : [this.params.positivePrompt];
+  }
+
+  /** Number of prompts the positive prompt splits into (>= 1). */
+  get promptPartCount(): number {
+    return this.positivePromptParts().length;
   }
 
   extractWorkflow(): void {
@@ -231,11 +294,11 @@ export class GenerateDialog {
   }
 
   /** Build the { flow, dictionaries } document — prompts keep their {{tokens}}. */
-  private buildFlowContent(): { flow: Record<string, any>; dictionaries: Record<string, { value: string; weight: number }[]> } {
+  private buildFlowContent(): { flow: Record<string, any>; dictionaries: Record<string, DictionaryValue[]> } {
     let flow = this.applyParams(this.data.workflow, this.params);
     flow = this.normalizeLoraClip(this.injectManualLoras(this.removeEmptyLoraNodes(flow), this.manualLoras.filter(l => l.name)));
 
-    const dictionaries: Record<string, { value: string; weight: number }[]> = {};
+    const dictionaries: Record<string, DictionaryValue[]> = {};
     for (const name of this.dictionaries.referencedNames(`${this.params.positivePrompt}\n${this.params.negativePrompt}`)) {
       const d = this.dictionaries.get(name);
       if (d) dictionaries[d.name] = d.values;
@@ -324,55 +387,145 @@ export class GenerateDialog {
     return parts.join(' — ') || err?.message || 'Failed to send';
   }
 
-  private _doSend(front = false, uploadedImageName: string | null = null): void {
-    const notifySuccess = (count: number) => {
-      this.sending = false;
-      const msg = count > 1 ? `Queued ${count} prompts` : 'Prompt queued';
-      const suffix = this.copyResult ? ' — will copy to folder' : '';
-      this.snackBar.open(msg + suffix, '', { duration: 4000 });
-    };
+  private notifyQueued(count: number): void {
+    this.sending = false;
+    this.sendStatus = '';
+    const msg = count > 1 ? `Queued ${count} prompts` : 'Prompt queued';
+    const suffix = this.copyResult ? ' — will copy to folder' : '';
+    this.snackBar.open(msg + suffix, '', { duration: 4000 });
+  }
 
-    // Build the final flow for one combo: loras, normalize CLIP, then img2img.
-    const finalize = (wf: Record<string, any>) => {
-      let out = this.injectManualLoras(this.removeEmptyLoraNodes(wf), this.manualLoras.filter(l => l.name));
-      out = this.normalizeLoraClip(out);
-      if (uploadedImageName) out = this.toImg2Img(out, uploadedImageName);
-      return out;
-    };
+  private failSend(err: any): void {
+    this.sending = false;
+    this.sendStatus = '';
+    this.snackBar.open(`Error: ${this.formatSendError(err)}`, 'Dismiss', { duration: 10000 });
+  }
 
-    const variableNodes = [
+  /** The checkpoint/LoRA nodes that expand into a Cartesian batch. */
+  private activeVariableNodes(): VariableNode[] {
+    return [
       ...this.checkpointNodes.filter(n => n.selected.length > 0),
       ...this.loraNodes.filter(n => n.selected.length > 0 && !n.removed),
     ];
+  }
+
+  /**
+   * Prepare every prompt for one send: for each job (seed re-randomized) × split
+   * prompt × Cartesian combo, resolve {{vars}} once and capture the result. The
+   * prompts are frozen here so they can be improved before the workflow is built.
+   */
+  private buildPromptUnits(): PromptUnit[] {
+    const variableNodes = this.activeVariableNodes();
     const combinations = variableNodes.length
       ? this.cartesian(variableNodes.map(n => n.selected))
       : [[]];
+    const promptParts = this.positivePromptParts();
 
-    // One job = the full Cartesian set; resolvedParams() re-rolls {{vars}} per combo.
-    const buildJob = (): Observable<any>[] =>
-      combinations.map(combo => {
-        const workflow = this.applyParams(this.data.workflow, this.resolvedParams());
-        combo.forEach((value, i) => {
-          const node = variableNodes[i];
-          if (workflow[node.nodeId]?.inputs) workflow[node.nodeId].inputs[node.inputKey] = value;
-        });
-        return this.photoService.sendToComfy(this.comfy.comfyUrl, finalize(workflow), this.copyResult, front);
-      });
-
-    // Re-randomize the seed and re-substitute template vars once per job.
-    const requests: Observable<any>[] = [];
+    const units: PromptUnit[] = [];
     for (let j = 0; j < this.jobCount; j++) {
       if (this.randomizeSeedOnSend) this.randomizeSeed();
-      requests.push(...buildJob());
+      for (const part of promptParts) {
+        for (const combo of combinations) {
+          const { params: resolved, loras: dictLoras } = this.resolvedParams(part);
+          const assign = combo.map((value, i) => ({
+            nodeId: variableNodes[i].nodeId,
+            inputKey: variableNodes[i].inputKey,
+            value,
+          }));
+          units.push({ resolved, dictLoras, assign });
+        }
+      }
+    }
+    return units;
+  }
+
+  /** Build the final ComfyUI flow for one prepared unit (params + combo + loras + img2img). */
+  private buildWorkflowFromUnit(unit: PromptUnit, uploadedImageName: string | null): Record<string, any> {
+    const workflow = this.applyParams(this.data.workflow, unit.resolved);
+    for (const a of unit.assign) {
+      if (workflow[a.nodeId]?.inputs) workflow[a.nodeId].inputs[a.inputKey] = a.value;
+    }
+    const loras = [...this.manualLoras.filter(l => l.name), ...unit.dictLoras];
+    let out = this.injectManualLoras(this.removeEmptyLoraNodes(workflow), loras);
+    out = this.normalizeLoraClip(out);
+    if (uploadedImageName) out = this.toImg2Img(out, uploadedImageName);
+    return out;
+  }
+
+  /** In "Generate from" img2img mode, upload the source image and yield its name; else null. */
+  private uploadSourceIfNeeded(): Observable<string | null> {
+    const src = this.data.sourceImage;
+    if (src && this.params.denoise != null && this.params.denoise < 1) {
+      return this.photoService.uploadToComfy(this.comfy.comfyUrl, src.filename, src.folder).pipe(map(r => r.name));
+    }
+    return of(null);
+  }
+
+  private _doSend(front = false, uploadedImageName: string | null = null): void {
+    const units = this.buildPromptUnits();
+    const requests = units.map(u =>
+      this.photoService.sendToComfy(this.comfy.comfyUrl, this.buildWorkflowFromUnit(u, uploadedImageName), this.copyResult, front),
+    );
+    forkJoin(requests).subscribe({
+      next: () => this.notifyQueued(requests.length),
+      error: (err) => this.failSend(err),
+    });
+  }
+
+  /**
+   * "Improve then send": prepare every prompt (full substitution / loras / seed),
+   * have LM Studio enrich each one (sequentially — LM Studio serves one request
+   * at a time), unload the LM model to free VRAM, then queue every improved flow.
+   */
+  improveThenSend(front = false): void {
+    const lmUrl = this.connState.lmstudio.url;
+    if (!lmUrl) {
+      this.snackBar.open('Set the LM Studio URL first (open the Prompt/Describe dialog to connect).', 'Dismiss', { duration: 6000 });
+      return;
     }
 
-    forkJoin(requests).subscribe({
-      next: () => notifySuccess(requests.length),
-      error: (err) => {
-        this.sending = false;
-        const msg = this.formatSendError(err);
-        this.snackBar.open(`Error: ${msg}`, 'Dismiss', { duration: 10000 });
-      },
+    this.saveParams();
+    this.promptHistory.add(this.params.positivePrompt);
+
+    const units = this.buildPromptUnits();
+    if (!units.length) return;
+
+    this.sending = true;
+    const model = this.lmStudio.model;
+    const total = units.length;
+
+    // Phase 1: improve each prompt one at a time; empty prompts are left as-is.
+    from(units.map((unit, i) => ({ unit, i }))).pipe(
+      concatMap(({ unit, i }) => {
+        this.sendStatus = `Improving prompt ${i + 1}/${total}…`;
+        const text = unit.resolved.positivePrompt;
+        if (!text.trim()) return of(unit);
+        return this.photoService.lmPrompt(lmUrl, `${IMPROVE_PROMPT_INSTRUCTION}\n\n${text}`, model).pipe(
+          map(res => {
+            const improved = (res.description || '').trim();
+            unit.resolved = { ...unit.resolved, positivePrompt: improved || text };
+            return unit;
+          }),
+        );
+      }),
+      toArray(),
+      // Phase 2: free VRAM by unloading LM Studio before ComfyUI runs.
+      switchMap(() => {
+        this.sendStatus = 'Unloading LM Studio…';
+        return this.photoService.unloadLmStudio(lmUrl).pipe(catchError(() => of(null)));
+      }),
+      // Phase 3: (img2img) upload the source image if needed.
+      switchMap(() => this.uploadSourceIfNeeded()),
+      // Phase 4: queue every improved flow.
+      switchMap(uploadedImageName => {
+        this.sendStatus = 'Queueing…';
+        return forkJoin(units.map(u =>
+          this.photoService.sendToComfy(this.comfy.comfyUrl, this.buildWorkflowFromUnit(u, uploadedImageName), this.copyResult, front),
+        ));
+      }),
+    ).subscribe({
+      next: () => this.notifyQueued(total),
+      error: (err) => this.failSend(err),
     });
   }
 
@@ -381,14 +534,13 @@ export class GenerateDialog {
     return Math.max(1, Math.floor(Number(this.jobsNumber) || 1));
   }
 
-  /** Cartesian combinations for one job (checkpoints × LoRAs). */
+  /** Prompts per job: split prompts × Cartesian combinations (checkpoints × LoRAs). */
   get totalPrompts(): number {
-    const variableNodes = [
-      ...this.checkpointNodes.filter(n => n.selected.length > 0),
-      ...this.loraNodes.filter(n => n.selected.length > 0 && !n.removed),
-    ];
-    if (variableNodes.length === 0) return 1;
-    return variableNodes.reduce((acc, n) => acc * n.selected.length, 1);
+    const variableNodes = this.activeVariableNodes();
+    const combos = variableNodes.length === 0
+      ? 1
+      : variableNodes.reduce((acc, n) => acc * n.selected.length, 1);
+    return combos * this.promptPartCount;
   }
 
   /** Total prompts queued across all jobs. */

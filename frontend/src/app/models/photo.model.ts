@@ -1,3 +1,5 @@
+import type { DictionaryValue } from '../services/dictionary.service';
+
 export interface PhotoListItem {
   filename: string;
   modified: string;
@@ -122,5 +124,23 @@ export interface CollectionFlow {
 /** Contents of a saved flow: the full ComfyUI workflow plus the dictionaries it references. */
 export interface FlowDocument {
   flow: Record<string, any>;
-  dictionaries: Record<string, { value: string; weight: number }[]>;
+  dictionaries: Record<string, DictionaryValue[]>;
+}
+
+/** What the local (non-ComfyUI) upscale features can currently do. */
+export interface UpscaleCapabilities {
+  /** torch + spandrel importable in the backend. */
+  spandrel: boolean;
+  /** A CUDA device is available (else spandrel runs on CPU — slow). */
+  cuda: boolean;
+  /** Interpolation (Pillow) — always available. */
+  interpolation: boolean;
+  /** Configured upscale_models_dir, or null when unset. */
+  models_dir: string | null;
+  /** Model files discovered under models_dir. */
+  models: string[];
+  /** Interpolation method names (nearest/bilinear/area/bicubic/lanczos). */
+  methods: string[];
+  /** Import error when spandrel/torch are missing. */
+  error: string | null;
 }

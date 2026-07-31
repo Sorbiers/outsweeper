@@ -189,6 +189,39 @@ mat-dialog-content {
   color: #9ad;
 }
 
+.value-action {
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  line-height: 30px;
+  color: #888;
+
+  .mat-icon { font-size: 18px; width: 18px; height: 18px; }
+}
+
+.value-lora-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: -2px 0 6px 8px;
+
+  // Compact this row's mat-form-fields via Material's system-level design
+  // tokens (see Angular Material theming docs — these are the same tokens
+  // `mat.theme()`/density config set globally, scoped here to one row).
+  --mat-form-field-container-height: 36px;
+  --mat-form-field-container-vertical-padding: 6px;
+  --mat-form-field-container-text-size: 12px;
+  --mat-form-field-container-text-line-height: 16px;
+  --mat-form-field-outlined-label-text-size: 12px;
+  --mat-form-field-outlined-label-text-populated-size: 11px;
+  --mat-select-trigger-text-size: 12px;
+  --mat-select-trigger-text-line-height: 16px;
+
+  .value-lora-name { flex: 1; min-width: 0; }
+  .value-lora-strength { width: 84px; flex: none; }
+}
+
 .add-value-btn { margin-top: 4px; }
 
 .usage {

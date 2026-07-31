@@ -39,6 +39,17 @@
   width: 120px;
 }
 
+.split-field {
+  width: 160px;
+}
+
+.send-status {
+  margin-right: auto;
+  padding-left: 8px;
+  font-size: 12px;
+  opacity: 0.75;
+}
+
 /* Top two-section layout: left = URL + LoRAs, right = options.
    Wraps to a single column when the dialog is too narrow. */
 .gen-columns {

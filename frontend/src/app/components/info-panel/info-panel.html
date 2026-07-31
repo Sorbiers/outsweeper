@@ -25,6 +25,10 @@
             <mat-icon>open_with</mat-icon>
             <span class="menu-label">Outpaint</span>
           </button>
+          <button mat-menu-item [matMenuTriggerFor]="upscaleSubMenu">
+            <mat-icon>photo_size_select_large</mat-icon>
+            <span class="menu-label">Upscale</span>
+          </button>
           <button mat-menu-item (click)="addToCollection()">
             <mat-icon>collections_bookmark</mat-icon>
             <span class="menu-label">Add to Collection <kbd>c</kbd></span>
@@ -85,6 +89,22 @@
           @for (t of tools; track t) {
             <button mat-menu-item (click)="runTool(t)">{{ t }}</button>
           }
+        </mat-menu>
+        <mat-menu #upscaleSubMenu="matMenu">
+          <button mat-menu-item (click)="openUpscale('spandrel')"
+                  [disabled]="!!spandrelUnavailable"
+                  [matTooltip]="spandrelUnavailable" matTooltipPosition="left">
+            <mat-icon>auto_awesome</mat-icon>
+            <span class="menu-label">spandrel (local model)</span>
+          </button>
+          <button mat-menu-item (click)="openUpscale('model')">
+            <mat-icon>bolt</mat-icon>
+            <span class="menu-label">ComfyUI model</span>
+          </button>
+          <button mat-menu-item (click)="openUpscale('interpolation')">
+            <mat-icon>photo_size_select_large</mat-icon>
+            <span class="menu-label">Interpolation</span>
+          </button>
         </mat-menu>
       </mat-card-header>
       <mat-card-content>

@@ -1,0 +1,84 @@
+<h2 mat-dialog-title cdkDrag cdkDragRootElement=".cdk-overlay-pane" cdkDragHandle
+    class="dialog-title">Upscale · {{ filename }}</h2>
+
+<mat-dialog-content>
+  <mat-button-toggle-group class="method-toggle" [value]="method()"
+                           (change)="method.set($event.value)" hideSingleSelectionIndicator>
+    <mat-button-toggle value="spandrel">spandrel</mat-button-toggle>
+    <mat-button-toggle value="model">ComfyUI model</mat-button-toggle>
+    <mat-button-toggle value="interpolation">Interpolation</mat-button-toggle>
+  </mat-button-toggle-group>
+
+  <!-- spandrel: local model-based upscale -->
+  @if (method() === 'spandrel') {
+    <p class="method-desc">Local model upscaler (torch + spandrel). Writes a new image next to the source.</p>
+    @if (spandrelReady) {
+      <mat-form-field class="full-width">
+        <mat-label>Upscale model</mat-label>
+        <mat-select [(ngModel)]="spandrelModel">
+          @for (m of caps()!.models; track m) {
+            <mat-option [value]="m">{{ m }}</mat-option>
+          }
+        </mat-select>
+      </mat-form-field>
+      <mat-form-field class="full-width">
+        <mat-label>Tile size (px, 0 = whole image)</mat-label>
+        <input matInput type="number" min="0" step="64" [(ngModel)]="tile"
+               matTooltip="Tiles bound VRAM. 512 is safe on 8 GB; 0 processes the whole image at once." />
+      </mat-form-field>
+      @if (spandrelHint) {
+        <p class="warn"><mat-icon>info</mat-icon> {{ spandrelHint }}</p>
+      }
+    } @else {
+      <p class="warn"><mat-icon>warning</mat-icon> {{ spandrelHint || 'spandrel is not available.' }}</p>
+    }
+  }
+
+  <!-- interpolation: local Pillow resize -->
+  @if (method() === 'interpolation') {
+    <p class="method-desc">Algorithmic resize (no model). Instant, always available. Writes a new image next to the source.</p>
+    <div class="row">
+      <mat-form-field class="grow">
+        <mat-label>Method</mat-label>
+        <mat-select [(ngModel)]="interpMethod">
+          @for (m of caps()?.methods || ['lanczos']; track m) {
+            <mat-option [value]="m">{{ m }}</mat-option>
+          }
+        </mat-select>
+      </mat-form-field>
+      <mat-form-field class="scale-field">
+        <mat-label>Scale ×</mat-label>
+        <input matInput type="number" min="1" max="16" step="0.5" [(ngModel)]="interpScale" />
+      </mat-form-field>
+    </div>
+  }
+
+  <!-- model: ComfyUI UpscaleModelLoader node -->
+  @if (method() === 'model') {
+    <p class="method-desc">Pure model upscaler run in ComfyUI (uses its VRAM management). Result copies back to the working folder.</p>
+    <pp-comfy-url-row (connected)="onConnected()"></pp-comfy-url-row>
+    <mat-form-field class="full-width">
+      <mat-label>Upscale model</mat-label>
+      <mat-select [(ngModel)]="comfyUpscaleModel" [disabled]="comfy.checkStatus !== 'ok'">
+        @for (m of availableUpscaleModels; track m) {
+          <mat-option [value]="m">{{ m }}</mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+    <mat-checkbox [(ngModel)]="copyResult">Copy the result to the working folder.</mat-checkbox>
+  }
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  @if (running()) {
+    <span class="run-status"><mat-spinner diameter="18"></mat-spinner> Working…</span>
+  }
+  <button mat-button mat-dialog-close [disabled]="running()">Cancel</button>
+  @if (method() === 'spandrel') {
+    <button mat-flat-button (click)="run()" [disabled]="running() || !spandrelReady || !spandrelModel">Upscale</button>
+  } @else if (method() === 'interpolation') {
+    <button mat-flat-button (click)="run()" [disabled]="running()">Upscale</button>
+  } @else {
+    <button mat-flat-button (click)="run()" [disabled]="running() || comfy.checkStatus !== 'ok' || !comfyUpscaleModel">Upscale</button>
+  }
+</mat-dialog-actions>

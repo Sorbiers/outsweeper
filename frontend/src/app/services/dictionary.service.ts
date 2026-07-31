@@ -1,9 +1,17 @@
 import { Injectable, signal } from '@angular/core';
 import { STORAGE_KEYS } from '../constants';
 
+export interface DictionaryValueLora {
+  name: string;
+  strengthModel: number;
+  strengthClip: number;
+}
+
 export interface DictionaryValue {
   value: string;
   weight: number;
+  /** Optional LoRA attached to this value; injected once when the value is picked. */
+  lora?: DictionaryValueLora;
 }
 
 export interface Dictionary {
@@ -73,24 +81,28 @@ export class DictionaryService {
    * A picked value is itself resolved, so dictionary values may reference other
    * dictionaries (nested substitution). Unknown/empty dictionaries, empty option
    * lists, and dictionary self-references (direct or via a cycle) are removed.
+   *
+   * When a picked value carries a `lora`, it's appended to `loraSink` (if given) —
+   * callers can pass the same array across multiple `substitute()` calls (e.g.
+   * positive + negative prompt) to collect every LoRA triggered by one generation.
    */
-  substitute(text: string): string {
+  substitute(text: string, loraSink: DictionaryValueLora[] = []): string {
     if (!text) return text;
-    const replaced = this.resolve(text, new Set());
+    const replaced = this.resolve(text, new Set(), loraSink);
     // Tidy up spacing left behind by removed/empty substitutions.
     return replaced.replace(/[ \t]{2,}/g, ' ').replace(/ +([,.])/g, '$1').trim();
   }
 
   /** Recursive resolver. `visited` holds dictionary names already expanded in the
    *  current chain, so a cycle (A -> B -> A) collapses to '' instead of looping. */
-  private resolve(text: string, visited: Set<string>, depth = 0): string {
+  private resolve(text: string, visited: Set<string>, loraSink: DictionaryValueLora[], depth = 0): string {
     if (!text || depth >= DictionaryService.MAX_DEPTH) return text;
     return text.replace(DictionaryService.TOKEN, (_match, raw: string) => {
       if (raw.includes('|')) {
         const options = raw.split('|').map(s => s.trim()).filter(Boolean);
         if (!options.length) return '';
         const picked = options[Math.floor(Math.random() * options.length)];
-        return this.resolve(picked, visited, depth + 1);
+        return this.resolve(picked, visited, loraSink, depth + 1);
       }
       const key = raw.trim().toLowerCase();
       if (visited.has(key)) {
@@ -99,23 +111,24 @@ export class DictionaryService {
       }
       const dict = this.get(raw);
       if (!dict || !dict.values.length) return '';
-      const picked = this.pickWeighted(dict.values);
+      const picked = this.pickWeightedValue(dict.values);
       if (!picked) return '';
-      return this.resolve(picked, new Set(visited).add(key), depth + 1);
+      if (picked.lora?.name) loraSink.push(picked.lora);
+      return this.resolve(picked.value, new Set(visited).add(key), loraSink, depth + 1);
     });
   }
 
   /** Weighted-random pick. Values with weight <= 0 are temporarily disabled and
-   *  never chosen; if every value is disabled, resolves to '' (no substitution). */
-  private pickWeighted(values: DictionaryValue[]): string {
+   *  never chosen; if every value is disabled, resolves to nothing picked. */
+  private pickWeightedValue(values: DictionaryValue[]): DictionaryValue | null {
     const pool = values.filter(v => (v.weight ?? 0) > 0);
-    if (!pool.length) return '';
+    if (!pool.length) return null;
     const total = pool.reduce((sum, v) => sum + v.weight, 0);
     let r = Math.random() * total;
     for (const v of pool) {
       r -= v.weight;
-      if (r < 0) return v.value;
+      if (r < 0) return v;
     }
-    return pool[pool.length - 1].value;
+    return pool[pool.length - 1];
   }
 }

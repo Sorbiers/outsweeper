@@ -64,7 +64,26 @@ from .utils import (
     mtime_token,
     stat_entry,
 )
+from .upscale import (
+    run_interpolation,
+    run_spandrel,
+    unique_output_path,
+    upscale_capabilities,
+)
 from .watcher import start_watcher
+
+
+def _combo_options(spec: Any) -> list:
+    """Option list from a ComfyUI object_info combo input, tolerant of both the
+    classic schema ([[...options...], {meta}]) and the newer V3 schema
+    (["COMBO", {"options": [...]}]). Returns [] when the shape is unrecognized."""
+    if not isinstance(spec, list) or not spec:
+        return []
+    if isinstance(spec[0], list):
+        return spec[0]
+    if len(spec) > 1 and isinstance(spec[1], dict):
+        return spec[1].get('options') or []
+    return []
 
 
 def create_app(
@@ -83,6 +102,7 @@ def create_app(
     run_comfy_command: str = '',
     run_lmstudio_command: str = '',
     collection_dir: str = '',
+    upscale_models_dir: str = '',
 ) -> Flask:
     static_dir = Path(__file__).parent.parent / 'static'
     root_dir = Path(root_dir)
@@ -90,6 +110,9 @@ def create_app(
     co_resolved = Path(comfy_output).resolve() if comfy_output else None
     collection_resolved = (
         Path(collection_dir).resolve() if collection_dir else root_resolved / 'collection'
+    )
+    upscale_models_resolved = (
+        Path(upscale_models_dir).resolve() if upscale_models_dir else None
     )
 
     state = AppState(
@@ -112,6 +135,7 @@ def create_app(
         comfy_output_str=str(co_resolved) if co_resolved else '',
         collection_resolved=collection_resolved,
         collection_str=str(collection_resolved),
+        upscale_models_resolved=upscale_models_resolved,
     )
 
     app = Flask(__name__, static_folder=None)
@@ -471,7 +495,7 @@ def create_app(
         try:
             resp = http_requests.get(f'{cu}/object_info', timeout=10)
             info = resp.json()
-            loras = info.get('LoraLoader', {}).get('input', {}).get('required', {}).get('lora_name', [[]])[0]
+            loras = _combo_options(info.get('LoraLoader', {}).get('input', {}).get('required', {}).get('lora_name'))
             return jsonify({'loras': loras})
         except Exception as e:
             return jsonify({'error': str(e)}), 502
@@ -483,7 +507,7 @@ def create_app(
         try:
             resp = http_requests.get(f'{cu}/object_info', timeout=10)
             info = resp.json()
-            checkpoints = info.get('CheckpointLoaderSimple', {}).get('input', {}).get('required', {}).get('ckpt_name', [[]])[0]
+            checkpoints = _combo_options(info.get('CheckpointLoaderSimple', {}).get('input', {}).get('required', {}).get('ckpt_name'))
             return jsonify({'checkpoints': checkpoints})
         except Exception as e:
             return jsonify({'error': str(e)}), 502
@@ -495,12 +519,24 @@ def create_app(
         try:
             resp = http_requests.get(f'{cu}/object_info', timeout=10)
             info = resp.json()
-            checkpoints = info.get('CheckpointLoaderSimple', {}) \
-                .get('input', {}).get('required', {}).get('ckpt_name', [[]])[0]
-            unets = info.get('UNETLoader', {}) \
-                .get('input', {}).get('required', {}).get('unet_name', [[]])[0]
+            checkpoints = _combo_options(info.get('CheckpointLoaderSimple', {})
+                .get('input', {}).get('required', {}).get('ckpt_name'))
+            unets = _combo_options(info.get('UNETLoader', {})
+                .get('input', {}).get('required', {}).get('unet_name'))
             models = [{'name': n, 'type': 'checkpoint'} for n in checkpoints] + \
                      [{'name': n, 'type': 'unet'} for n in unets]
+            return jsonify({'models': models})
+        except Exception as e:
+            return jsonify({'error': str(e)}), 502
+
+    @app.route('/api/comfy/upscale-models', methods=['POST'])
+    def comfy_upscale_models():
+        data = request.get_json()
+        cu = data.get('comfy_url', 'http://127.0.0.1:8188').rstrip('/')
+        try:
+            resp = http_requests.get(f'{cu}/object_info/UpscaleModelLoader', timeout=10)
+            info = resp.json().get('UpscaleModelLoader', {}).get('input', {}).get('required', {})
+            models = _combo_options(info.get('model_name'))
             return jsonify({'models': models})
         except Exception as e:
             return jsonify({'error': str(e)}), 502
@@ -531,8 +567,8 @@ def create_app(
         try:
             resp = http_requests.get(f'{cu}/object_info/KSampler', timeout=10)
             info = resp.json().get('KSampler', {}).get('input', {}).get('required', {})
-            samplers   = info.get('sampler_name', [[]])[0]
-            schedulers = info.get('scheduler', [[]])[0]
+            samplers   = _combo_options(info.get('sampler_name'))
+            schedulers = _combo_options(info.get('scheduler'))
             return jsonify({'samplers': samplers, 'schedulers': schedulers})
         except Exception as e:
             return jsonify({'error': str(e)}), 502
@@ -849,6 +885,58 @@ def create_app(
     @app.route('/api/exiftool/capabilities')
     def api_exiftool_capabilities():
         return jsonify(exiftool_capabilities(state))
+
+    def _register_upscaled(dst: Path) -> None:
+        """Make a freshly-written output visible: refresh its folder cache entry
+        and notify clients so the feed picks it up."""
+        _invalidate_cache(dst)
+        _sse_broadcast('source_changed:+1')
+
+    @app.route('/api/upscale/capabilities')
+    def api_upscale_capabilities():
+        return jsonify(upscale_capabilities(state))
+
+    @app.route('/api/upscale/spandrel', methods=['POST'])
+    def api_upscale_spandrel():
+        data = request.get_json() or {}
+        file_path = resolve_path(request.args.get('path', ''))
+        if not file_path.is_file():
+            return jsonify({'error': 'not found'}), 404
+        if not state.upscale_models_resolved:
+            return jsonify({'error': 'upscale_models_dir is not configured'}), 400
+        model_rel = (data.get('model') or '').strip()
+        model_path = (state.upscale_models_resolved / model_rel).resolve()
+        if not model_path.is_relative_to(state.upscale_models_resolved) or not model_path.is_file():
+            return jsonify({'error': 'model not found'}), 404
+        tile = int(data.get('tile') or 0)
+        try:
+            dst = unique_output_path(file_path, 'up')
+            scale = run_spandrel(model_path, file_path, dst, tile=tile)
+            _register_upscaled(dst)
+            return jsonify({'ok': True, 'filename': dst.name, 'scale': scale})
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+
+    @app.route('/api/upscale/interpolate', methods=['POST'])
+    def api_upscale_interpolate():
+        data = request.get_json() or {}
+        file_path = resolve_path(request.args.get('path', ''))
+        if not file_path.is_file():
+            return jsonify({'error': 'not found'}), 404
+        method = (data.get('method') or 'lanczos').lower()
+        try:
+            scale = float(data.get('scale') or 4)
+        except (TypeError, ValueError):
+            return jsonify({'error': 'invalid scale'}), 400
+        if scale <= 0 or scale > 16:
+            return jsonify({'error': 'scale must be between 0 and 16'}), 400
+        try:
+            dst = unique_output_path(file_path, f'x{scale:g}')
+            run_interpolation(file_path, dst, method, scale)
+            _register_upscaled(dst)
+            return jsonify({'ok': True, 'filename': dst.name})
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
 
     @app.route('/api/exiftool/metadata', methods=['GET'])
     def api_exiftool_metadata():

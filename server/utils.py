@@ -13,6 +13,12 @@ from PIL import Image, ImageCms
 from PIL.ExifTags import GPSTAGS, TAGS
 from PIL.PngImagePlugin import PngInfo  # re-exported for factory use  # noqa: F401
 
+# This is a local triage tool that intentionally handles very large images
+# (e.g. 4× upscales — 300+ megapixels), so disable Pillow's decompression-bomb
+# guard, which otherwise makes Image.open() raise and reports 0×0 dimensions,
+# no thumbnails, etc. for such files.
+Image.MAX_IMAGE_PIXELS = None
+
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------

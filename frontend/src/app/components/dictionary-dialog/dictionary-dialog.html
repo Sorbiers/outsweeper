@@ -8,7 +8,7 @@
   @if (isDragOver()) {
     <div class="dropzone-overlay">
       <mat-icon>upload_file</mat-icon>
-      <span>Drop .json to import</span>
+      <span>Drop .json or .txt to import</span>
     </div>
   }
 
@@ -87,11 +87,44 @@
                      [(ngModel)]="v.weight" (ngModelChange)="persist()" />
             </mat-form-field>
             <span class="value-pct">{{ percent(v.weight) }}%</span>
+            @if (!v.lora) {
+              <button mat-icon-button class="value-action" matTooltip="Attach a LoRA to this value"
+                      (click)="addValueLora(v)">
+                <mat-icon>extension</mat-icon>
+              </button>
+            }
             <button mat-icon-button class="value-del" matTooltip="Remove value"
                     (click)="deleteValue($index)">
               <mat-icon>remove_circle_outline</mat-icon>
             </button>
           </div>
+
+          @if (v.lora; as lora) {
+            <div class="value-lora-row">
+              <mat-form-field class="value-lora-name" subscriptSizing="dynamic">
+                <mat-label>LoRA</mat-label>
+                <mat-select [(ngModel)]="lora.name" (ngModelChange)="persist()">
+                  @for (l of availableLoras; track l) {
+                    <mat-option [value]="l">{{ l }}</mat-option>
+                  }
+                </mat-select>
+              </mat-form-field>
+              <mat-form-field class="value-lora-strength" subscriptSizing="dynamic">
+                <mat-label>Str Model</mat-label>
+                <input matInput type="number" step="0.1" min="0" max="2"
+                       [(ngModel)]="lora.strengthModel" (ngModelChange)="persist()" />
+              </mat-form-field>
+              <mat-form-field class="value-lora-strength" subscriptSizing="dynamic">
+                <mat-label>Str Clip</mat-label>
+                <input matInput type="number" step="0.1" min="0" max="2"
+                       [(ngModel)]="lora.strengthClip" (ngModelChange)="persist()" />
+              </mat-form-field>
+              <button mat-icon-button class="value-action" matTooltip="Remove LoRA"
+                      (click)="removeValueLora(v)">
+                <mat-icon>close</mat-icon>
+              </button>
+            </div>
+          }
         }
 
         <button mat-stroked-button class="add-value-btn" (click)="addValue()">
@@ -112,7 +145,7 @@
   <button mat-button (click)="exportJson()"><mat-icon>download</mat-icon> Export</button>
   <button mat-button (click)="triggerImport()"><mat-icon>upload</mat-icon> Import</button>
   <button mat-button (click)="pasteFromClipboard()"><mat-icon>content_paste</mat-icon> Paste</button>
-  <input #fileInput type="file" accept=".json,application/json" hidden (change)="onFileSelected($event)" />
+  <input #fileInput type="file" accept=".json,application/json,.txt,text/plain" hidden (change)="onFileSelected($event)" />
   <span class="actions-spacer"></span>
   <button mat-button mat-dialog-close>Close</button>
   <span class="resize-handle" matTooltip="Drag to resize" (mousedown)="startDialogResize($event)">

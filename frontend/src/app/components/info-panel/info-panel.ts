@@ -10,9 +10,10 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { PhotoInfo } from '../../models/photo.model';
+import { PhotoInfo, UpscaleCapabilities } from '../../models/photo.model';
 import { ComfyConnectionService } from '../../services/comfy-connection.service';
 import { PhotoService } from '../../services/photo.service';
+import { UpscaleDialog, UpscaleDialogData, UpscaleMethod } from '../upscale-dialog/upscale-dialog';
 import { CollectionAddDialog, CollectionAddDialogData } from '../collection-add-dialog/collection-add-dialog';
 import { DescribeDialog } from '../describe-dialog/describe-dialog';
 import { DEFAULT_FLUX_WORKFLOW, GenerateDialog, GenerateDialogData } from '../generate-dialog/generate-dialog';
@@ -44,6 +45,7 @@ export class InfoPanel implements OnInit {
   private snackBar = inject(MatSnackBar);
   copyDoneIconActive = signal(false);
   exiftoolAvailable = signal(false);
+  upscaleCaps = signal<UpscaleCapabilities | null>(null);
 
   tools: string[] = [];
 
@@ -52,6 +54,28 @@ export class InfoPanel implements OnInit {
     this.photoService.exiftoolCapabilities().subscribe({
       next: caps => this.exiftoolAvailable.set(caps.available),
       error: () => this.exiftoolAvailable.set(false),
+    });
+    this.photoService.upscaleCapabilities().subscribe({
+      next: caps => this.upscaleCaps.set(caps),
+      error: () => this.upscaleCaps.set(null),
+    });
+  }
+
+  /** Hint shown when the local spandrel upscaler isn't ready (disables the item). */
+  get spandrelUnavailable(): string {
+    const c = this.upscaleCaps();
+    if (!c) return '';
+    if (!c.spandrel) return 'Install torch + spandrel to enable';
+    if (!c.models.length) return 'Set upscale_models_dir with model files';
+    return '';
+  }
+
+  openUpscale(method: UpscaleMethod): void {
+    if (!this.info) return;
+    this.dialog.open(UpscaleDialog, {
+      data: { filename: this.info.filename, folder: this.folder, method } satisfies UpscaleDialogData,
+      width: '90vw',
+      maxWidth: '560px',
     });
   }
 

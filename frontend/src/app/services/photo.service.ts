@@ -6,6 +6,7 @@ import {
   PhotoListItem, PhotoInfo, MoveResponse, UndoResponse,
   ExiftoolCapabilities, ExiftoolMetadata, EditableFields, StripGroup,
   BatchEditResult, ComfyQueueJob, CollectionsResponse, CollectionFlow, FlowDocument,
+  UpscaleCapabilities,
 } from '../models/photo.model';
 
 /** Path prefix understood by the backend resolver for the local flows collection. */
@@ -99,6 +100,32 @@ export class PhotoService {
 
   getComfyModels(comfyUrl: string): Observable<{ models: { name: string; type: 'checkpoint' | 'unet' }[] }> {
     return this.http.post<any>('/api/comfy/models', { comfy_url: comfyUrl });
+  }
+
+  getComfyUpscaleModels(comfyUrl: string): Observable<{ models: string[] }> {
+    return this.http.post<{ models: string[] }>('/api/comfy/upscale-models', { comfy_url: comfyUrl });
+  }
+
+  upscaleCapabilities(): Observable<UpscaleCapabilities> {
+    return this.http.get<UpscaleCapabilities>('/api/upscale/capabilities');
+  }
+
+  /** Local model-based upscale via spandrel; writes a new image next to the source. */
+  spandrelUpscale(filename: string, folder: string, model: string, tile: number): Observable<{ ok: boolean; filename: string; scale: number }> {
+    return this.http.post<{ ok: boolean; filename: string; scale: number }>(
+      '/api/upscale/spandrel',
+      { model, tile },
+      { params: { path: this.filePath(filename, folder) } },
+    );
+  }
+
+  /** Local interpolation upscale (Pillow); writes a new image next to the source. */
+  interpolateUpscale(filename: string, folder: string, method: string, scale: number): Observable<{ ok: boolean; filename: string }> {
+    return this.http.post<{ ok: boolean; filename: string }>(
+      '/api/upscale/interpolate',
+      { method, scale },
+      { params: { path: this.filePath(filename, folder) } },
+    );
   }
 
   getComfyQueue(comfyUrl: string): Observable<{ running: ComfyQueueJob[]; pending: ComfyQueueJob[] }> {

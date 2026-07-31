@@ -19,6 +19,10 @@ thumb_cache_days  = 3
 # Optional: commands to launch ComfyUI / LM Studio from inside the app
 run_comfy_command    = ""
 run_lmstudio_command = ""
+# Optional: folder of upscale models (.pth/.safetensors) for the local "spandrel"
+# upscaler — point it at ComfyUI's models/upscale_models. Requires torch+spandrel:
+#   pip install spandrel && pip install torch torchvision --index-url https://download.pytorch.org/whl/cu124
+upscale_models_dir   = ""
 
 [widgets]
 gpu_monitor = true   # requires nvidia-ml-py

@@ -56,6 +56,7 @@ def main() -> None:
     exiftool_path        = defaults.get('exiftool_path', 'exiftool')
     run_comfy_command    = defaults.get('run_comfy_command', '')
     run_lmstudio_command = defaults.get('run_lmstudio_command', '')
+    upscale_models_dir   = defaults.get('upscale_models_dir', '')
     widgets              = config.get('widgets', {})
     monitor_enabled      = widgets.get('gpu_monitor', False)
     comfy_queue_enabled  = widgets.get('comfy_queue', False)
@@ -66,7 +67,7 @@ def main() -> None:
         monitor_enabled, comfy_queue_enabled,
         validation_interval, thumb_cache_days,
         exiftool_path, run_comfy_command, run_lmstudio_command,
-        collection_dir,
+        collection_dir, upscale_models_dir,
     )
 
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:

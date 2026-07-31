@@ -1,0 +1,42 @@
+.method-toggle {
+  width: 100%;
+  margin-bottom: 12px;
+}
+
+.method-desc {
+  margin: 0 0 12px;
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+.full-width {
+  width: 100%;
+}
+
+.row {
+  display: flex;
+  gap: 12px;
+}
+
+.grow { flex: 1; }
+.scale-field { width: 120px; }
+
+.warn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  opacity: 0.85;
+
+  mat-icon { font-size: 18px; width: 18px; height: 18px; }
+}
+
+.run-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-right: auto;
+  padding-left: 8px;
+  font-size: 12px;
+  opacity: 0.75;
+}

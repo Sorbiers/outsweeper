@@ -6,15 +6,19 @@ import { MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
+import { MatSelectModule } from '@angular/material/select';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { STORAGE_KEYS } from '../../constants';
-import { Dictionary, DictionaryService } from '../../services/dictionary.service';
+import { ComfyConnectionService } from '../../services/comfy-connection.service';
+import { ConnectionStateService } from '../../services/connection-state.service';
+import { Dictionary, DictionaryService, DictionaryValue } from '../../services/dictionary.service';
+import { PhotoService } from '../../services/photo.service';
 
 @Component({
   selector: 'pp-dictionary-dialog',
   imports: [FormsModule, CdkDrag, CdkDragHandle, MatDialogModule, MatButtonModule, MatIconModule,
-            MatFormFieldModule, MatInputModule, MatTooltipModule],
+            MatFormFieldModule, MatInputModule, MatSelectModule, MatTooltipModule],
   templateUrl: './dictionary-dialog.html',
   styleUrl: './dictionary-dialog.scss',
 })
@@ -23,6 +27,12 @@ export class DictionaryDialog {
   private snackBar = inject(MatSnackBar);
   private dialogRef = inject(MatDialogRef<DictionaryDialog>);
   private hostEl = inject(ElementRef<HTMLElement>);
+  private photoService = inject(PhotoService);
+  private connState = inject(ConnectionStateService);
+  private comfy = inject(ComfyConnectionService);
+
+  /** LoRA names for the per-value LoRA picker; seeded from cache, refreshed in the background. */
+  availableLoras: string[] = [];
 
   private fileInput = viewChild<ElementRef<HTMLInputElement>>('fileInput');
   private content = viewChild('content', { read: ElementRef });
@@ -51,6 +61,10 @@ export class DictionaryDialog {
   private boundDialogResizeEnd = () => this.onDialogResizeEnd();
 
   constructor() {
+    this.comfy.init();
+    this.availableLoras = [...this.connState.comfy.loras];
+    this.fetchLoras();
+
     afterNextRender(() => {
       const savedListWidth = Number(sessionStorage.getItem(STORAGE_KEYS.DICTIONARY_LIST_WIDTH));
       if (savedListWidth) this.listWidth.set(savedListWidth);
@@ -62,6 +76,21 @@ export class DictionaryDialog {
           if (w && h) this.dialogRef.updateSize(`${w}px`, `${h}px`);
         } catch { /* ignore malformed saved size */ }
       }
+    });
+  }
+
+  /** Best-effort background refresh; silently keeps the cached/empty list on failure. */
+  private fetchLoras(): void {
+    const url = this.comfy.effectiveUrl;
+    if (!url) return;
+    this.photoService.getComfyLoras(url).subscribe({
+      next: res => {
+        if (res.loras?.length) {
+          this.availableLoras = res.loras;
+          this.connState.comfy.loras = [...res.loras];
+        }
+      },
+      error: () => { /* ComfyUI not reachable — keep whatever was cached */ },
     });
   }
 
@@ -115,6 +144,17 @@ export class DictionaryDialog {
 
   deleteValue(index: number): void {
     this.selected?.values.splice(index, 1);
+    this.persist();
+  }
+
+  /** Attach a (normally-hidden) LoRA to a value, injected when that value is picked. */
+  addValueLora(v: DictionaryValue): void {
+    v.lora = { name: '', strengthModel: 0.7, strengthClip: 0.7 };
+    this.persist();
+  }
+
+  removeValueLora(v: DictionaryValue): void {
+    delete v.lora;
     this.persist();
   }
 
@@ -192,9 +232,30 @@ export class DictionaryDialog {
   }
 
   private readFile(file: File): void {
+    const isTxt = /\.txt$/i.test(file.name) || file.type === 'text/plain';
     const reader = new FileReader();
-    reader.onload = () => this.importFromText(reader.result as string, 'file');
+    reader.onload = () => {
+      const text = reader.result as string;
+      if (isTxt) this.importTxt(text, file.name);
+      else this.importFromText(text, 'file');
+    };
     reader.readAsText(file);
+  }
+
+  /** Import a plain-text file as one dictionary: each non-empty line is a value
+   *  at weight 1; the dictionary is named after the file (without extension). */
+  private importTxt(text: string, filename: string): void {
+    const values: DictionaryValue[] = text
+      .split(/\r?\n/)
+      .map(line => line.trim())
+      .filter(Boolean)
+      .map(value => ({ value, weight: 1 }));
+    if (!values.length) {
+      this.snackBar.open('No lines found in file', '', { duration: 3000 });
+      return;
+    }
+    const name = filename.replace(/\.[^.]+$/, '').trim() || 'dictionary';
+    this.importPending.set([{ name, values }]);
   }
 
   /** Shared JSON import path for file, drop, and clipboard sources. */
@@ -222,7 +283,17 @@ export class DictionaryDialog {
         name: String(d.name),
         values: d.values
           .filter((v: any) => v && typeof v.value === 'string')
-          .map((v: any) => ({ value: String(v.value), weight: Number(v.weight) || 1 })),
+          .map((v: any): DictionaryValue => {
+            const out: DictionaryValue = { value: String(v.value), weight: Number(v.weight) || 1 };
+            if (v.lora && typeof v.lora.name === 'string' && v.lora.name.trim()) {
+              out.lora = {
+                name: v.lora.name,
+                strengthModel: Number(v.lora.strengthModel) || 1,
+                strengthClip: Number(v.lora.strengthClip) || 1,
+              };
+            }
+            return out;
+          }),
       }));
   }
 
