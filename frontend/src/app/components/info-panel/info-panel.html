@@ -29,6 +29,12 @@
             <mat-icon>photo_size_select_large</mat-icon>
             <span class="menu-label">Upscale</span>
           </button>
+          <button mat-menu-item (click)="openRemoveBg()"
+                  [disabled]="!!bgRemoveUnavailable"
+                  [matTooltip]="bgRemoveUnavailable" matTooltipPosition="left">
+            <mat-icon>auto_fix_off</mat-icon>
+            <span class="menu-label">Remove background</span>
+          </button>
           <button mat-menu-item (click)="addToCollection()">
             <mat-icon>collections_bookmark</mat-icon>
             <span class="menu-label">Add to Collection <kbd>c</kbd></span>

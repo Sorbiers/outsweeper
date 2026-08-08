@@ -10,9 +10,10 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { PhotoInfo, UpscaleCapabilities } from '../../models/photo.model';
+import { BgRemoveCapabilities, PhotoInfo, UpscaleCapabilities } from '../../models/photo.model';
 import { ComfyConnectionService } from '../../services/comfy-connection.service';
 import { PhotoService } from '../../services/photo.service';
+import { RemoveBgDialog, RemoveBgDialogData } from '../remove-bg-dialog/remove-bg-dialog';
 import { UpscaleDialog, UpscaleDialogData, UpscaleMethod } from '../upscale-dialog/upscale-dialog';
 import { CollectionAddDialog, CollectionAddDialogData } from '../collection-add-dialog/collection-add-dialog';
 import { DescribeDialog } from '../describe-dialog/describe-dialog';
@@ -46,6 +47,7 @@ export class InfoPanel implements OnInit {
   copyDoneIconActive = signal(false);
   exiftoolAvailable = signal(false);
   upscaleCaps = signal<UpscaleCapabilities | null>(null);
+  bgRemoveCaps = signal<BgRemoveCapabilities | null>(null);
 
   tools: string[] = [];
 
@@ -58,6 +60,27 @@ export class InfoPanel implements OnInit {
     this.photoService.upscaleCapabilities().subscribe({
       next: caps => this.upscaleCaps.set(caps),
       error: () => this.upscaleCaps.set(null),
+    });
+    this.photoService.bgRemoveCapabilities().subscribe({
+      next: caps => this.bgRemoveCaps.set(caps),
+      error: () => this.bgRemoveCaps.set(null),
+    });
+  }
+
+  /** Hint shown when neither background-removal engine is ready (disables the item). */
+  get bgRemoveUnavailable(): string {
+    const c = this.bgRemoveCaps();
+    if (!c) return '';
+    if (!c.rembg && !c.birefnet) return 'Install rembg or transformers+torch';
+    return '';
+  }
+
+  openRemoveBg(): void {
+    if (!this.info) return;
+    this.dialog.open(RemoveBgDialog, {
+      data: { filename: this.info.filename, folder: this.folder } satisfies RemoveBgDialogData,
+      width: '90vw',
+      maxWidth: '480px',
     });
   }
 

@@ -31,8 +31,11 @@ THUMBNAIL_QUALITY = 80
 EXIFTOOL_CHECK_TIMEOUT    = 5
 EXIFTOOL_RUN_TIMEOUT      = 10
 LMS_CHECK_TIMEOUT         = 5
-LMS_COMPLETION_TIMEOUT    = 60
-VISION_COMPLETION_TIMEOUT = 120
+# Generous read timeouts: local models can be slow, and the Guided-generation
+# loop unloads the LLM before each image and reloads it for the next call, so a
+# single request may include a full model load plus inference.
+LMS_COMPLETION_TIMEOUT    = 600
+VISION_COMPLETION_TIMEOUT = 600
 SSE_QUEUE_TIMEOUT         = 25
 
 WATCHER_DEBOUNCE_SECS = 3

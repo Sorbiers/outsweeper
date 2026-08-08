@@ -255,6 +255,12 @@
       <mat-icon>auto_fix_high</mat-icon>
       @if (totalSends > 1) { Improve then send {{ totalSends }} } @else { Improve then send }
     </button>
+    <button mat-menu-item (click)="openGuided()"
+            [disabled]="sending || comfy.checkStatus !== 'ok' || guidedDisabled"
+            [matTooltip]="guidedDisabled ? 'Single image only — set Jobs to 1 with one prompt/combo' : ''"
+            matTooltipPosition="left">
+      <mat-icon>psychology</mat-icon> Guided generation
+    </button>
     <button mat-menu-item (click)="sendFront()" [disabled]="sending || comfy.checkStatus !== 'ok'">
       <mat-icon>vertical_align_top</mat-icon>
       @if (totalSends > 1) { Send {{ totalSends }} to front } @else { Send to front }

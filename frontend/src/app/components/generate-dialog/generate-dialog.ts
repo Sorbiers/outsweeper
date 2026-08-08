@@ -1,13 +1,13 @@
+import { CdkDrag, CdkDragHandle } from '@angular/cdk/drag-drop';
 import { Component, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { CdkDrag, CdkDragHandle } from '@angular/cdk/drag-drop';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MAT_DIALOG_DATA, MatDialog, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
+import { MatDividerModule } from '@angular/material/divider';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
-import { MatDividerModule } from '@angular/material/divider';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatSelectModule } from '@angular/material/select';
 import { MatSnackBar } from '@angular/material/snack-bar';
@@ -23,6 +23,8 @@ import { PhotoService } from '../../services/photo.service';
 import { PromptHistoryService } from '../../services/prompt-history.service';
 import { ComfyUrlRowComponent } from '../comfy-url-row/comfy-url-row';
 import { DictionaryDialog } from '../dictionary-dialog/dictionary-dialog';
+import { GuidedGenerationData, GuidedGenerationDialog } from '../guided-generation-dialog/guided-generation-dialog';
+import { LlmModelDialog, LlmModelDialogData } from '../llm-model-dialog/llm-model-dialog';
 import { PromptHistoryDialog } from '../prompt-history-dialog/prompt-history-dialog';
 import { PrompterDialog } from '../prompter-dialog/prompter-dialog';
 import { SaveFlowDialog } from '../save-flow-dialog/save-flow-dialog';
@@ -477,13 +479,22 @@ export class GenerateDialog {
    * have LM Studio enrich each one (sequentially — LM Studio serves one request
    * at a time), unload the LM model to free VRAM, then queue every improved flow.
    */
+  /** Pick the LLM model, then run the improve-then-send flow. */
   improveThenSend(front = false): void {
     const lmUrl = this.connState.lmstudio.url;
     if (!lmUrl) {
       this.snackBar.open('Set the LM Studio URL first (open the Prompt/Describe dialog to connect).', 'Dismiss', { duration: 6000 });
       return;
     }
+    this.dialog.open(LlmModelDialog, {
+      data: { title: 'Improve then send — LLM model' } satisfies LlmModelDialogData,
+      width: '90vw', maxWidth: '420px',
+    }).afterClosed().subscribe((model?: string) => {
+      if (model) this.runImproveThenSend(front, lmUrl, model);
+    });
+  }
 
+  private runImproveThenSend(front: boolean, lmUrl: string, model: string): void {
     this.saveParams();
     this.promptHistory.add(this.params.positivePrompt);
 
@@ -491,11 +502,14 @@ export class GenerateDialog {
     if (!units.length) return;
 
     this.sending = true;
-    const model = this.lmStudio.model;
     const total = units.length;
 
-    // Phase 1: improve each prompt one at a time; empty prompts are left as-is.
-    from(units.map((unit, i) => ({ unit, i }))).pipe(
+    // Free all LLM VRAM before starting (limited resources), then improve.
+    this.sendStatus = 'Unloading LLM models…';
+    this.photoService.unloadLmStudio(lmUrl).pipe(
+      catchError(() => of(null)),
+      // Phase 1: improve each prompt one at a time; empty prompts are left as-is.
+      switchMap(() => from(units.map((unit, i) => ({ unit, i })))),
       concatMap(({ unit, i }) => {
         this.sendStatus = `Improving prompt ${i + 1}/${total}…`;
         const text = unit.resolved.positivePrompt;
@@ -526,6 +540,47 @@ export class GenerateDialog {
     ).subscribe({
       next: () => this.notifyQueued(total),
       error: (err) => this.failSend(err),
+    });
+  }
+
+  /** Guided generation handles a single image only — disabled for batches. */
+  get guidedDisabled(): boolean {
+    return this.totalSends > 1;
+  }
+
+  /**
+   * Guided generation: freeze the current single-image flow, then hand a
+   * prompt→workflow builder to the loop dialog (improve → generate → evaluate →
+   * refine, up to 5×). Dictionary tokens are resolved once here; the loop then
+   * works on concrete, LLM-refined prompt text.
+   */
+  openGuided(): void {
+    const lmUrl = this.connState.lmstudio.url;
+    if (!lmUrl) {
+      this.snackBar.open('Set the LM Studio URL first (open the Prompt/Describe dialog to connect).', 'Dismiss', { duration: 6000 });
+      return;
+    }
+    if (this.guidedDisabled) return;
+
+    this.saveParams();
+    this.randomizeSeed();
+
+    const loraSink: DictionaryValueLora[] = [];
+    const negativePrompt = this.dictionaries.substitute(this.params.negativePrompt, loraSink);
+    const basePrompt = this.dictionaries.substitute(this.params.positivePrompt, loraSink);
+    const seen = new Set<string>();
+    const dictLoras = loraSink.filter(l => l.name && !seen.has(l.name) && seen.add(l.name));
+    const variableNodes = this.activeVariableNodes();
+    const assign = variableNodes.map(n => ({ nodeId: n.nodeId, inputKey: n.inputKey, value: n.selected[0] }));
+    const frozen = { ...this.params };
+
+    const buildWorkflow = (positiveText: string, seed?: number): Record<string, any> =>
+      this.buildWorkflowFromUnit(
+        { resolved: { ...frozen, positivePrompt: positiveText, negativePrompt, seed: seed ?? frozen.seed }, dictLoras, assign }, null);
+
+    this.dialog.open(GuidedGenerationDialog, {
+      data: { comfyUrl: this.comfy.comfyUrl, lmUrl, basePrompt, buildWorkflow } satisfies GuidedGenerationData,
+      width: '90vw', maxWidth: '960px', height: '80vh', maxHeight: '90vh',
     });
   }
 

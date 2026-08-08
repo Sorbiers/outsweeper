@@ -6,7 +6,7 @@ import {
   PhotoListItem, PhotoInfo, MoveResponse, UndoResponse,
   ExiftoolCapabilities, ExiftoolMetadata, EditableFields, StripGroup,
   BatchEditResult, ComfyQueueJob, CollectionsResponse, CollectionFlow, FlowDocument,
-  UpscaleCapabilities,
+  UpscaleCapabilities, BgRemoveCapabilities,
 } from '../models/photo.model';
 
 /** Path prefix understood by the backend resolver for the local flows collection. */
@@ -124,6 +124,28 @@ export class PhotoService {
     return this.http.post<{ ok: boolean; filename: string }>(
       '/api/upscale/interpolate',
       { method, scale },
+      { params: { path: this.filePath(filename, folder) } },
+    );
+  }
+
+  bgRemoveCapabilities(): Observable<BgRemoveCapabilities> {
+    return this.http.get<BgRemoveCapabilities>('/api/bgremove/capabilities');
+  }
+
+  /** Background removal via rembg; writes a transparent PNG next to the source. */
+  removeBgRembg(filename: string, folder: string, model: string, alphaMatting: boolean): Observable<{ ok: boolean; filename: string }> {
+    return this.http.post<{ ok: boolean; filename: string }>(
+      '/api/bgremove/rembg',
+      { model, alpha_matting: alphaMatting },
+      { params: { path: this.filePath(filename, folder) } },
+    );
+  }
+
+  /** Background removal via BiRefNet (torch/GPU); writes a transparent PNG next to the source. */
+  removeBgBirefnet(filename: string, folder: string, model: string): Observable<{ ok: boolean; filename: string }> {
+    return this.http.post<{ ok: boolean; filename: string }>(
+      '/api/bgremove/birefnet',
+      { model },
       { params: { path: this.filePath(filename, folder) } },
     );
   }
@@ -299,6 +321,14 @@ export class PhotoService {
     return this.http.post('/api/comfy/prompt', {
       comfy_url: comfyUrl, prompt, copy_result: copyResult, front,
     });
+  }
+
+  /** Non-blocking status check for a submitted prompt (poll until done). While the
+   *  job runs it returns {done:false}; once finished, {done:true} with the copied
+   *  output filenames. Lets a long generation be awaited without a blocking request. */
+  comfyResult(comfyUrl: string, promptId: string): Observable<{ done: boolean; queued?: boolean; filenames?: string[]; status?: string }> {
+    return this.http.post<{ done: boolean; queued?: boolean; filenames?: string[]; status?: string }>(
+      '/api/comfy/result', { comfy_url: comfyUrl, prompt_id: promptId });
   }
 
   checkLmStudio(lmstudioUrl: string): Observable<any> {

@@ -6,3 +6,11 @@ psutil>=5.9
 nvidia-ml-py>=12.0
 websocket-client>=1.6
 watchdog>=4.0
+
+# --- Optional: local upscale / background-removal (heavy, GPU) ---
+# Upscale (spandrel) and BiRefNet background removal:
+#   pip install spandrel torch torchvision --index-url https://download.pytorch.org/whl/cu124
+#   pip install transformers timm kornia einops
+# rembg background removal (GPU ONNX):
+#   pip uninstall -y onnxruntime && pip install "rembg[gpu]"   # or: pip install rembg  (CPU)
+# These features degrade gracefully (menu items disable) when the deps are absent.

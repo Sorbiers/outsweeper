@@ -144,3 +144,21 @@ export interface UpscaleCapabilities {
   /** Import error when spandrel/torch are missing. */
   error: string | null;
 }
+
+/** What the local background-removal engines can currently do. */
+export interface BgRemoveCapabilities {
+  /** rembg importable in the backend. */
+  rembg: boolean;
+  /** onnxruntime exposes a CUDA provider (rembg runs on GPU). */
+  rembg_gpu: boolean;
+  /** rembg model names (u2net / isnet-general-use / birefnet-general / …). */
+  rembg_models: string[];
+  /** transformers + torch importable (BiRefNet engine). */
+  birefnet: boolean;
+  /** A CUDA device is available for BiRefNet. */
+  cuda: boolean;
+  /** HF BiRefNet-family model ids. */
+  birefnet_models: string[];
+  /** Import error when a backend dependency is missing. */
+  error: string | null;
+}

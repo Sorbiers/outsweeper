@@ -1,0 +1,141 @@
+.dialog-title {
+  cursor: move;
+  user-select: none;
+}
+
+// Fixed-height dialog: the content fills the space between the (fixed) header and
+// actions, and only the progress list scrolls — so the dialog never resizes as
+// iterations accumulate (which, once dragged, would push the header off-screen).
+mat-dialog-content {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  max-height: none;
+  overflow: hidden;
+}
+
+.progress {
+  flex: 1 1 auto;
+  min-height: 140px;   // reserve space for the progress view
+  overflow-y: auto;
+  margin: 0 -8px;      // let the scrollbar sit at the dialog edge
+  padding: 0 8px;
+}
+
+.intro {
+  margin: 0 0 12px;
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+.config {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin: 10px 0;
+}
+
+.model-field { flex: 1; min-width: 220px; }
+
+.num-field { width: 110px; }
+.num-field--wide { width: 190px; }
+
+.warn, .status-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  opacity: 0.85;
+  margin: 8px 0;
+
+  mat-icon { font-size: 18px; width: 18px; height: 18px; }
+}
+
+.iter {
+  border: 1px solid #333;
+  border-left-width: 3px;
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin-top: 10px;
+
+  &.iter-match   { border-left-color: #66bb6a; }
+  &.iter-nomatch { border-left-color: #e0a030; }
+}
+
+.iter-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+
+  .iter-n { font-weight: 600; opacity: 0.7; }
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  padding: 1px 8px;
+  border-radius: 10px;
+
+  mat-icon { font-size: 15px; width: 15px; height: 15px; }
+
+  &.ok    { color: #66bb6a; background: rgba(102, 187, 106, 0.14); }
+  &.no    { color: #e0a030; background: rgba(224, 160, 48, 0.14); }
+  &.err   { color: #e57373; background: rgba(229, 115, 115, 0.14); }
+  &.abort { color: #bbb; background: rgba(180, 180, 180, 0.14); }
+  &.run   { opacity: 0.7; }
+}
+
+.iter-body {
+  display: flex;
+  gap: 10px;
+}
+
+.iter-thumb {
+  width: 40%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 4px;
+//   background: #000;
+  flex: none;
+
+  &.placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+}
+
+.iter-text {
+  min-width: 0;
+  flex: 1;
+
+  .prompt   { font-size: 12px; line-height: 1.4; }
+  .feedback { font-size: 12px; margin-top: 6px; opacity: 0.7; font-style: italic; }
+  .err-text {
+    display: flex;
+    align-items: flex-start;
+    gap: 4px;
+    font-size: 12px;
+    margin-top: 6px;
+    color: #e57373;
+
+    mat-icon { font-size: 15px; width: 15px; height: 15px; margin-top: 1px; flex: none; }
+  }
+}
+
+.result {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 14px 0 0;
+  font-size: 13px;
+
+  mat-icon { font-size: 20px; width: 20px; height: 20px; }
+  &.ok  { color: #66bb6a; }
+  &.no  { opacity: 0.8; }
+  &.err { color: #e57373; }
+}

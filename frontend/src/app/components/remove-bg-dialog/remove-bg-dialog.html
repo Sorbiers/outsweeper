@@ -1,0 +1,77 @@
+<h2 mat-dialog-title cdkDrag cdkDragRootElement=".cdk-overlay-pane" cdkDragHandle
+    class="dialog-title">Remove background · {{ filename }}</h2>
+
+<mat-dialog-content>
+  <mat-button-toggle-group class="engine-toggle" [value]="engine()"
+                           (change)="engine.set($event.value)" hideSingleSelectionIndicator>
+    <mat-button-toggle value="rembg">rembg</mat-button-toggle>
+    <mat-button-toggle value="birefnet">BiRefNet (GPU)</mat-button-toggle>
+  </mat-button-toggle-group>
+
+  <!-- rembg: local ONNX -->
+  @if (engine() === 'rembg') {
+    <p class="engine-desc">Local ONNX matting (rembg). Writes a transparent PNG next to the source.</p>
+    <p class="guidance">Default <code>isnet-general-use</code>. For best edges/hair use
+      <code>birefnet-general</code>; illustrations → <code>isnet-anime</code>;
+      people → <code>u2net_human_seg</code> / <code>birefnet-portrait</code>.</p>
+    @if (rembgReady) {
+      <mat-form-field class="full-width" subscriptSizing="dynamic">
+        <mat-label>Model</mat-label>
+        <mat-select [(ngModel)]="rembgModel">
+          <mat-select-trigger>{{ rembgModel }}</mat-select-trigger>
+          @for (m of caps()!.rembg_models; track m) {
+            <mat-option [value]="m" [matTooltip]="rembgDesc[m] || ''" matTooltipPosition="right">
+              {{ m }}@if (rembgDesc[m]) { <span class="opt-desc">— {{ rembgDesc[m] }}</span> }
+            </mat-option>
+          }
+        </mat-select>
+        @if (rembgDesc[rembgModel]) { <mat-hint>{{ rembgDesc[rembgModel] }}</mat-hint> }
+      </mat-form-field>
+      <mat-checkbox [(ngModel)]="alphaMatting"
+                    matTooltip="Refines edges (hair/fur). Slower.">Alpha matting</mat-checkbox>
+      @if (rembgHint) {
+        <p class="warn"><mat-icon>info</mat-icon> {{ rembgHint }}</p>
+      }
+    } @else {
+      <p class="warn"><mat-icon>warning</mat-icon> {{ rembgHint || 'rembg is not available.' }}</p>
+    }
+  }
+
+  <!-- BiRefNet: transformers / torch on GPU -->
+  @if (engine() === 'birefnet') {
+    <p class="engine-desc">BiRefNet run on the GPU (transformers + torch). Higher quality; models download on first use. Writes a transparent PNG next to the source.</p>
+    <p class="guidance"><code>BiRefNet_lite</code> = fast + great quality (recommended);
+      <code>BiRefNet</code> = best quality, slower; <code>RMBG-2.0</code> = SOTA, non-commercial.</p>
+    @if (birefnetReady) {
+      <mat-form-field class="full-width" subscriptSizing="dynamic">
+        <mat-label>Model</mat-label>
+        <mat-select [(ngModel)]="birefnetModel">
+          <mat-select-trigger>{{ birefnetModel }}</mat-select-trigger>
+          @for (m of caps()!.birefnet_models; track m) {
+            <mat-option [value]="m" [matTooltip]="birefnetDesc[m] || ''" matTooltipPosition="right">
+              {{ m }}@if (birefnetDesc[m]) { <span class="opt-desc">— {{ birefnetDesc[m] }}</span> }
+            </mat-option>
+          }
+        </mat-select>
+        @if (birefnetDesc[birefnetModel]) { <mat-hint>{{ birefnetDesc[birefnetModel] }}</mat-hint> }
+      </mat-form-field>
+      @if (birefnetHint) {
+        <p class="warn"><mat-icon>info</mat-icon> {{ birefnetHint }}</p>
+      }
+    } @else {
+      <p class="warn"><mat-icon>warning</mat-icon> {{ birefnetHint || 'BiRefNet is not available.' }}</p>
+    }
+  }
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  @if (running()) {
+    <span class="run-status"><mat-spinner diameter="18"></mat-spinner> Working…</span>
+  }
+  <button mat-button mat-dialog-close [disabled]="running()">Cancel</button>
+  @if (engine() === 'rembg') {
+    <button mat-flat-button (click)="run()" [disabled]="running() || !rembgReady || !rembgModel">Remove</button>
+  } @else {
+    <button mat-flat-button (click)="run()" [disabled]="running() || !birefnetReady || !birefnetModel">Remove</button>
+  }
+</mat-dialog-actions>

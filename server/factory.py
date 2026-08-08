@@ -64,6 +64,7 @@ from .utils import (
     mtime_token,
     stat_entry,
 )
+from .bgremove import bgremove_capabilities, run_birefnet, run_rembg
 from .upscale import (
     run_interpolation,
     run_spandrel,
@@ -697,25 +698,9 @@ def create_app(
         except Exception as e:
             return jsonify({'error': str(e)}), 502
 
-    def _wait_and_copy_result(cu: str, prompt_id: str) -> None:
-        """Background thread: polls ComfyUI history until done, then downloads output
-        files via /view — works for both local and remote ComfyUI instances."""
-        deadline = time.time() + 600  # 10 min timeout
-        hist_entry: dict = {}
-        while time.time() < deadline:
-            try:
-                resp = http_requests.get(f'{cu}/history/{prompt_id}', timeout=5).json()
-                if prompt_id in resp:
-                    hist_entry = resp[prompt_id]
-                    break
-            except Exception:
-                pass
-            time.sleep(2)
-        else:
-            print(f'[warn] copy-result: timeout waiting for {prompt_id}', flush=True)
-            return
-
-        # Collect output image refs from history (type == 'output' only)
+    def _copy_history_outputs(cu: str, hist_entry: dict) -> list[str]:
+        """Download a finished prompt's output images from ComfyUI into the workspace
+        via /view; returns the copied filenames and notifies clients."""
         image_refs: list[tuple[str, str]] = []  # (subfolder, filename)
         for node_output in hist_entry.get('outputs', {}).values():
             for img in node_output.get('images', []):
@@ -746,6 +731,47 @@ def create_app(
                 print(f'[warn] copy-result {safe_name}: {e}', flush=True)
         if copied:
             _sse_broadcast(f'source_changed:+{len(copied)}')
+        return copied
+
+    def _wait_and_copy_result(cu: str, prompt_id: str) -> list[str]:
+        """Background copy for normal sends: poll history until the prompt finishes,
+        then download its outputs into the workspace."""
+        deadline = time.time() + 600  # 10 min safety cap for the background thread
+        while time.time() < deadline:
+            try:
+                resp = http_requests.get(f'{cu}/history/{prompt_id}', timeout=5).json()
+                if prompt_id in resp:
+                    return _copy_history_outputs(cu, resp[prompt_id])
+            except Exception:
+                pass
+            time.sleep(2)
+        print(f'[warn] copy-result: timeout waiting for {prompt_id}', flush=True)
+        return []
+
+    @app.route('/api/comfy/result', methods=['POST'])
+    def comfy_result():
+        """Non-blocking status check for a submitted prompt, so a long generation never
+        ties up a request (Guided generation polls this). Returns:
+          - {done: true, filenames: [...], status} once finished (outputs copied in);
+          - {done: false, queued: true|false} while still running/pending or briefly
+            before it appears (the caller keeps polling; a persistent queued:false with
+            no history means the job failed/was cancelled)."""
+        data = request.get_json() or {}
+        cu = data.get('comfy_url', 'http://127.0.0.1:8188').rstrip('/')
+        prompt_id = data.get('prompt_id')
+        if not prompt_id:
+            return jsonify({'error': 'no prompt_id'}), 400
+        try:
+            hist = http_requests.get(f'{cu}/history/{prompt_id}', timeout=5).json()
+            if prompt_id in hist:
+                entry = hist[prompt_id]
+                status = (entry.get('status') or {}).get('status_str')
+                return jsonify({'done': True, 'filenames': _copy_history_outputs(cu, entry), 'status': status})
+            q = http_requests.get(f'{cu}/queue', timeout=5).json()
+            active = [it[1] for it in (q.get('queue_running', []) + q.get('queue_pending', [])) if len(it) > 1]
+            return jsonify({'done': False, 'queued': prompt_id in active})
+        except Exception as e:
+            return jsonify({'error': str(e)}), 502
 
     @app.route('/api/comfy/prompt', methods=['POST'])
     def comfy_prompt():
@@ -886,7 +912,7 @@ def create_app(
     def api_exiftool_capabilities():
         return jsonify(exiftool_capabilities(state))
 
-    def _register_upscaled(dst: Path) -> None:
+    def _register_output(dst: Path) -> None:
         """Make a freshly-written output visible: refresh its folder cache entry
         and notify clients so the feed picks it up."""
         _invalidate_cache(dst)
@@ -912,7 +938,7 @@ def create_app(
         try:
             dst = unique_output_path(file_path, 'up')
             scale = run_spandrel(model_path, file_path, dst, tile=tile)
-            _register_upscaled(dst)
+            _register_output(dst)
             return jsonify({'ok': True, 'filename': dst.name, 'scale': scale})
         except Exception as e:
             return jsonify({'error': str(e)}), 500
@@ -933,7 +959,42 @@ def create_app(
         try:
             dst = unique_output_path(file_path, f'x{scale:g}')
             run_interpolation(file_path, dst, method, scale)
-            _register_upscaled(dst)
+            _register_output(dst)
+            return jsonify({'ok': True, 'filename': dst.name})
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+
+    @app.route('/api/bgremove/capabilities')
+    def api_bgremove_capabilities():
+        return jsonify(bgremove_capabilities(state))
+
+    @app.route('/api/bgremove/rembg', methods=['POST'])
+    def api_bgremove_rembg():
+        data = request.get_json() or {}
+        file_path = resolve_path(request.args.get('path', ''))
+        if not file_path.is_file():
+            return jsonify({'error': 'not found'}), 404
+        model = (data.get('model') or 'u2net').strip()
+        alpha_matting = bool(data.get('alpha_matting', False))
+        try:
+            dst = unique_output_path(file_path, 'nobg')
+            run_rembg(file_path, dst, model, alpha_matting)
+            _register_output(dst)
+            return jsonify({'ok': True, 'filename': dst.name})
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+
+    @app.route('/api/bgremove/birefnet', methods=['POST'])
+    def api_bgremove_birefnet():
+        data = request.get_json() or {}
+        file_path = resolve_path(request.args.get('path', ''))
+        if not file_path.is_file():
+            return jsonify({'error': 'not found'}), 404
+        model = (data.get('model') or 'ZhengPeng7/BiRefNet_lite').strip()
+        try:
+            dst = unique_output_path(file_path, 'nobg')
+            run_birefnet(file_path, dst, model)
+            _register_output(dst)
             return jsonify({'ok': True, 'filename': dst.name})
         except Exception as e:
             return jsonify({'error': str(e)}), 500
