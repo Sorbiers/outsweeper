@@ -53,7 +53,7 @@ const IMPROVE_INSTRUCTION =
 
 const evalInstruction = (prompt: string): string =>
   `You are checking whether the image matches the main subject and intended meaning of this text-to-image prompt closely enough. 
-  Don’t be too strict—evaluate only the main idea of the plot and ignore secondary details. Also check the image quality: whether it is well exposed and whether the characters have correct anatomy and facial expression.
+  Evaluate the main idea of the plot and ignore secondary details. Also check the image quality: whether it is well exposed and whether the characters have correct anatomy and facial expression.
   PROMPT: "${prompt}"\n
   Reply ONLY with a JSON object and nothing else:\n
   { "match": true or false, "feedback": "what is missing or wrong (empty if it matches)",
