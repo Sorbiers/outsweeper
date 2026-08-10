@@ -37,6 +37,7 @@ import { GpuMonitorWidget } from './components/gpu-monitor/gpu-monitor';
 import { ImageStrip } from './components/image-strip/image-strip';
 import { InfoPanel } from './components/info-panel/info-panel';
 import { LmPromptDialog } from './components/lm-prompt-dialog/lm-prompt-dialog';
+import { LmStudioMonitorWidget } from './components/lmstudio-monitor/lmstudio-monitor';
 import { MetadataEditDialog } from './components/metadata-edit-dialog/metadata-edit-dialog';
 import { PreviewPanel } from './components/preview-panel/preview-panel';
 import { SPECIAL_FOLDERS, STORAGE_KEYS } from './constants';
@@ -46,6 +47,7 @@ import { ComfyQueueService } from './services/comfy-queue.service';
 import { ConnectionStateService } from './services/connection-state.service';
 import { FavoritesService } from './services/favorites.service';
 import { KeyboardService, PhotoAction } from './services/keyboard.service';
+import { LmStudioActivityService } from './services/lmstudio-activity.service';
 import { PhotoService } from './services/photo.service';
 
 @Component({
@@ -64,6 +66,7 @@ import { PhotoService } from './services/photo.service';
     PreviewPanel,
     GpuMonitorWidget,
     ComfyQueueWidget,
+    LmStudioMonitorWidget,
   ],
   templateUrl: './app.html',
   styleUrl: './app.scss',
@@ -76,6 +79,7 @@ export class App implements OnInit, OnDestroy {
   private dialog = inject(MatDialog);
   private connState = inject(ConnectionStateService);
   private comfyQueue = inject(ComfyQueueService);
+  private lmStudioActivity = inject(LmStudioActivityService);
   private destroyRef = inject(DestroyRef);
 
   photos: PhotoListItem[] = [];
@@ -97,6 +101,8 @@ export class App implements OnInit, OnDestroy {
   widgetVisible = signal(true);
   comfyQueueEnabled = signal(false);
   comfyQueueVisible = signal(true);
+  lmStudioWidgetEnabled = signal(false);
+  lmStudioWidgetVisible = signal(true);
   exiftoolAvailable = signal(false);
 
   // Pagination
@@ -151,6 +157,8 @@ export class App implements OnInit, OnDestroy {
       else if (e.data.startsWith('metrics:')) this.metrics.set(JSON.parse(e.data.slice(8)));
       else if (e.data.startsWith('comfy_queue:'))
         this.comfyQueue.status.set(JSON.parse(e.data.slice(12)));
+      else if (e.data.startsWith('lmstudio:'))
+        this.lmStudioActivity.status.set(JSON.parse(e.data.slice(9)));
       else if (e.data.startsWith('source_changed:') && this.folderType === 'source')
         this.sourceChangedPending.set(e.data.slice('source_changed:'.length));
     };
@@ -161,6 +169,7 @@ export class App implements OnInit, OnDestroy {
       if (!this.connState.lmstudio.url) this.connState.lmstudio.url = cfg.lmstudio_url;
       if (cfg.widgets?.gpu_monitor) this.gpuMonitorEnabled.set(true);
       if (cfg.widgets?.comfy_queue) this.comfyQueueEnabled.set(true);
+      if (cfg.widgets?.lmstudio) this.lmStudioWidgetEnabled.set(true);
       if (cfg.selected_name) this.selectedName = cfg.selected_name;
       if (cfg.dust_name) this.dustName = cfg.dust_name;
       if (cfg.thumbnails_name) this.photoService.thumbnailsName = cfg.thumbnails_name;
@@ -618,6 +627,17 @@ export class App implements OnInit, OnDestroy {
     const next = !this.comfyQueueVisible();
     this.comfyQueueVisible.set(next);
     this.photoService.setComfyQueuePaused(!next, this.sseClientId).subscribe();
+  }
+
+  closeLmStudioWidget(): void {
+    this.lmStudioWidgetVisible.set(false);
+    this.photoService.setLmStudioWidgetPaused(true, this.sseClientId).subscribe();
+  }
+
+  toggleLmStudioWidget(): void {
+    const next = !this.lmStudioWidgetVisible();
+    this.lmStudioWidgetVisible.set(next);
+    this.photoService.setLmStudioWidgetPaused(!next, this.sseClientId).subscribe();
   }
 
   private undoLast(): void {

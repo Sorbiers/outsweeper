@@ -190,6 +190,10 @@ export class PhotoService {
     return this.http.post<{ ok: boolean }>('/api/comfy-queue/pause', { paused, client_id: clientId });
   }
 
+  setLmStudioWidgetPaused(paused: boolean, clientId: string): Observable<{ ok: boolean }> {
+    return this.http.post<{ ok: boolean }>('/api/lmstudio/pause', { paused, client_id: clientId });
+  }
+
   getTools(): Observable<{ tools: string[] }> {
     return this.http.get<{ tools: string[] }>('/api/tools');
   }

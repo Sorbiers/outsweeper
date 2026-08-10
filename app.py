@@ -60,6 +60,7 @@ def main() -> None:
     widgets              = config.get('widgets', {})
     monitor_enabled      = widgets.get('gpu_monitor', False)
     comfy_queue_enabled  = widgets.get('comfy_queue', False)
+    lmstudio_widget_enabled = widgets.get('lmstudio', False)
 
     app = create_app(
         source, config, selected_name, dust_name,
@@ -68,6 +69,7 @@ def main() -> None:
         validation_interval, thumb_cache_days,
         exiftool_path, run_comfy_command, run_lmstudio_command,
         collection_dir, upscale_models_dir,
+        lmstudio_widget_enabled,
     )
 
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:

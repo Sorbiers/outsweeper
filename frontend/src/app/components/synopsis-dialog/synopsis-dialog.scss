@@ -1,0 +1,90 @@
+.dialog-title {
+  cursor: move;
+  user-select: none;
+}
+
+// Fixed-height dialog: the pane never grows with content (which, once dragged,
+// would push the header off-screen) — everything scrolls inside `.body` instead.
+mat-dialog-content {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  max-height: none;
+  overflow: hidden;
+}
+
+.body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  margin: 0 -8px;
+  padding: 0 8px;
+}
+
+.intro {
+  margin: 0 0 12px;
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+.full-width {
+  width: 100%;
+}
+
+.config {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin: 10px 0;
+}
+
+.model-field { flex: 1; min-width: 220px; }
+.num-field { width: 110px; }
+
+.warn, .status-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  opacity: 0.85;
+  margin: 8px 0;
+
+  mat-icon { font-size: 18px; width: 18px; height: 18px; }
+}
+
+.results-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 16px 0 6px;
+  font-size: 13px;
+  opacity: 0.85;
+}
+
+.spacer { flex: 1 1 auto; }
+
+.prompt-card {
+  border: 1px solid #333;
+  border-left-width: 3px;
+  border-left-color: #7e57c2;
+  border-radius: 6px;
+  padding: 6px 10px 10px;
+  margin-top: 8px;
+}
+
+.prompt-card-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+
+  .prompt-n { font-weight: 600; opacity: 0.7; font-size: 12px; }
+
+  button { width: 32px; height: 32px; line-height: 32px; }
+  mat-icon { font-size: 18px; width: 18px; height: 18px; }
+}
+
+.prompt-text {
+  font-size: 12px;
+  line-height: 1.4;
+}

@@ -178,7 +178,7 @@
   <button mat-menu-item [matMenuTriggerFor]="sortMenu">
     <mat-icon color="primary">{{ sortBy === 'name' ? 'sort_by_alpha' : 'schedule' }}</mat-icon> Sort
   </button>
-  @if (gpuMonitorEnabled() || comfyQueueEnabled()) {
+  @if (gpuMonitorEnabled() || comfyQueueEnabled() || lmStudioWidgetEnabled()) {
     <button mat-menu-item [matMenuTriggerFor]="widgetsMenu">
       <mat-icon>widgets</mat-icon> Widgets
     </button>
@@ -297,6 +297,21 @@
       </span>
     </button>
   }
+  @if (lmStudioWidgetEnabled()) {
+    <button
+      mat-menu-item
+      (click)="toggleLmStudioWidget()"
+      [class.pp-menu-active]="lmStudioWidgetVisible()"
+    >
+      <mat-icon>psychology</mat-icon>
+      <span class="pp-menu-row"
+        >LM Studio
+        @if (lmStudioWidgetVisible()) {
+          <mat-icon class="pp-menu-check">check</mat-icon>
+        }
+      </span>
+    </button>
+  }
 </mat-menu>
 
 @if (metrics(); as m) {
@@ -307,4 +322,8 @@
 
 @if (comfyQueueEnabled() && comfyQueueVisible()) {
   <pp-comfy-queue (closed)="closeComfyQueueWidget()"></pp-comfy-queue>
+}
+
+@if (lmStudioWidgetEnabled() && lmStudioWidgetVisible()) {
+  <pp-lmstudio-monitor (closed)="closeLmStudioWidget()"></pp-lmstudio-monitor>
 }

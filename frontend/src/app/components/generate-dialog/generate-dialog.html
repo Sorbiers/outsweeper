@@ -261,6 +261,9 @@
             matTooltipPosition="left">
       <mat-icon>psychology</mat-icon> Guided generation
     </button>
+    <button mat-menu-item (click)="openSynopsis()" [disabled]="sending">
+      <mat-icon>auto_stories</mat-icon> Synopsis to illustrations
+    </button>
     <button mat-menu-item (click)="sendFront()" [disabled]="sending || comfy.checkStatus !== 'ok'">
       <mat-icon>vertical_align_top</mat-icon>
       @if (totalSends > 1) { Send {{ totalSends }} to front } @else { Send to front }

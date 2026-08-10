@@ -30,6 +30,7 @@ class AppState:
     collection_resolved: Path | None = None
     collection_str: str = ''
     upscale_models_resolved: Path | None = None
+    lmstudio_widget_enabled: bool = False
 
     folder_caches: dict = field(default_factory=dict)
     tag_index: dict = field(default_factory=dict)

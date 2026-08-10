@@ -1,0 +1,31 @@
+<div class="header" (mousedown)="onHeaderMouseDown($event)">
+  <span class="title">LM STUDIO</span>
+  <button class="close-btn" (mousedown)="$event.stopPropagation()" (click)="closed.emit()">×</button>
+</div>
+@if (svc.status(); as s) {
+  @if (s.reachable) {
+    <div class="row"><span class="lbl">Model</span><span [class.active]="s.model" [class.dim]="!s.model">{{ s.model || 'not loaded' }}</span></div>
+    @if (s.model_load_progress != null) {
+      <div class="row progress-pct">
+        <span class="lbl">Loading</span>
+        <span class="active">{{ s.model_load_progress * 100 | number:'1.0-0' }}%</span>
+      </div>
+      <div class="progress-row">
+        <div class="progress-bar" [style.width.%]="s.model_load_progress * 100"></div>
+      </div>
+    }
+    @if (s.prompt_progress != null) {
+      <div class="row progress-pct">
+        <span class="lbl">Prompt</span>
+        <span class="active">{{ s.prompt_progress * 100 | number:'1.0-0' }}%</span>
+      </div>
+      <div class="progress-row">
+        <div class="progress-bar" [style.width.%]="s.prompt_progress * 100"></div>
+      </div>
+    }
+  } @else {
+    <div class="row offline"><span>unreachable</span></div>
+  }
+} @else {
+  <div class="row offline"><span>unreachable</span></div>
+}

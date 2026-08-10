@@ -1,0 +1,102 @@
+<h2 mat-dialog-title cdkDrag cdkDragRootElement=".cdk-overlay-pane" cdkDragBoundary=".cdk-overlay-container" cdkDragHandle
+    class="dialog-title">Synopsis to illustrations</h2>
+
+<mat-dialog-content>
+  <div class="body">
+    <p class="intro">Turn a plot synopsis into a short story, then a set of FLUX-ready illustration
+      prompts — hand the whole set (or just one) back to the Generate dialog.</p>
+
+    <mat-form-field class="full-width" subscriptSizing="dynamic">
+      <mat-label>Synopsis</mat-label>
+      <textarea matInput rows="3" [(ngModel)]="synopsis" [disabled]="running()"
+                placeholder="A short plot description: setting, characters, and the action..."></textarea>
+    </mat-form-field>
+
+    <div class="config">
+      <mat-form-field class="model-field" subscriptSizing="dynamic">
+        <mat-label>Storyteller model</mat-label>
+        <mat-select [(ngModel)]="storytellerModel" [disabled]="running()">
+          @for (m of lms.availableModels; track m) { <mat-option [value]="m">{{ m }}</mat-option> }
+        </mat-select>
+      </mat-form-field>
+      <button mat-stroked-button (click)="generateStory()" [disabled]="!canGenerateStory"
+              matTooltip="Optional — you can also just type/paste a story below">
+        <mat-icon>auto_stories</mat-icon> Generate story
+      </button>
+    </div>
+
+    <mat-form-field class="full-width" subscriptSizing="dynamic">
+      <mat-label>Story</mat-label>
+      <textarea matInput rows="6" [(ngModel)]="story" [disabled]="running()"
+                placeholder="Generated here — or paste/write your own story to skip the synopsis step..."></textarea>
+    </mat-form-field>
+
+    <div class="config">
+      <mat-form-field class="model-field" subscriptSizing="dynamic">
+        <mat-label>Illustrator model</mat-label>
+        <mat-select [(ngModel)]="illustratorModel" [disabled]="running()">
+          @for (m of lms.availableModels; track m) { <mat-option [value]="m">{{ m }}</mat-option> }
+        </mat-select>
+      </mat-form-field>
+      <mat-form-field class="num-field" subscriptSizing="dynamic">
+        <mat-label>Min images</mat-label>
+        <input matInput type="number" min="0" step="1" [(ngModel)]="minImages" [disabled]="running()"
+               matTooltip="0 = no minimum" />
+      </mat-form-field>
+      <mat-form-field class="num-field" subscriptSizing="dynamic">
+        <mat-label>Max images</mat-label>
+        <input matInput type="number" min="0" step="1" [(ngModel)]="maxImages" [disabled]="running()"
+               matTooltip="0 = no maximum" />
+      </mat-form-field>
+    </div>
+
+    <mat-form-field class="full-width" subscriptSizing="dynamic">
+      <mat-label>Illustration style</mat-label>
+      <input matInput [(ngModel)]="style" [disabled]="running()"
+             placeholder="e.g. watercolour children's book, dramatic oil painting, anime..." />
+    </mat-form-field>
+
+    <div class="config">
+      <button mat-flat-button (click)="generateIllustrations()" [disabled]="!canGenerateIllustrations">
+        <mat-icon>image</mat-icon> Generate illustrations
+      </button>
+    </div>
+
+    @if (!lms.availableModels.length) {
+      <p class="warn"><mat-icon>info</mat-icon> No LM Studio models — connect LM Studio first (LM Prompt / Describe dialog).</p>
+    }
+
+    @if (status()) {
+      <div class="status-row"><mat-spinner diameter="18"></mat-spinner> {{ status() }}</div>
+    }
+
+    @if (prompts().length) {
+      <div class="results-head">
+        <span>{{ prompts().length }} illustration prompt{{ prompts().length > 1 ? 's' : '' }}</span>
+        <span class="spacer"></span>
+        <button mat-stroked-button (click)="useAll()" [disabled]="running()">
+          <mat-icon>done_all</mat-icon> Use all
+        </button>
+      </div>
+      @for (p of prompts(); track $index) {
+        <div class="prompt-card">
+          <div class="prompt-card-head">
+            <span class="prompt-n">#{{ $index + 1 }}</span>
+            <span class="spacer"></span>
+            <button mat-icon-button [cdkCopyToClipboard]="p" matTooltip="Copy">
+              <mat-icon>content_copy</mat-icon>
+            </button>
+            <button mat-icon-button (click)="useOne(p)" [disabled]="running()" matTooltip="Use in Generate">
+              <mat-icon>arrow_circle_right</mat-icon>
+            </button>
+          </div>
+          <div class="prompt-text">{{ p }}</div>
+        </div>
+      }
+    }
+  </div>
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button mat-button (click)="close()" [disabled]="running()">Cancel</button>
+</mat-dialog-actions>

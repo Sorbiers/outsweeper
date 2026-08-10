@@ -28,6 +28,7 @@ from PIL.PngImagePlugin import PngInfo
 
 from .background import _comfy_queue_loop, _comfy_ws_loop, _metrics_loop
 from .events import _SSE_CLIENTS, _SSE_LOCK, _sse_broadcast
+from . import lmstudio as lmstudio_activity
 from .exiftool import (
     EDIT_TAG_MAP,
     STRIP_GROUP_MAP,
@@ -104,6 +105,7 @@ def create_app(
     run_lmstudio_command: str = '',
     collection_dir: str = '',
     upscale_models_dir: str = '',
+    lmstudio_widget_enabled: bool = False,
 ) -> Flask:
     static_dir = Path(__file__).parent.parent / 'static'
     root_dir = Path(root_dir)
@@ -137,6 +139,7 @@ def create_app(
         collection_resolved=collection_resolved,
         collection_str=str(collection_resolved),
         upscale_models_resolved=upscale_models_resolved,
+        lmstudio_widget_enabled=lmstudio_widget_enabled,
     )
 
     app = Flask(__name__, static_folder=None)
@@ -176,6 +179,8 @@ def create_app(
     if comfy_queue_enabled:
         threading.Thread(target=_comfy_queue_loop, args=(state,), daemon=True).start()
         threading.Thread(target=_comfy_ws_loop, args=(state,), daemon=True).start()
+    if lmstudio_widget_enabled:
+        threading.Thread(target=lmstudio_activity.poll_loop, args=(state,), daemon=True).start()
 
     # --- Shared helpers ---
 
@@ -835,6 +840,13 @@ def create_app(
         prompt  = data.get('prompt', '')
         model   = data.get('model', 'model-identifier')
         try:
+            # Native streaming endpoint: same result, but also broadcasts live
+            # model-load / prompt-processing progress to the LM Studio widget.
+            text = lmstudio_activity.stream_chat(lms_url, model, prompt, timeout=LMS_COMPLETION_TIMEOUT)
+            return jsonify({'description': text})
+        except Exception as e:
+            print(f'[warn] lmstudio native stream failed, falling back: {e}', flush=True)
+        try:
             resp = http_requests.post(
                 f'{lms_url}/chat/completions',
                 json={'model': model, 'messages': [{'role': 'user', 'content': prompt}],
@@ -858,12 +870,24 @@ def create_app(
         mt      = mt or 'image/png'
         with open(file_path, 'rb') as f:
             b64 = base64.b64encode(f.read()).decode('ascii')
+        data_url = f'data:{mt};base64,{b64}'
+        try:
+            # Native streaming endpoint: same result, but also broadcasts live
+            # model-load / prompt-processing progress to the LM Studio widget.
+            text = lmstudio_activity.stream_chat(
+                lms_url, model,
+                [{'type': 'text', 'content': prompt}, {'type': 'image', 'data_url': data_url}],
+                timeout=VISION_COMPLETION_TIMEOUT,
+            )
+            return jsonify({'description': text})
+        except Exception as e:
+            print(f'[warn] lmstudio native stream failed, falling back: {e}', flush=True)
         try:
             resp = http_requests.post(
                 f'{lms_url}/chat/completions',
                 json={'model': model, 'messages': [{'role': 'user', 'content': [
                     {'type': 'text', 'text': prompt},
-                    {'type': 'image_url', 'image_url': {'url': f'data:{mt};base64,{b64}'}},
+                    {'type': 'image_url', 'image_url': {'url': data_url}},
                 ]}], 'temperature': LMS_VISION_TEMPERATURE},
                 timeout=VISION_COMPLETION_TIMEOUT,
             )
@@ -1358,6 +1382,15 @@ def create_app(
                 _SSE_CLIENTS[client_id]['comfy_queue'] = not paused
         return jsonify({'ok': True})
 
+    @app.route('/api/lmstudio/pause', methods=['POST'])
+    def lmstudio_widget_pause():
+        client_id = request.json.get('client_id', '')
+        paused    = request.json.get('paused', True)
+        with _SSE_LOCK:
+            if client_id in _SSE_CLIENTS:
+                _SSE_CLIENTS[client_id]['lmstudio'] = not paused
+        return jsonify({'ok': True})
+
     @app.route('/api/refresh', methods=['POST'])
     def refresh():
         target = resolve_path(request.args.get('path', ''))
@@ -1369,7 +1402,7 @@ def create_app(
         return jsonify({
             'comfy_url':               state.comfy_url,
             'lmstudio_url':            state.lmstudio_url,
-            'widgets':                 {'gpu_monitor': state.monitor_enabled, 'comfy_queue': state.comfy_queue_enabled},
+            'widgets':                 {'gpu_monitor': state.monitor_enabled, 'comfy_queue': state.comfy_queue_enabled, 'lmstudio': state.lmstudio_widget_enabled},
             'selected_name':           state.selected_name,
             'dust_name':               state.dust_name,
             'thumbnails_name':         THUMBNAILS_DIR,
@@ -1409,7 +1442,7 @@ def create_app(
 
         def generate():
             with _SSE_LOCK:
-                _SSE_CLIENTS[client_id] = {'queue': q, 'metrics': True, 'comfy_queue': True}
+                _SSE_CLIENTS[client_id] = {'queue': q, 'metrics': True, 'comfy_queue': True, 'lmstudio': True}
             try:
                 yield f'data: client_id:{client_id}\n\n'
                 while True:

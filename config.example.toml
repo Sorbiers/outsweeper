@@ -27,6 +27,7 @@ upscale_models_dir   = ""
 [widgets]
 gpu_monitor = true   # requires nvidia-ml-py
 comfy_queue = true
+lmstudio    = true   # loaded model + model-load/prompt-processing progress
 
 # [tools]
 # Define shell commands callable from the info panel.

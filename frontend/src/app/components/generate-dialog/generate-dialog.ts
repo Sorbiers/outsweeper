@@ -28,6 +28,7 @@ import { LlmModelDialog, LlmModelDialogData } from '../llm-model-dialog/llm-mode
 import { PromptHistoryDialog } from '../prompt-history-dialog/prompt-history-dialog';
 import { PrompterDialog } from '../prompter-dialog/prompter-dialog';
 import { SaveFlowDialog } from '../save-flow-dialog/save-flow-dialog';
+import { SynopsisDialog, SynopsisDialogData } from '../synopsis-dialog/synopsis-dialog';
 
 export interface GenerateDialogData {
   workflow: Record<string, any>;
@@ -581,6 +582,31 @@ export class GenerateDialog {
     this.dialog.open(GuidedGenerationDialog, {
       data: { comfyUrl: this.comfy.comfyUrl, lmUrl, basePrompt, buildWorkflow } satisfies GuidedGenerationData,
       width: '90vw', maxWidth: '960px', height: '80vh', maxHeight: '90vh',
+    });
+  }
+
+  /**
+   * Synopsis to illustrations: compose a story from a plot synopsis, then a set of
+   * FLUX-ready illustration prompts, in a separate dialog — then hand the whole set
+   * back here as this dialog's positive prompt (Multiple prompts + `---` delimiter),
+   * or a single prompt from the set, without closing this dialog.
+   */
+  openSynopsis(): void {
+    const lmUrl = this.connState.lmstudio.url;
+    if (!lmUrl) {
+      this.snackBar.open('Set the LM Studio URL first (open the Prompt/Describe dialog to connect).', 'Dismiss', { duration: 6000 });
+      return;
+    }
+
+    const applyPrompts = (prompts: string[]) => {
+      this.params.positivePrompt = prompts.join('\n---\n');
+      this.multiplePrompts = true;
+      this.promptDelimiter = '---';
+    };
+
+    this.dialog.open(SynopsisDialog, {
+      data: { lmUrl, applyPrompts } satisfies SynopsisDialogData,
+      width: '90vw', maxWidth: '760px', height: '85vh', maxHeight: '92vh',
     });
   }
 
