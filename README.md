@@ -50,6 +50,19 @@ A fast, keyboard-driven photo triage tool. Open a folder, browse images in a scr
 - Live ComfyUI queue monitor widget (Running / Waiting / Done)
 - Automatic GPU stats widget: CPU %, RAM %, GPU %, temperature, VRAM %
 
+### Job queue
+ComfyUI and LM Studio can't both hold VRAM, so every non-interactive operation
+(**Send**, **Send to front**, **Improve then send**, **Guided generation**, **Outpaint**,
+**Upscale**) is queued as an internal job and executed one at a time on the backend.
+
+- Line up as many operations as you like — including ones that mix an LLM step with
+  rendering — and they run in order
+- Before each job: starts ComfyUI / LM Studio if needed, waits for ComfyUI's own queue to
+  drain (or force-clears it), and unloads the other engine to free VRAM
+- Jobs are UI-independent: close the dialog or the whole tab and the work continues
+- Queue widget + manager dialog: live status, drag-to-reorder, cancel one / cancel all, pause
+- Guided generation shows its iterations live and can be re-attached from the queue
+
 ### File system
 - Background file-system watcher — strip auto-refreshes when files are added or removed
 - Periodic index validation to catch external changes
@@ -215,6 +228,10 @@ comfy_queue = true    # top-right ComfyUI queue widget
 | `permissions.allow_dir_change` | `true` | Show folder-switch button in UI |
 | `widgets.gpu_monitor` | `false` | GPU/CPU stats overlay |
 | `widgets.comfy_queue` | `false` | ComfyUI queue overlay |
+| `widgets.lmstudio` | `false` | LM Studio activity overlay (loaded model, load/prompt progress) |
+| `widgets.jobs` | `true` | Internal job-queue overlay |
+| `queue.auto_start_services` | `true` | Launch ComfyUI / LM Studio on demand when a job needs them |
+| `queue.force_clear_comfy` | `false` | Clear ComfyUI's own queue instead of waiting for it to drain |
 
 ---
 

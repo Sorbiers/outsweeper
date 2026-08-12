@@ -1,0 +1,124 @@
+.intro {
+  margin: 0 0 12px;
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+.toolbar,
+.settings {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.section {
+  margin: 16px 0 6px;
+  font-size: 13px;
+  font-weight: 600;
+  opacity: 0.85;
+
+  .hint { font-weight: 400; font-size: 12px; opacity: 0.6; }
+}
+
+.empty {
+  margin: 0;
+  font-size: 12px;
+  opacity: 0.6;
+}
+
+.job-list {
+  display: block;
+  min-height: 8px;
+}
+
+.job {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  border: 1px solid #333;
+  border-left-width: 3px;
+  border-radius: 6px;
+  padding: 6px 8px;
+  margin-bottom: 6px;
+  background: rgba(255, 255, 255, 0.02);
+
+  &.job--running { border-left-color: #66bb6a; }
+  &.job--done    { opacity: 0.75; }
+}
+
+.drag-handle {
+  cursor: grab;
+  opacity: 0.45;
+  font-size: 18px;
+  width: 18px;
+  height: 18px;
+
+  &:active { cursor: grabbing; }
+}
+
+.job-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.job-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.count, .when { font-size: 11px; opacity: 0.6; flex: none; }
+
+.job-step,
+.job-error {
+  flex-basis: 100%;
+  font-size: 11px;
+  padding-left: 2px;
+}
+
+.job-step  { opacity: 0.6; }
+.job-error { color: #e57373; }
+
+.job-cancel {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  line-height: 30px;
+
+  mat-icon { font-size: 17px; width: 17px; height: 17px; }
+}
+
+.badge {
+  flex: none;
+  font-size: 11px;
+  padding: 1px 8px;
+  border-radius: 10px;
+
+  &.ok    { color: #66bb6a; background: rgba(102, 187, 106, 0.14); }
+  &.err   { color: #e57373; background: rgba(229, 115, 115, 0.14); }
+  &.wait  { color: #9ad;    background: rgba(153, 170, 221, 0.14); }
+  &.run   { color: #e0a030; background: rgba(224, 160, 48, 0.14); }
+  &.muted { color: #bbb;    background: rgba(180, 180, 180, 0.14); }
+}
+
+// While dragging, CDK clones the row into an overlay — keep it legible.
+.cdk-drag-preview {
+  border-radius: 6px;
+  box-shadow: 0 5px 14px rgba(0, 0, 0, 0.5);
+  background: #1e1e1e;
+}
+
+.cdk-drag-placeholder { opacity: 0.35; }
+
+.cdk-drop-list-dragging .job:not(.cdk-drag-placeholder) {
+  transition: transform 200ms cubic-bezier(0, 0, 0.2, 1);
+}

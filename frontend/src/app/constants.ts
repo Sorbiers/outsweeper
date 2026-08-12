@@ -23,6 +23,7 @@ export const STORAGE_KEYS = {
   COMFY_POS:          'pp_comfy_pos',
   WIDGET_POS:         'pp_widget_pos',
   LMSTUDIO_POS:       'pp_lmstudio_pos',
+  JOBS_POS:           'pp_jobs_pos',
   SYNOPSIS_STORYTELLER_MODEL: 'pp_synopsis_storyteller_model',
   SYNOPSIS_ILLUSTRATOR_MODEL: 'pp_synopsis_illustrator_model',
   SYNOPSIS_STYLE:     'pp_synopsis_style',

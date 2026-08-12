@@ -32,6 +32,12 @@ class AppState:
     upscale_models_resolved: Path | None = None
     lmstudio_widget_enabled: bool = False
 
+    # Internal job queue (see server/jobs.py)
+    jobs_widget_enabled: bool = False
+    jobs_auto_start: bool = True        # launch ComfyUI / LM Studio on demand
+    jobs_force_clear_comfy: bool = False  # clear ComfyUI's own queue instead of waiting
+    job_queue: Any = None
+
     folder_caches: dict = field(default_factory=dict)
     tag_index: dict = field(default_factory=dict)
     undo_stack: collections.deque = field(

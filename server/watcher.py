@@ -89,50 +89,64 @@ class _RootChangeHandler(FileSystemEventHandler):
         self._state = state
 
     def _relevant(self, event) -> bool:
-        return (
-            not event.is_directory
-            and Path(event.src_path).suffix.lower() in EXTENSIONS
-            and Path(event.src_path).parent.resolve() == self._state.root_resolved
-        )
+        if event.is_directory:
+            return False
+        # A rename reports the *old* name in src_path (often a .tmp), so check both
+        # ends — writers that save to a temp file and rename it into place would
+        # otherwise never be noticed.
+        paths = [getattr(event, 'src_path', None), getattr(event, 'dest_path', None)]
+        for raw in paths:
+            if not raw:
+                continue
+            p = Path(raw)
+            if p.suffix.lower() in EXTENSIONS and p.parent == self._state.root_resolved:
+                return True
+        return False
 
-    def on_created(self, event) -> None:
+    def _touch(self, event) -> None:
         if self._relevant(event):
             self._state.last_detection[0] = time.time()
 
-    def on_deleted(self, event) -> None:
-        if self._relevant(event):
-            self._state.last_detection[0] = time.time()
+    on_created = _touch
+    on_deleted = _touch
+    on_moved = _touch
 
 
 def _watcher_rescan_loop(state: AppState) -> None:
     while True:
+        # Nothing in here may escape: an exception used to kill this thread outright
+        # and silently disable file watching for the rest of the process.
+        try:
+            _rescan_tick(state)
+        except Exception as e:
+            print(f'[watcher] rescan error (continuing): {e!r}', flush=True)
+            state.last_rescan_done[0] = time.time()
         time.sleep(WATCHER_POLL_SECS)
-        now = time.time()
-        if state.last_detection[0] <= state.last_rescan_done[0]:
-            continue
-        if now - state.last_detection[0] < WATCHER_DEBOUNCE_SECS:
-            continue
-        if now - state.last_rescan_done[0] < WATCHER_COOLDOWN_SECS:
-            continue
-        root_key = str(state.root_resolved)
-        old_count = len(state.folder_caches.get(root_key, {}))
-        print(f'[watcher] rebuild start — {old_count} files known', flush=True)
-        t0 = time.perf_counter()
-        state.folder_caches[root_key] = build_index(state.root_resolved)
-        elapsed = (time.perf_counter() - t0) * 1000
-        new_count = len(state.folder_caches[root_key])
-        state.last_rescan_done[0] = time.time()
-        print(
-            f'[watcher] rebuild done — {new_count} files in {elapsed:.1f} ms'
-            + (
-                f' (count changed: {old_count} → {new_count})'
-                if new_count != old_count
-                else ''
-            ),
-            flush=True,
-        )
-        if new_count != old_count:
-            _sse_broadcast(f'source_changed:{new_count - old_count:+d}')
+
+
+def _rescan_tick(state: AppState) -> None:
+    now = time.time()
+    if state.last_detection[0] <= state.last_rescan_done[0]:
+        return
+    if now - state.last_detection[0] < WATCHER_DEBOUNCE_SECS:
+        return
+    if now - state.last_rescan_done[0] < WATCHER_COOLDOWN_SECS:
+        return
+    root_key = str(state.root_resolved)
+    old_count = len(state.folder_caches.get(root_key, {}))
+    print(f'[watcher] rebuild start - {old_count} files known', flush=True)
+    t0 = time.perf_counter()
+    index = build_index(state.root_resolved)
+    elapsed = (time.perf_counter() - t0) * 1000
+    new_count = len(index)
+    state.folder_caches[root_key] = index
+    state.last_rescan_done[0] = time.time()
+    # Notify first, log second: a console that can't encode the message must never
+    # cost us the broadcast (Windows consoles are cp1252 — keep this line ASCII).
+    if new_count != old_count:
+        _sse_broadcast(f'source_changed:{new_count - old_count:+d}')
+    changed = f' (count changed: {old_count} -> {new_count})' if new_count != old_count else ''
+    print(f'[watcher] rebuild done - {new_count} files in {elapsed:.1f} ms{changed}', flush=True)
 
 
 def start_watcher(state: AppState) -> None:

@@ -61,6 +61,10 @@ def main() -> None:
     monitor_enabled      = widgets.get('gpu_monitor', False)
     comfy_queue_enabled  = widgets.get('comfy_queue', False)
     lmstudio_widget_enabled = widgets.get('lmstudio', False)
+    jobs_widget_enabled  = widgets.get('jobs', True)
+    queue_cfg            = config.get('queue', {})
+    jobs_auto_start      = queue_cfg.get('auto_start_services', True)
+    jobs_force_clear     = queue_cfg.get('force_clear_comfy', False)
 
     app = create_app(
         source, config, selected_name, dust_name,
@@ -70,6 +74,7 @@ def main() -> None:
         exiftool_path, run_comfy_command, run_lmstudio_command,
         collection_dir, upscale_models_dir,
         lmstudio_widget_enabled,
+        jobs_widget_enabled, jobs_auto_start, jobs_force_clear,
     )
 
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:

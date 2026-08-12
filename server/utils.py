@@ -38,8 +38,12 @@ LMS_COMPLETION_TIMEOUT    = 600
 VISION_COMPLETION_TIMEOUT = 600
 SSE_QUEUE_TIMEOUT         = 25
 
+# Watcher pacing. DEBOUNCE waits for a burst of writes to settle; COOLDOWN is the
+# minimum gap between full folder re-indexes. The cooldown used to be 200s, which
+# meant a batch finishing just after a rescan went unreported for over three minutes
+# — the debounce already absorbs bursts, so a short gap is enough.
 WATCHER_DEBOUNCE_SECS = 3
-WATCHER_COOLDOWN_SECS = 200
+WATCHER_COOLDOWN_SECS = 15
 WATCHER_POLL_SECS     = 1
 
 LMS_TEXT_TEMPERATURE   = 0.7

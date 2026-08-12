@@ -1,0 +1,30 @@
+<div class="header" (mousedown)="onHeaderMouseDown($event)">
+  <span class="title">JOBS</span>
+  <button class="hdr-btn" (mousedown)="$event.stopPropagation()" (click)="manage.emit()" title="Manage queue">☰</button>
+  <button class="close-btn" (mousedown)="$event.stopPropagation()" (click)="closed.emit()">×</button>
+</div>
+
+@if (svc.paused()) {
+  <div class="row paused"><span>paused</span></div>
+}
+
+@if (svc.running(); as job) {
+  <div class="job-title" [title]="job.title">{{ job.title }}</div>
+  <div class="row"><span class="lbl">Status</span><span class="active">{{ job.status }}</span></div>
+  @if (job.progress?.step) {
+    <div class="step" [title]="job.progress.step">{{ job.progress.step }}</div>
+  }
+  @if (job.progress?.pct != null) {
+    <div class="progress-row">
+      <div class="progress-bar" [style.width.%]="(job.progress.pct || 0) * 100"></div>
+    </div>
+  }
+} @else if (!svc.queued().length) {
+  <div class="row idle"><span>idle</span></div>
+}
+
+<div class="row"><span class="lbl">Waiting</span><span [class.active]="svc.queued().length > 0">{{ svc.queued().length }}</span></div>
+<div class="row"><span class="lbl">Done</span><span>{{ svc.doneCount() | number:'1.0-0' }}</span></div>
+@if (svc.failedCount() > 0) {
+  <div class="row"><span class="lbl">Failed</span><span class="err">{{ svc.failedCount() }}</span></div>
+}

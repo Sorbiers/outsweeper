@@ -178,7 +178,7 @@
   <button mat-menu-item [matMenuTriggerFor]="sortMenu">
     <mat-icon color="primary">{{ sortBy === 'name' ? 'sort_by_alpha' : 'schedule' }}</mat-icon> Sort
   </button>
-  @if (gpuMonitorEnabled() || comfyQueueEnabled() || lmStudioWidgetEnabled()) {
+  @if (gpuMonitorEnabled() || comfyQueueEnabled() || lmStudioWidgetEnabled() || jobsWidgetEnabled()) {
     <button mat-menu-item [matMenuTriggerFor]="widgetsMenu">
       <mat-icon>widgets</mat-icon> Widgets
     </button>
@@ -189,6 +189,10 @@
     <span class="menu-label">Generator <kbd>Shift+G</kbd></span>
   </button>
   <button mat-menu-item (click)="openLmPrompt()"><mat-icon>psychology</mat-icon> LM Prompt</button>
+  <button mat-menu-item (click)="openJobQueueDialog()">
+    <mat-icon>playlist_play</mat-icon>
+    <span class="menu-label">Job Queue</span>
+  </button>
   <button mat-menu-item (click)="openComfyQueueDialog()">
     <mat-icon>queue</mat-icon>
     <span class="menu-label">ComfyUI Queue <kbd>q</kbd></span>
@@ -312,6 +316,21 @@
       </span>
     </button>
   }
+  @if (jobsWidgetEnabled()) {
+    <button
+      mat-menu-item
+      (click)="toggleJobsWidget()"
+      [class.pp-menu-active]="jobsWidgetVisible()"
+    >
+      <mat-icon>playlist_play</mat-icon>
+      <span class="pp-menu-row"
+        >Job Queue
+        @if (jobsWidgetVisible()) {
+          <mat-icon class="pp-menu-check">check</mat-icon>
+        }
+      </span>
+    </button>
+  }
 </mat-menu>
 
 @if (metrics(); as m) {
@@ -326,4 +345,8 @@
 
 @if (lmStudioWidgetEnabled() && lmStudioWidgetVisible()) {
   <pp-lmstudio-monitor (closed)="closeLmStudioWidget()"></pp-lmstudio-monitor>
+}
+
+@if (jobsWidgetEnabled() && jobsWidgetVisible()) {
+  <pp-job-queue (closed)="closeJobsWidget()" (manage)="openJobQueueDialog()"></pp-job-queue>
 }

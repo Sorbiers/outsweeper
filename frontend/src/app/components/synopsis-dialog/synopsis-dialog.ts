@@ -1,6 +1,5 @@
 import { ClipboardModule } from '@angular/cdk/clipboard';
-import { CdkDrag, CdkDragHandle } from '@angular/cdk/drag-drop';
-import { Component, inject, signal } from '@angular/core';
+import { Component, OnDestroy, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
@@ -13,8 +12,10 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { catchError, firstValueFrom, of } from 'rxjs';
 import { STORAGE_KEYS } from '../../constants';
+import { DialogTitleDirective } from '../../directives/dialog-title.directive';
 import { LmStudioConnectionService } from '../../services/lmstudio-connection.service';
 import { PhotoService } from '../../services/photo.service';
+import { PromptHistoryService } from '../../services/prompt-history.service';
 
 export interface SynopsisDialogData {
   lmUrl: string;
@@ -70,17 +71,18 @@ function splitIllustrations(text: string): string[] {
 
 @Component({
   selector: 'pp-synopsis-dialog',
-  imports: [CdkDrag, CdkDragHandle, ClipboardModule, FormsModule, MatDialogModule, MatFormFieldModule,
+  imports: [DialogTitleDirective, ClipboardModule, FormsModule, MatDialogModule, MatFormFieldModule,
             MatInputModule, MatSelectModule, MatButtonModule, MatIconModule, MatProgressSpinnerModule,
             MatTooltipModule],
   templateUrl: './synopsis-dialog.html',
   styleUrl: './synopsis-dialog.scss',
 })
-export class SynopsisDialog {
+export class SynopsisDialog implements OnDestroy {
   private dialogRef = inject(MatDialogRef<SynopsisDialog>);
   data: SynopsisDialogData = inject(MAT_DIALOG_DATA);
   private photo = inject(PhotoService);
   private snackBar = inject(MatSnackBar);
+  private promptHistory = inject(PromptHistoryService);
   lms = inject(LmStudioConnectionService);
 
   synopsis = '';
@@ -96,6 +98,9 @@ export class SynopsisDialog {
   running = signal(false);
   status = signal('');
   prompts = signal<string[]>([]);
+  /** Set once the work has been handed to the job queue (monitor mode). */
+  jobId = signal<string | null>(null);
+  private timer: any = null;
 
   constructor() {
     this.lms.init();
@@ -120,8 +125,84 @@ export class SynopsisDialog {
     return !this.running() && !!this.story.trim() && !!this.illustratorModel;
   }
 
+  ngOnDestroy(): void {
+    this.stopPolling();
+    // Keep the synopsis for the session so it can be picked from prompt history.
+    this.promptHistory.add(this.synopsis);
+  }
+
   close(): void {
     if (!this.running()) this.dialogRef.close();
+  }
+
+  get canEnqueue(): boolean {
+    return !this.running() && !!this.illustratorModel &&
+      (!!this.story.trim() || (!!this.synopsis.trim() && !!this.storytellerModel));
+  }
+
+  /**
+   * Hand the whole flow (story, if needed, then illustrations) to the job queue
+   * instead of running it here — it then waits its turn behind any rendering work
+   * and survives this dialog being closed.
+   */
+  enqueue(): void {
+    if (!this.canEnqueue) return;
+    this.saveSettings();
+    this.clampBounds();
+    this.photo.enqueueJob('synopsis', `Illustrations · ${this.shortLabel()}`, {
+      prompts: [],
+      synopsis: this.synopsis.trim(),
+      story: this.story.trim(),
+      storytellerModel: this.storytellerModel,
+      illustratorModel: this.illustratorModel,
+      style: this.style,
+      minImages: this.minImages,
+      maxImages: this.maxImages,
+    } as any).subscribe({
+      next: r => {
+        this.jobId.set(r.id);
+        this.snackBar.open('Queued — results appear here when it runs', '', { duration: 4000 });
+        this.poll();
+      },
+      error: err => this.snackBar.open(
+        `Could not queue: ${this.errText(err)}`, 'Dismiss', { duration: 8000 }),
+    });
+  }
+
+  /** Follow the queued job and surface its story/prompts as they land. */
+  private poll(): void {
+    this.stopPolling();
+    const tick = () => {
+      const id = this.jobId();
+      if (!id) return;
+      this.photo.getJob(id).subscribe({
+        next: job => {
+          this.status.set(job.progress?.step || '');
+          const res = job.result || {};
+          if (res['story']) this.story = res['story'] as string;
+          if (Array.isArray(res['prompts'])) this.prompts.set(res['prompts'] as string[]);
+          if (['done', 'failed', 'cancelled'].includes(job.status)) {
+            this.stopPolling();
+            this.status.set('');
+            if (job.status === 'failed') {
+              this.snackBar.open(`Job failed: ${job.error || 'unknown error'}`, 'Dismiss', { duration: 8000 });
+            }
+          }
+        },
+        error: () => this.stopPolling(),
+      });
+    };
+    tick();
+    this.timer = setInterval(tick, 2000);
+  }
+
+  private stopPolling(): void {
+    if (this.timer) { clearInterval(this.timer); this.timer = null; }
+  }
+
+  private shortLabel(): string {
+    const s = (this.synopsis || this.story || '').trim().replace(/\s+/g, ' ');
+    return s.length > 50 ? s.slice(0, 50) + '…' : (s || 'untitled');
   }
 
   async generateStory(): Promise<void> {

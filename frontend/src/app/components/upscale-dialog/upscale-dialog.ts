@@ -12,14 +12,15 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSelectModule } from '@angular/material/select';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { catchError, of, switchMap } from 'rxjs';
 import { UpscaleCapabilities } from '../../models/photo.model';
 import { ComfyConnectionService } from '../../services/comfy-connection.service';
-import { ConnectionStateService } from '../../services/connection-state.service';
 import { PhotoService } from '../../services/photo.service';
 import { ComfyUrlRowComponent } from '../comfy-url-row/comfy-url-row';
 
 export type UpscaleMethod = 'spandrel' | 'model' | 'interpolation';
+
+/** Stand-in for the source image; the worker swaps it for the real uploaded name. */
+const UPLOAD_PLACEHOLDER = '__pp_pending_upload__';
 
 export interface UpscaleDialogData {
   filename: string;
@@ -40,7 +41,6 @@ export class UpscaleDialog {
   private data: UpscaleDialogData = inject(MAT_DIALOG_DATA);
   private photoService = inject(PhotoService);
   private snackBar = inject(MatSnackBar);
-  private connState = inject(ConnectionStateService);
   comfy = inject(ComfyConnectionService);
 
   method = signal<UpscaleMethod>(this.data.method);
@@ -128,27 +128,22 @@ export class UpscaleDialog {
     });
   }
 
+  /** Queue the ComfyUI upscale as an internal job; the worker handles starting
+   *  ComfyUI, freeing LM Studio's VRAM and uploading the source image. */
   private runModel(): void {
     if (!this.comfyUpscaleModel) return;
     this.running.set(true);
-    const lmUrl = this.connState.lmstudio.url;
-    const unload$ = lmUrl ? this.photoService.unloadLmStudio(lmUrl).pipe(catchError(() => of(null))) : of(null);
-    unload$.pipe(
-      switchMap(() => this.photoService.uploadToComfy(this.comfy.comfyUrl, this.data.filename, this.data.folder)),
-    ).subscribe({
-      next: res => this.sendModelWorkflow(res.name),
-      error: err => this.fail(err, 'Upload'),
-    });
-  }
-
-  private sendModelWorkflow(uploadedName: string): void {
     const workflow: Record<string, any> = {
-      '1': { class_type: 'LoadImage',            inputs: { image: uploadedName } },
+      '1': { class_type: 'LoadImage',            inputs: { image: UPLOAD_PLACEHOLDER } },
       '2': { class_type: 'UpscaleModelLoader',   inputs: { model_name: this.comfyUpscaleModel } },
       '3': { class_type: 'ImageUpscaleWithModel', inputs: { upscale_model: ['2', 0], image: ['1', 0] } },
       '4': { class_type: 'SaveImage',            inputs: { filename_prefix: 'upscaled', images: ['3', 0] } },
     };
-    this.photoService.sendToComfy(this.comfy.comfyUrl, workflow, this.copyResult).subscribe({
+    this.photoService.enqueueJob('comfy', `Upscale · ${this.data.filename}`, {
+      prompts: [{ workflow, uploadNodeId: '1' }],
+      copyResult: this.copyResult,
+      upload: { path: this.data.folder ? `${this.data.folder}/${this.data.filename}` : this.data.filename },
+    }).subscribe({
       next: () => {
         this.running.set(false);
         const suffix = this.copyResult ? ' — will appear in the working folder' : '';

@@ -1,0 +1,88 @@
+:host {
+  position: fixed;
+  z-index: 60;
+  background: rgba(15, 15, 15, 0.82);
+  border: 1px solid #333;
+  border-radius: 6px;
+  padding: 0 0 5px;
+  font-size: 12px;
+  font-family: monospace;
+  color: #aaa;
+  line-height: 1.6;
+  user-select: none;
+  min-width: 150px;
+  max-width: 210px;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 6px 2px 10px;
+  cursor: grab;
+  border-bottom: 1px solid #2a2a2a;
+  margin-bottom: 3px;
+
+  &:active { cursor: grabbing; }
+}
+
+.title { font-size: 10px; color: #555; letter-spacing: 0.08em; flex: 1; }
+
+.hdr-btn, .close-btn {
+  background: none;
+  border: none;
+  color: #555;
+  font-size: 13px;
+  line-height: 1;
+  padding: 0 2px;
+  cursor: pointer;
+}
+
+.hdr-btn:hover  { color: #9ad; }
+.close-btn:hover { color: #ef5350; }
+
+.row {
+  display: flex;
+  gap: 6px;
+  justify-content: space-between;
+  padding: 0 10px;
+}
+
+.lbl    { color: #555; }
+.active { color: #66bb6a; }
+.err    { color: #e57373; }
+.idle, .paused { color: #555; font-style: italic; justify-content: center; }
+
+.job-title {
+  padding: 0 10px;
+  color: #ddd;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.step {
+  padding: 0 10px;
+  font-size: 11px;
+  color: #888;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.progress-row {
+  position: relative;
+  margin: 3px 10px 2px;
+  height: 3px;
+  background: #222;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.progress-bar {
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  background: #66bb6a;
+  border-radius: 2px;
+  transition: width 0.3s;
+}

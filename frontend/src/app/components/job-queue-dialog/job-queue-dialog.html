@@ -1,0 +1,100 @@
+<h2 mat-dialog-title>Job queue</h2>
+
+<mat-dialog-content>
+  <p class="intro">Every non-interactive operation runs here, one at a time — so ComfyUI and
+    LM Studio never need VRAM at the same time. Jobs keep running when you close a dialog.</p>
+
+  <div class="toolbar">
+    <button mat-stroked-button (click)="togglePaused()">
+      <mat-icon>{{ svc.paused() ? 'play_arrow' : 'pause' }}</mat-icon>
+      {{ svc.paused() ? 'Resume' : 'Pause' }}
+    </button>
+    <button mat-stroked-button (click)="cancelAll()" [disabled]="!svc.active().length">
+      <mat-icon>cancel</mat-icon> Cancel all
+    </button>
+    <button mat-stroked-button (click)="clearFinished()" [disabled]="!svc.finished().length">
+      <mat-icon>clear_all</mat-icon> Clear finished
+    </button>
+  </div>
+
+  <div class="settings">
+    <mat-checkbox [checked]="forceClearComfy()" (change)="onForceClearChange($event.checked)"
+                  matTooltip="When ComfyUI already has queued work: clear it and take over, instead of waiting for it to finish">
+      Force-clear the ComfyUI queue
+    </mat-checkbox>
+    <mat-checkbox [checked]="autoStart()" (change)="onAutoStartChange($event.checked)"
+                  matTooltip="Launch ComfyUI / LM Studio automatically when a job needs them">
+      Auto-start services
+    </mat-checkbox>
+  </div>
+
+  @if (svc.running(); as job) {
+    <h3 class="section">Running</h3>
+    <div class="job job--running">
+      <div class="job-main">
+        <span class="badge" [class]="statusClass(job)">{{ job.status }}</span>
+        <span class="job-title" [title]="job.title">{{ job.title }}</span>
+        @if (job.count > 1) { <span class="count">×{{ job.count }}</span> }
+      </div>
+      @if (job.progress?.step) { <div class="job-step">{{ job.progress.step }}</div> }
+      @if (canMonitor(job)) {
+        <button mat-icon-button class="job-cancel" (click)="monitor(job)" matTooltip="Watch iterations">
+          <mat-icon>visibility</mat-icon>
+        </button>
+      }
+      <button mat-icon-button class="job-cancel" (click)="cancel(job)"
+              [disabled]="job.cancel_requested" matTooltip="Cancel">
+        <mat-icon>close</mat-icon>
+      </button>
+    </div>
+  }
+
+  <h3 class="section">
+    Waiting
+    @if (svc.queued().length) { <span class="hint">— drag to reorder</span> }
+  </h3>
+  @if (svc.queued().length) {
+    <div cdkDropList (cdkDropListDropped)="drop($event)" class="job-list">
+      @for (job of svc.queued(); track job.id) {
+        <div class="job" cdkDrag>
+          <mat-icon class="drag-handle" cdkDragHandle>drag_indicator</mat-icon>
+          <div class="job-main">
+            <span class="badge wait">queued</span>
+            <span class="job-title" [title]="job.title">{{ job.title }}</span>
+            @if (job.count > 1) { <span class="count">×{{ job.count }}</span> }
+          </div>
+          <button mat-icon-button class="job-cancel" (click)="cancel(job)" matTooltip="Cancel">
+            <mat-icon>close</mat-icon>
+          </button>
+        </div>
+      }
+    </div>
+  } @else {
+    <p class="empty">Nothing waiting.</p>
+  }
+
+  @if (svc.finished().length) {
+    <h3 class="section">History</h3>
+    @for (job of svc.finished(); track job.id) {
+      <div class="job job--done">
+        <div class="job-main">
+          <span class="badge" [class]="statusClass(job)">{{ job.status }}</span>
+          <span class="job-title" [title]="job.title">{{ job.title }}</span>
+          @if (job.finished_at) {
+            <span class="when">{{ job.finished_at * 1000 | date: 'HH:mm' }}</span>
+          }
+          @if (canMonitor(job)) {
+            <button mat-icon-button class="job-cancel" (click)="monitor(job)" matTooltip="Show iterations">
+              <mat-icon>visibility</mat-icon>
+            </button>
+          }
+        </div>
+        @if (job.error) { <div class="job-error">{{ job.error }}</div> }
+      </div>
+    }
+  }
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button mat-button mat-dialog-close>Close</button>
+</mat-dialog-actions>

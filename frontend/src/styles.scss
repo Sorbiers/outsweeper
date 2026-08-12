@@ -72,3 +72,9 @@ html, body {
     max-height: unset !important;
   }
 }
+
+/* Draggable dialog title bars (ppDialogTitle directive) */
+.pp-dialog-title {
+  cursor: move;
+  user-select: none;
+}

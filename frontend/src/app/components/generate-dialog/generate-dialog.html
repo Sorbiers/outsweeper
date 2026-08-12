@@ -208,10 +208,18 @@
     </div>
   </div>
 
-  <mat-form-field class="full-width">
-    <mat-label>Negative Prompt</mat-label>
-    <textarea matInput [(ngModel)]="params.negativePrompt" rows="3"></textarea>
-  </mat-form-field>
+  <div class="prompt-row">
+    <mat-form-field class="prompt-field">
+      <mat-label>Negative Prompt</mat-label>
+      <textarea matInput [(ngModel)]="params.negativePrompt" rows="3"></textarea>
+    </mat-form-field>
+    <div class="prompt-actions">
+      <button mat-icon-button (click)="resetNegativePrompt()"
+              matTooltip="Reset to the standard negative prompt">
+        <mat-icon>restart_alt</mat-icon>
+      </button>
+    </div>
+  </div>
 
   <div class="extract-row">
     <mat-checkbox [(ngModel)]="multiplePrompts"

@@ -50,8 +50,44 @@ npm run release
 - `POST /api/comfy/check` — verify ComfyUI connection
 - `POST /api/comfy/loras` — list available LoRAs
 - `POST /api/comfy/checkpoints` — list available checkpoints
-- `POST /api/comfy/prompt` — submit workflow to ComfyUI
+- `POST /api/comfy/prompt` — submit workflow to ComfyUI (low-level; prefer the job queue)
 - `POST /api/lmstudio/check` — verify LM Studio connection
+
+**API endpoints — Internal job queue:**
+- `GET  /api/jobs` — queue snapshot (`{jobs, paused}`); also pushed over SSE as `jobs:`
+- `POST /api/jobs` — enqueue `{kind, title, payload}`
+- `GET  /api/jobs/<id>` — full detail (guided generation's per-iteration history)
+- `POST /api/jobs/<id>/cancel` · `POST /api/jobs/cancel-all`
+- `POST /api/jobs/reorder` — new order for the *queued* jobs
+- `POST /api/jobs/pause` · `POST /api/jobs/settings` · `POST /api/jobs/clear-finished`
+
+## Job queue (core architecture)
+
+ComfyUI and LM Studio cannot hold VRAM simultaneously on the target machine, so **every
+non-interactive operation is a backend job** rather than being driven from the browser.
+A single worker thread (`server/jobs.py`) runs jobs one at a time and, before touching an
+engine, enforces the invariants in `server/resources.py`: the service is running (launched
+on demand), ComfyUI's own queue is drained (or force-cleared), and the *other* engine's
+memory has been released. Work therefore survives closing a dialog or the whole tab.
+
+- **Job kinds:** `comfy` (Send / Send to front / Outpaint / Upscale), `improve_send`
+  (LLM enriches each prompt, then renders), `guided` (improve → render → vision-judge →
+  refine, looping until it matches or the budget runs out).
+- **Status lifecycle:** `queued → running → processed → done`, plus `failed` / `cancelled`.
+  `processed` means ComfyUI accepted the graphs; `done` means the images exist.
+- **Payload contract:** the **frontend builds the ComfyUI graphs** (that logic stays in
+  TypeScript) and submits them as finished graphs plus *patch points* — `promptNodeId`,
+  `seedNodeId`, `uploadNodeId` — which is all a multi-step runner needs to re-prompt,
+  re-seed, or drop in an uploaded image between iterations.
+- **Source images are uploaded by the worker**, not the browser, so img2img / Outpaint /
+  Upscale no longer require ComfyUI to be running when the dialog is used.
+- **LLM instruction texts** live in `server/prompts.py` — the single place to tune wording.
+- **Interactive dialogs deliberately bypass the queue**: Describe, Synopsis to Illustrations
+  and LM Prompt call LM Studio directly and are *not* arbitrated, so they can collide with a
+  running job. That's an accepted trade-off (the user is present and driving them).
+- Tests: `tests/test_job_queue.py` runs the worker against a stub ComfyUI + stub LM Studio
+  (no GPU) and asserts serial execution, queue-drain waiting, engine mutual exclusion,
+  reorder/cancel, and the guided loop's refine behaviour.
 
 **Key API pattern:** All photo routes accept `?folder=source|selected|dust` to target source, `__selected`, or `__dust` directories.
 
@@ -68,9 +104,11 @@ npm run release
 - `ImageStrip` — thumbnail strip with IntersectionObserver lazy loading and auto-center scroll
 - `InfoPanel` — metadata display with ComfyUI workflow details
 - `PreviewPanel` — full-resolution image viewer with mouse-wheel zoom and click-drag pan
-- `GenerateDialog` — edit and send ComfyUI workflows; extracts variable nodes (LoRAs, checkpoints) for Cartesian product batch generation
+- `GenerateDialog` — edit ComfyUI workflows and queue them as jobs; extracts variable nodes (LoRAs, checkpoints) for Cartesian product batch generation
 - `DescribeDialog` — AI image description via LM Studio vision model; can save description to image metadata
 - `PrompterDialog` — compose narrative prompts from randomized preset arrays (ambience, character, action, style)
+- `GuidedGenerationDialog` — configures a `guided` job, then *monitors* it (the loop runs on the backend, so closing the dialog doesn't stop it)
+- `JobQueueWidget` / `JobQueueDialog` — the internal queue: live status, drag-to-reorder, cancel, pause. Separate from the ComfyUI queue widget/dialog, which still show ComfyUI's own queue.
 
 **ComfyUI metadata extraction** (`app.py`): Reads PNG `prompt` metadata field, walks ComfyUI workflow nodes to extract model (`ckpt_name`), LoRAs (`lora_name`), KSampler params (`steps`/`cfg`/`seed`/`sampler_name`), and CLIP text prompts.
 

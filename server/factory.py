@@ -29,6 +29,8 @@ from PIL.PngImagePlugin import PngInfo
 from .background import _comfy_queue_loop, _comfy_ws_loop, _metrics_loop
 from .events import _SSE_CLIENTS, _SSE_LOCK, _sse_broadcast
 from . import lmstudio as lmstudio_activity
+from . import resources as job_resources
+from .jobs import JobContext, JobQueue
 from .exiftool import (
     EDIT_TAG_MAP,
     STRIP_GROUP_MAP,
@@ -106,6 +108,9 @@ def create_app(
     collection_dir: str = '',
     upscale_models_dir: str = '',
     lmstudio_widget_enabled: bool = False,
+    jobs_widget_enabled: bool = False,
+    jobs_auto_start: bool = True,
+    jobs_force_clear_comfy: bool = False,
 ) -> Flask:
     static_dir = Path(__file__).parent.parent / 'static'
     root_dir = Path(root_dir)
@@ -140,6 +145,9 @@ def create_app(
         collection_str=str(collection_resolved),
         upscale_models_resolved=upscale_models_resolved,
         lmstudio_widget_enabled=lmstudio_widget_enabled,
+        jobs_widget_enabled=jobs_widget_enabled,
+        jobs_auto_start=jobs_auto_start,
+        jobs_force_clear_comfy=jobs_force_clear_comfy,
     )
 
     app = Flask(__name__, static_folder=None)
@@ -477,10 +485,7 @@ def create_app(
     def comfy_free():
         data = request.get_json()
         cu = data.get('comfy_url', 'http://127.0.0.1:8188').rstrip('/')
-        try:
-            http_requests.post(f'{cu}/free', json={'unload_models': True, 'free_memory': True}, timeout=5)
-        except Exception:
-            pass
+        job_resources.free_comfy_memory(cu)
         return jsonify({'ok': True})
 
     @app.route('/api/comfy/check', methods=['POST'])
@@ -753,6 +758,76 @@ def create_app(
         print(f'[warn] copy-result: timeout waiting for {prompt_id}', flush=True)
         return []
 
+    # --- internal job queue ------------------------------------------------
+    # Built here (not at the top of create_app) because it needs `resolve_path`
+    # and `_copy_history_outputs`, which are closures over the workspace state.
+    job_queue = JobQueue(JobContext(
+        state=state,
+        resolve_path=resolve_path,
+        copy_history_outputs=_copy_history_outputs,
+        broadcast=lambda snapshot: _sse_broadcast(
+            'jobs:' + json.dumps({'jobs': snapshot, 'paused': job_queue.paused}),
+            flag='jobs'),
+    ))
+    state.job_queue = job_queue
+    job_queue.start()
+
+    @app.route('/api/jobs')
+    def jobs_list():
+        return jsonify(job_queue.state())
+
+    @app.route('/api/jobs', methods=['POST'])
+    def jobs_enqueue():
+        data = request.get_json() or {}
+        kind = data.get('kind')
+        if not kind:
+            return jsonify({'error': 'no job kind'}), 400
+        job = job_queue.enqueue(kind, data.get('title', ''), data.get('payload') or {})
+        return jsonify({'ok': True, 'id': job.id})
+
+    @app.route('/api/jobs/cancel-all', methods=['POST'])
+    def jobs_cancel_all():
+        return jsonify({'ok': True, 'cancelled': job_queue.cancel_all()})
+
+    @app.route('/api/jobs/reorder', methods=['POST'])
+    def jobs_reorder():
+        data = request.get_json() or {}
+        job_queue.reorder(data.get('ids') or [])
+        return jsonify({'ok': True})
+
+    @app.route('/api/jobs/pause', methods=['POST'])
+    def jobs_pause():
+        data = request.get_json() or {}
+        job_queue.set_paused(bool(data.get('paused')))
+        return jsonify({'ok': True})
+
+    @app.route('/api/jobs/settings', methods=['POST'])
+    def jobs_settings():
+        """Runtime toggles for the queue manager (force-clear / auto-start)."""
+        data = request.get_json() or {}
+        if 'force_clear_comfy' in data:
+            state.jobs_force_clear_comfy = bool(data['force_clear_comfy'])
+        if 'auto_start' in data:
+            state.jobs_auto_start = bool(data['auto_start'])
+        return jsonify({'ok': True, 'force_clear_comfy': state.jobs_force_clear_comfy,
+                        'auto_start': state.jobs_auto_start})
+
+    @app.route('/api/jobs/clear-finished', methods=['POST'])
+    def jobs_clear_finished():
+        job_queue.clear_finished()
+        return jsonify({'ok': True})
+
+    @app.route('/api/jobs/<job_id>')
+    def jobs_detail(job_id):
+        job = job_queue.get(job_id)
+        if job is None:
+            return jsonify({'error': 'not found'}), 404
+        return jsonify(job.detail())
+
+    @app.route('/api/jobs/<job_id>/cancel', methods=['POST'])
+    def jobs_cancel(job_id):
+        return jsonify({'ok': job_queue.cancel(job_id)})
+
     @app.route('/api/comfy/result', methods=['POST'])
     def comfy_result():
         """Non-blocking status check for a submitted prompt, so a long generation never
@@ -805,22 +880,7 @@ def create_app(
     def lmstudio_unload():
         data = request.get_json()
         lms_url = data.get('lmstudio_url', 'http://localhost:1234/v1')
-        parsed = urlparse(lms_url)
-        base = f'{parsed.scheme}://{parsed.netloc}'
-        try:
-            resp = http_requests.get(f'{base}/api/v1/models', timeout=LMS_CHECK_TIMEOUT)
-            models = resp.json().get('models', [])
-            for model in models:
-                for instance in model.get('loaded_instances', []):
-                    instance_id = instance.get('id')
-                    if instance_id:
-                        http_requests.post(
-                            f'{base}/api/v1/models/unload',
-                            json={'instance_id': instance_id},
-                            timeout=LMS_CHECK_TIMEOUT,
-                        )
-        except Exception:
-            pass
+        job_resources.unload_all_lm_models(lms_url)
         return jsonify({'ok': True})
 
     @app.route('/api/lmstudio/check', methods=['POST'])
@@ -1402,7 +1462,8 @@ def create_app(
         return jsonify({
             'comfy_url':               state.comfy_url,
             'lmstudio_url':            state.lmstudio_url,
-            'widgets':                 {'gpu_monitor': state.monitor_enabled, 'comfy_queue': state.comfy_queue_enabled, 'lmstudio': state.lmstudio_widget_enabled},
+            'widgets':                 {'gpu_monitor': state.monitor_enabled, 'comfy_queue': state.comfy_queue_enabled, 'lmstudio': state.lmstudio_widget_enabled, 'jobs': state.jobs_widget_enabled},
+            'queue':                   {'force_clear_comfy': state.jobs_force_clear_comfy, 'auto_start': state.jobs_auto_start},
             'selected_name':           state.selected_name,
             'dust_name':               state.dust_name,
             'thumbnails_name':         THUMBNAILS_DIR,
@@ -1442,7 +1503,8 @@ def create_app(
 
         def generate():
             with _SSE_LOCK:
-                _SSE_CLIENTS[client_id] = {'queue': q, 'metrics': True, 'comfy_queue': True, 'lmstudio': True}
+                _SSE_CLIENTS[client_id] = {'queue': q, 'metrics': True, 'comfy_queue': True,
+                                           'lmstudio': True, 'jobs': True}
             try:
                 yield f'data: client_id:{client_id}\n\n'
                 while True:

@@ -1,5 +1,4 @@
-<h2 mat-dialog-title cdkDrag cdkDragRootElement=".cdk-overlay-pane" cdkDragBoundary=".cdk-overlay-container" cdkDragHandle
-    class="dialog-title">Synopsis to illustrations</h2>
+<h2 mat-dialog-title ppDialogTitle [ppDialogTitleEscape]="!running()">Synopsis to illustrations</h2>
 
 <mat-dialog-content>
   <div class="body">
@@ -59,6 +58,10 @@
     <div class="config">
       <button mat-flat-button (click)="generateIllustrations()" [disabled]="!canGenerateIllustrations">
         <mat-icon>image</mat-icon> Generate illustrations
+      </button>
+      <button mat-stroked-button (click)="enqueue()" [disabled]="!canEnqueue"
+              matTooltip="Run the whole thing as a queued job instead — it waits its turn behind any rendering and survives closing this dialog">
+        <mat-icon>playlist_add</mat-icon> Enqueue
       </button>
     </div>
 

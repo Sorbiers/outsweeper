@@ -1,7 +1,4 @@
-.dialog-title {
-  cursor: move;
-  user-select: none;
-}
+// Title-bar styling (cursor/user-select) comes from the ppDialogTitle directive.
 
 // Fixed-height dialog: the pane never grows with content (which, once dragged,
 // would push the header off-screen) — everything scrolls inside `.body` instead.

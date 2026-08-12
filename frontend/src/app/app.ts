@@ -34,6 +34,8 @@ import {
     GenerateDialogData,
 } from './components/generate-dialog/generate-dialog';
 import { GpuMonitorWidget } from './components/gpu-monitor/gpu-monitor';
+import { JobQueueDialog } from './components/job-queue-dialog/job-queue-dialog';
+import { JobQueueWidget } from './components/job-queue/job-queue';
 import { ImageStrip } from './components/image-strip/image-strip';
 import { InfoPanel } from './components/info-panel/info-panel';
 import { LmPromptDialog } from './components/lm-prompt-dialog/lm-prompt-dialog';
@@ -46,6 +48,7 @@ import { PhotoInfo, PhotoListItem } from './models/photo.model';
 import { ComfyQueueService } from './services/comfy-queue.service';
 import { ConnectionStateService } from './services/connection-state.service';
 import { FavoritesService } from './services/favorites.service';
+import { JobQueueService } from './services/job-queue.service';
 import { KeyboardService, PhotoAction } from './services/keyboard.service';
 import { LmStudioActivityService } from './services/lmstudio-activity.service';
 import { PhotoService } from './services/photo.service';
@@ -67,6 +70,7 @@ import { PhotoService } from './services/photo.service';
     GpuMonitorWidget,
     ComfyQueueWidget,
     LmStudioMonitorWidget,
+    JobQueueWidget,
   ],
   templateUrl: './app.html',
   styleUrl: './app.scss',
@@ -80,6 +84,7 @@ export class App implements OnInit, OnDestroy {
   private connState = inject(ConnectionStateService);
   private comfyQueue = inject(ComfyQueueService);
   private lmStudioActivity = inject(LmStudioActivityService);
+  private jobQueue = inject(JobQueueService);
   private destroyRef = inject(DestroyRef);
 
   photos: PhotoListItem[] = [];
@@ -103,6 +108,8 @@ export class App implements OnInit, OnDestroy {
   comfyQueueVisible = signal(true);
   lmStudioWidgetEnabled = signal(false);
   lmStudioWidgetVisible = signal(true);
+  jobsWidgetEnabled = signal(false);
+  jobsWidgetVisible = signal(true);
   exiftoolAvailable = signal(false);
 
   // Pagination
@@ -159,6 +166,11 @@ export class App implements OnInit, OnDestroy {
         this.comfyQueue.status.set(JSON.parse(e.data.slice(12)));
       else if (e.data.startsWith('lmstudio:'))
         this.lmStudioActivity.status.set(JSON.parse(e.data.slice(9)));
+      else if (e.data.startsWith('jobs:')) {
+        const s = JSON.parse(e.data.slice(5));
+        this.jobQueue.jobs.set(s.jobs || []);
+        this.jobQueue.paused.set(!!s.paused);
+      }
       else if (e.data.startsWith('source_changed:') && this.folderType === 'source')
         this.sourceChangedPending.set(e.data.slice('source_changed:'.length));
     };
@@ -170,6 +182,7 @@ export class App implements OnInit, OnDestroy {
       if (cfg.widgets?.gpu_monitor) this.gpuMonitorEnabled.set(true);
       if (cfg.widgets?.comfy_queue) this.comfyQueueEnabled.set(true);
       if (cfg.widgets?.lmstudio) this.lmStudioWidgetEnabled.set(true);
+      if (cfg.widgets?.jobs) this.jobsWidgetEnabled.set(true);
       if (cfg.selected_name) this.selectedName = cfg.selected_name;
       if (cfg.dust_name) this.dustName = cfg.dust_name;
       if (cfg.thumbnails_name) this.photoService.thumbnailsName = cfg.thumbnails_name;
@@ -178,6 +191,13 @@ export class App implements OnInit, OnDestroy {
     this.photoService.exiftoolCapabilities().subscribe({
       next: caps => this.exiftoolAvailable.set(caps.available),
       error: () => this.exiftoolAvailable.set(false),
+    });
+
+    // SSE only pushes on change, so seed the queue view for jobs already running
+    // when this tab opened (they outlive any single browser session).
+    this.photoService.getJobs().subscribe({
+      next: s => { this.jobQueue.jobs.set(s.jobs || []); this.jobQueue.paused.set(!!s.paused); },
+      error: () => { /* queue disabled or backend older than the UI */ },
     });
 
     this.filterSubject
@@ -632,6 +652,18 @@ export class App implements OnInit, OnDestroy {
   closeLmStudioWidget(): void {
     this.lmStudioWidgetVisible.set(false);
     this.photoService.setLmStudioWidgetPaused(true, this.sseClientId).subscribe();
+  }
+
+  closeJobsWidget(): void {
+    this.jobsWidgetVisible.set(false);
+  }
+
+  toggleJobsWidget(): void {
+    this.jobsWidgetVisible.set(!this.jobsWidgetVisible());
+  }
+
+  openJobQueueDialog(): void {
+    this.dialog.open(JobQueueDialog, { width: '90vw', maxWidth: '720px', maxHeight: '85vh' });
   }
 
   toggleLmStudioWidget(): void {

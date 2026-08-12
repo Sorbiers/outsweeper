@@ -91,6 +91,39 @@ def poll_loop(state: Any, interval: float = 3.0) -> None:
             _broadcast_state()
 
 
+def complete(lms_url: str, model: str, text: str, *, image_data_url: str | None = None,
+             timeout: float, temperature: float = 0.7) -> str:
+    """One chat completion, text or vision.
+
+    Prefers the native streaming endpoint so model-load / prompt-processing progress
+    reaches the LM Studio widget, and falls back to the OpenAI-compatible endpoint
+    (older LM Studio builds, or if the newer API changes shape). Used by the job
+    runners so a queued flow gets the same live progress an interactive call does.
+    """
+    try:
+        items: Any = text if image_data_url is None else [
+            {'type': 'text', 'content': text},
+            {'type': 'image', 'data_url': image_data_url},
+        ]
+        return stream_chat(lms_url, model, items, timeout=timeout)
+    except Exception as e:
+        print(f'[warn] lmstudio native stream failed, falling back: {e}', flush=True)
+
+    import requests as http_requests
+    content: Any = text if image_data_url is None else [
+        {'type': 'text', 'text': text},
+        {'type': 'image_url', 'image_url': {'url': image_data_url}},
+    ]
+    resp = http_requests.post(
+        f'{lms_url.rstrip("/")}/chat/completions',
+        json={'model': model, 'messages': [{'role': 'user', 'content': content}],
+              'temperature': temperature},
+        timeout=timeout,
+    )
+    resp.raise_for_status()
+    return resp.json()['choices'][0]['message']['content']
+
+
 def stream_chat(lms_url: str, model: str, input_items: Any, *, timeout: float) -> str:
     """POST LM Studio's native /api/v1/chat with stream:true, updating the shared
     activity state as events arrive, and returning the assembled response text.
@@ -113,6 +146,10 @@ def stream_chat(lms_url: str, model: str, input_items: Any, *, timeout: float) -
             timeout=(10, timeout),
         )
         resp.raise_for_status()
+        # Server-sent events are always UTF-8 (HTML spec). `requests` would otherwise
+        # fall back to ISO-8859-1 for any text/* response that omits a charset, and
+        # decode_unicode below would turn e.g. "'" into "â€™".
+        resp.encoding = 'utf-8'
 
         event_type: str | None = None
         result_text = ''

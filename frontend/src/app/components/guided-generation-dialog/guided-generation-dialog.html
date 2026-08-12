@@ -2,34 +2,36 @@
     class="dialog-title">Guided generation</h2>
 
 <mat-dialog-content>
-  <p class="intro">Generate one image, have the vision model check it against the prompt, and
-    auto-refine up to {{ maxIterations }} times until it matches.</p>
+  @if (!monitoring) {
+    <p class="intro">Generate one image, have the vision model check it against the prompt, and
+      auto-refine until it matches. Runs in the job queue — you can close this window and it
+      keeps going.</p>
 
-  <div class="config">
-    <mat-form-field class="model-field" subscriptSizing="dynamic">
-      <mat-label>Vision LLM model</mat-label>
-      <mat-select [(ngModel)]="lms.model" [disabled]="running()">
-        @for (m of lms.availableModels; track m) { <mat-option [value]="m">{{ m }}</mat-option> }
-      </mat-select>
-    </mat-form-field>
-    <mat-checkbox [(ngModel)]="improve" [disabled]="running()">Improve before send</mat-checkbox>
-  </div>
+    <div class="config">
+      <mat-form-field class="model-field" subscriptSizing="dynamic">
+        <mat-label>Vision LLM model</mat-label>
+        <mat-select [(ngModel)]="lms.model">
+          @for (m of lms.availableModels; track m) { <mat-option [value]="m">{{ m }}</mat-option> }
+        </mat-select>
+      </mat-form-field>
+      <mat-checkbox [(ngModel)]="improve">Improve before send</mat-checkbox>
+    </div>
 
-  <div class="config">
-    <mat-form-field class="num-field" subscriptSizing="dynamic">
-      <mat-label>Iterations</mat-label>
-      <input matInput type="number" min="1" max="50" step="1" [(ngModel)]="maxIterations" [disabled]="running()" />
-    </mat-form-field>
-    <mat-form-field class="num-field num-field--wide" subscriptSizing="dynamic">
-      <mat-label>Randomize seed every</mat-label>
-      <input matInput type="number" min="0" step="1" [(ngModel)]="randomizeEvery" [disabled]="running()"
-             matTooltip="0 = keep the flow's seed fixed; N = a fresh random seed every N iterations" />
-      <span matTextSuffix>&nbsp;steps</span>
-    </mat-form-field>
-  </div>
+    <div class="config">
+      <mat-form-field class="num-field" subscriptSizing="dynamic">
+        <mat-label>Iterations</mat-label>
+        <input matInput type="number" min="1" max="50" step="1" [(ngModel)]="maxIterations" />
+      </mat-form-field>
+      <mat-form-field class="num-field num-field--wide" subscriptSizing="dynamic">
+        <mat-label>Randomize seed every</mat-label>
+        <input matInput type="number" min="0" step="1" [(ngModel)]="randomizeEvery" />
+        <span matTextSuffix>&nbsp;steps</span>
+      </mat-form-field>
+    </div>
 
-  @if (!lms.availableModels.length) {
-    <p class="warn"><mat-icon>info</mat-icon> No LM Studio models — connect LM Studio first (needs a vision model).</p>
+    @if (!lms.availableModels.length) {
+      <p class="warn"><mat-icon>info</mat-icon> No LM Studio models — connect LM Studio first (needs a vision model).</p>
+    }
   }
 
   @if (status()) {
@@ -45,10 +47,6 @@
           <span class="badge ok"><mat-icon>check_circle</mat-icon> matches</span>
         } @else if (it.status === 'done' && it.match === false) {
           <span class="badge no"><mat-icon>cancel</mat-icon> refine</span>
-        } @else if (it.status === 'error') {
-          <span class="badge err"><mat-icon>error</mat-icon> error</span>
-        } @else if (it.status === 'aborted') {
-          <span class="badge abort"><mat-icon>stop_circle</mat-icon> aborted</span>
         } @else {
           <span class="badge run">{{ it.status }}…</span>
         }
@@ -62,17 +60,16 @@
         <div class="iter-text">
           <div class="prompt">{{ it.prompt }}</div>
           @if (it.feedback) { <div class="feedback">{{ it.feedback }}</div> }
-          @if (it.error) { <div class="err-text"><mat-icon>error</mat-icon> {{ it.error }}</div> }
         </div>
       </div>
     </div>
   }
 
-  @if (finished()) {
+  @if (finished) {
     @if (matched()) {
       <p class="result ok"><mat-icon>check_circle</mat-icon> The generated image matches the prompt.</p>
-    } @else if (aborted()) {
-      <p class="result no"><mat-icon>stop_circle</mat-icon> Aborted after {{ iterations().length }} iteration(s).</p>
+    } @else if (jobStatus() === 'cancelled') {
+      <p class="result no"><mat-icon>stop_circle</mat-icon> Cancelled after {{ iterations().length }} iteration(s).</p>
     } @else if (errorMsg()) {
       <p class="result err"><mat-icon>error</mat-icon> {{ errorMsg() }}</p>
     } @else {
@@ -83,14 +80,14 @@
 </mat-dialog-content>
 
 <mat-dialog-actions align="end">
-  @if (running()) {
-    <button mat-stroked-button color="warn" (click)="abort()" [disabled]="aborting()">
-      {{ aborting() ? 'Aborting…' : 'Abort' }}
-    </button>
+  @if (monitoring && !finished) {
+    <span class="run-hint">Runs in the queue — closing this window won't stop it.</span>
+    <button mat-stroked-button color="warn" (click)="cancel()">Cancel job</button>
+    <button mat-button (click)="close()">Close</button>
+  } @else if (monitoring) {
+    <button mat-button (click)="close()">Close</button>
   } @else {
-    <button mat-button (click)="close()">{{ finished() ? 'Close' : 'Cancel' }}</button>
-    <button mat-flat-button (click)="start()" [disabled]="!lms.model">
-      {{ finished() ? 'Run again' : 'Start' }}
-    </button>
+    <button mat-button (click)="close()">Cancel</button>
+    <button mat-flat-button (click)="start()" [disabled]="!lms.model">Start</button>
   }
 </mat-dialog-actions>

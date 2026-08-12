@@ -12,11 +12,10 @@ import { MatMenuModule } from '@angular/material/menu';
 import { MatSelectModule } from '@angular/material/select';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { forkJoin, from, Observable, of } from 'rxjs';
-import { catchError, concatMap, map, switchMap, toArray } from 'rxjs/operators';
 import { STORAGE_KEYS } from '../../constants';
 import { ComfyConnectionService } from '../../services/comfy-connection.service';
 import { ConnectionStateService } from '../../services/connection-state.service';
+import { JobPayload, JobPrompt } from '../../models/job.model';
 import { DictionaryService, DictionaryValue, DictionaryValueLora } from '../../services/dictionary.service';
 import { LmStudioConnectionService } from '../../services/lmstudio-connection.service';
 import { PhotoService } from '../../services/photo.service';
@@ -96,12 +95,9 @@ interface PromptUnit {
 
 const DEFAULT_NEGATIVE_PROMPT = 'worst quality, low quality, bad anatomy, bad hands, text, watermark, blurry, deformed';
 
-/** Instruction sent to LM Studio to enrich a prompt in "Improve then send". */
-const IMPROVE_PROMPT_INSTRUCTION =
-  'Improve and enrich the following text-to-image prompt. Keep its core subject ' +
-  'and intent, but make it more vivid and detailed by adding arbitrary details, ' +
-  'elements, or plot variations. Return ONLY the improved prompt text, ready to ' +
-  'use, with no explanations, preamble, or quotation marks.';
+/** Stand-in for the source image name in an img2img graph. The upload happens on the
+ *  backend when the job runs, and the worker swaps this for the real filename. */
+const UPLOAD_PLACEHOLDER = '__pp_pending_upload__';
 
 @Component({
   selector: 'pp-generate-dialog',
@@ -205,6 +201,12 @@ export class GenerateDialog {
 
   randomizeSeed(): void {
     this.params.seed = Math.floor(Math.random() * 2 ** 32);
+  }
+
+  /** Restore the built-in negative prompt (handy after a flow supplied a poor one,
+   *  or none at all). */
+  resetNegativePrompt(): void {
+    this.params.negativePrompt = DEFAULT_NEGATIVE_PROMPT;
   }
 
   openPrompter(): void {
@@ -336,34 +338,76 @@ export class GenerateDialog {
     this.manualLoras.splice(index, 1);
   }
 
+  /**
+   * Queue this generation as an internal job. The backend owns the whole dance from
+   * here — starting ComfyUI, waiting for its queue, unloading LM Studio, uploading
+   * the source image and submitting the batch — so the work no longer depends on
+   * this dialog (or this tab) staying open.
+   */
   send(front = false): void {
     this.saveParams();
     this.promptHistory.add(this.params.positivePrompt);
-    this.sending = true;
-    const lmstudioUrl = this.connState.lmstudio.url;
-    const unload$ = lmstudioUrl
-      ? this.photoService.unloadLmStudio(lmstudioUrl).pipe(catchError(() => of(null)))
-      : of(null);
+
+    const units = this.buildPromptUnits();
+    if (!units.length) return;
 
     const src = this.data.sourceImage;
-    if (src && this.params.denoise != null && this.params.denoise < 1) {
-      // img2img: upload the source image to ComfyUI before building the flow.
-      unload$.pipe(
-        switchMap(() => this.photoService.uploadToComfy(this.comfy.comfyUrl, src.filename, src.folder)),
-      ).subscribe({
-        next: res => this._doSend(front, res.name),
-        error: err => {
-          this.sending = false;
-          this.snackBar.open(`Upload error: ${this.formatSendError(err)}`, 'Dismiss', { duration: 10000 });
-        },
-      });
-    } else {
-      unload$.subscribe(() => this._doSend(front));
-    }
+    const needsUpload = !!(src && this.params.denoise != null && this.params.denoise < 1);
+    const prompts: JobPrompt[] = units.map(u => {
+      const workflow = this.buildWorkflowFromUnit(u, needsUpload ? UPLOAD_PLACEHOLDER : null);
+      return { workflow, ...this.patchPoints(workflow), uploadNodeId: this.uploadNodeId(workflow) };
+    });
+
+    this.enqueue(front ? 'Send to front' : 'Generate', {
+      prompts,
+      copyResult: this.copyResult,
+      front,
+      upload: needsUpload ? { path: src!.folder ? `${src!.folder}/${src!.filename}` : src!.filename } : undefined,
+    });
   }
 
   sendFront(): void {
     this.send(true);
+  }
+
+  /** POST a job and report the outcome; the dialog stays open and usable. */
+  private enqueue(label: string, payload: JobPayload, kind = 'comfy'): void {
+    this.sending = true;
+    const n = payload.prompts.length;
+    const title = `${label}${n > 1 ? ` ×${n}` : ''} · ${this.shortPrompt()}`;
+    this.photoService.enqueueJob(kind, title, payload).subscribe({
+      next: () => {
+        this.sending = false;
+        this.snackBar.open(n > 1 ? `Queued ${n} prompts` : 'Job queued', '', { duration: 3000 });
+      },
+      error: err => {
+        this.sending = false;
+        this.snackBar.open(`Could not queue: ${this.formatSendError(err)}`, 'Dismiss', { duration: 8000 });
+      },
+    });
+  }
+
+  /** Node ids a backend runner patches between iterations (prompt text and seed). */
+  private patchPoints(wf: Record<string, any>): { promptNodeId?: string; seedNodeId?: string } {
+    const entry = Object.entries<any>(wf).find(
+      ([, n]) => 'steps' in (n.inputs || {}) && 'cfg' in (n.inputs || {}));
+    if (!entry) return {};
+    const [seedNodeId, ksampler] = entry;
+    return {
+      seedNodeId,
+      promptNodeId: this.resolveClipNodeId(ksampler.inputs?.positive, wf) ?? undefined,
+    };
+  }
+
+  /** The LoadImage node holding the placeholder, so the worker can patch in the
+   *  real uploaded filename once it has performed the upload. */
+  private uploadNodeId(wf: Record<string, any>): string | undefined {
+    return Object.keys(wf).find(id => wf[id]?.inputs?.image === UPLOAD_PLACEHOLDER);
+  }
+
+  private shortPrompt(): string {
+    const p = (this.params.positivePrompt || '').trim().replace(/\s+/g, ' ');
+    return p.length > 60 ? p.slice(0, 60) + '…' : (p || 'untitled');
   }
 
   /**
@@ -388,20 +432,6 @@ export class GenerateDialog {
     }
 
     return parts.join(' — ') || err?.message || 'Failed to send';
-  }
-
-  private notifyQueued(count: number): void {
-    this.sending = false;
-    this.sendStatus = '';
-    const msg = count > 1 ? `Queued ${count} prompts` : 'Prompt queued';
-    const suffix = this.copyResult ? ' — will copy to folder' : '';
-    this.snackBar.open(msg + suffix, '', { duration: 4000 });
-  }
-
-  private failSend(err: any): void {
-    this.sending = false;
-    this.sendStatus = '';
-    this.snackBar.open(`Error: ${this.formatSendError(err)}`, 'Dismiss', { duration: 10000 });
   }
 
   /** The checkpoint/LoRA nodes that expand into a Cartesian batch. */
@@ -455,32 +485,7 @@ export class GenerateDialog {
     return out;
   }
 
-  /** In "Generate from" img2img mode, upload the source image and yield its name; else null. */
-  private uploadSourceIfNeeded(): Observable<string | null> {
-    const src = this.data.sourceImage;
-    if (src && this.params.denoise != null && this.params.denoise < 1) {
-      return this.photoService.uploadToComfy(this.comfy.comfyUrl, src.filename, src.folder).pipe(map(r => r.name));
-    }
-    return of(null);
-  }
-
-  private _doSend(front = false, uploadedImageName: string | null = null): void {
-    const units = this.buildPromptUnits();
-    const requests = units.map(u =>
-      this.photoService.sendToComfy(this.comfy.comfyUrl, this.buildWorkflowFromUnit(u, uploadedImageName), this.copyResult, front),
-    );
-    forkJoin(requests).subscribe({
-      next: () => this.notifyQueued(requests.length),
-      error: (err) => this.failSend(err),
-    });
-  }
-
-  /**
-   * "Improve then send": prepare every prompt (full substitution / loras / seed),
-   * have LM Studio enrich each one (sequentially — LM Studio serves one request
-   * at a time), unload the LM model to free VRAM, then queue every improved flow.
-   */
-  /** Pick the LLM model, then run the improve-then-send flow. */
+  /** Pick the LLM model, then queue the improve-then-send job. */
   improveThenSend(front = false): void {
     const lmUrl = this.connState.lmstudio.url;
     if (!lmUrl) {
@@ -495,6 +500,12 @@ export class GenerateDialog {
     });
   }
 
+  /**
+   * Queue an "improve then send" job. The graphs go over already built with the
+   * original prompt text plus `promptText` / `promptNodeId`; the worker enriches the
+   * text with the LLM, patches it into each graph, then renders the batch — all
+   * behind the same VRAM guards as any other job.
+   */
   private runImproveThenSend(front: boolean, lmUrl: string, model: string): void {
     this.saveParams();
     this.promptHistory.add(this.params.positivePrompt);
@@ -502,46 +513,25 @@ export class GenerateDialog {
     const units = this.buildPromptUnits();
     if (!units.length) return;
 
-    this.sending = true;
-    const total = units.length;
-
-    // Free all LLM VRAM before starting (limited resources), then improve.
-    this.sendStatus = 'Unloading LLM models…';
-    this.photoService.unloadLmStudio(lmUrl).pipe(
-      catchError(() => of(null)),
-      // Phase 1: improve each prompt one at a time; empty prompts are left as-is.
-      switchMap(() => from(units.map((unit, i) => ({ unit, i })))),
-      concatMap(({ unit, i }) => {
-        this.sendStatus = `Improving prompt ${i + 1}/${total}…`;
-        const text = unit.resolved.positivePrompt;
-        if (!text.trim()) return of(unit);
-        return this.photoService.lmPrompt(lmUrl, `${IMPROVE_PROMPT_INSTRUCTION}\n\n${text}`, model).pipe(
-          map(res => {
-            const improved = (res.description || '').trim();
-            unit.resolved = { ...unit.resolved, positivePrompt: improved || text };
-            return unit;
-          }),
-        );
-      }),
-      toArray(),
-      // Phase 2: free VRAM by unloading LM Studio before ComfyUI runs.
-      switchMap(() => {
-        this.sendStatus = 'Unloading LM Studio…';
-        return this.photoService.unloadLmStudio(lmUrl).pipe(catchError(() => of(null)));
-      }),
-      // Phase 3: (img2img) upload the source image if needed.
-      switchMap(() => this.uploadSourceIfNeeded()),
-      // Phase 4: queue every improved flow.
-      switchMap(uploadedImageName => {
-        this.sendStatus = 'Queueing…';
-        return forkJoin(units.map(u =>
-          this.photoService.sendToComfy(this.comfy.comfyUrl, this.buildWorkflowFromUnit(u, uploadedImageName), this.copyResult, front),
-        ));
-      }),
-    ).subscribe({
-      next: () => this.notifyQueued(total),
-      error: (err) => this.failSend(err),
+    const src = this.data.sourceImage;
+    const needsUpload = !!(src && this.params.denoise != null && this.params.denoise < 1);
+    const prompts: JobPrompt[] = units.map(u => {
+      const workflow = this.buildWorkflowFromUnit(u, needsUpload ? UPLOAD_PLACEHOLDER : null);
+      return {
+        workflow,
+        ...this.patchPoints(workflow),
+        uploadNodeId: this.uploadNodeId(workflow),
+        promptText: u.resolved.positivePrompt,
+      };
     });
+
+    this.enqueue('Improve then send', {
+      prompts,
+      copyResult: this.copyResult,
+      front,
+      lmModel: model,
+      upload: needsUpload ? { path: src!.folder ? `${src!.folder}/${src!.filename}` : src!.filename } : undefined,
+    }, 'improve_send');
   }
 
   /** Guided generation handles a single image only — disabled for batches. */
@@ -575,12 +565,16 @@ export class GenerateDialog {
     const assign = variableNodes.map(n => ({ nodeId: n.nodeId, inputKey: n.inputKey, value: n.selected[0] }));
     const frozen = { ...this.params };
 
-    const buildWorkflow = (positiveText: string, seed?: number): Record<string, any> =>
-      this.buildWorkflowFromUnit(
-        { resolved: { ...frozen, positivePrompt: positiveText, negativePrompt, seed: seed ?? frozen.seed }, dictLoras, assign }, null);
+    // One concrete graph plus its patch points; the backend runner re-patches the
+    // prompt text and seed on each iteration rather than rebuilding the graph.
+    const workflow = this.buildWorkflowFromUnit(
+      { resolved: { ...frozen, positivePrompt: basePrompt, negativePrompt }, dictLoras, assign }, null);
 
     this.dialog.open(GuidedGenerationDialog, {
-      data: { comfyUrl: this.comfy.comfyUrl, lmUrl, basePrompt, buildWorkflow } satisfies GuidedGenerationData,
+      data: {
+        lmUrl, basePrompt, copyResult: this.copyResult,
+        prompt: { workflow, ...this.patchPoints(workflow) },
+      } satisfies GuidedGenerationData,
       width: '90vw', maxWidth: '960px', height: '80vh', maxHeight: '90vh',
     });
   }
@@ -692,20 +686,10 @@ export class GenerateDialog {
     return nodes;
   }
 
-  /** Trace a node reference chain until a CLIPTextEncode is found; return its text. */
+  /** Text of the CLIPTextEncode a conditioning input traces back to ('' if none). */
   private resolveClipText(ref: any, workflow: Record<string, any>): string {
-    const visited = new Set<string>();
-    let nodeId = Array.isArray(ref) ? ref[0] : null;
-    while (nodeId && !visited.has(nodeId)) {
-      visited.add(nodeId);
-      const node = workflow[nodeId];
-      if (!node) break;
-      if (node.class_type === 'CLIPTextEncode') return node.inputs?.text ?? '';
-      // Follow the first input reference onward (handles FluxGuidance etc.)
-      const next = Object.values(node.inputs ?? {}).find(v => Array.isArray(v));
-      nodeId = next ? (next as any)[0] : null;
-    }
-    return '';
+    const nodeId = this.resolveClipNodeId(ref, workflow);
+    return nodeId ? (workflow[nodeId]?.inputs?.text ?? '') : '';
   }
 
   private extractParams(workflow: Record<string, any>): WorkflowParams {
@@ -727,9 +711,14 @@ export class GenerateDialog {
         if ('sampler_name' in inputs) params.samplerName = inputs.sampler_name;
         if ('scheduler'    in inputs) params.scheduler   = inputs.scheduler;
         if ('denoise'      in inputs && inputs.denoise !== 1.0) params.denoise = inputs.denoise;
-        // Resolve prompts via KSampler references so order in the object doesn't matter
-        params.positivePrompt = this.resolveClipText(inputs.positive, workflow);
-        params.negativePrompt = this.resolveClipText(inputs.negative, workflow);
+        // Resolve prompts via KSampler references so order in the object doesn't matter.
+        // If both sides trace to the *same* encoder the flow has no distinct negative
+        // (Flux zero-out flows do this) — leave it blank so the fallback below supplies
+        // the default rather than echoing the positive prompt back at the user.
+        const posId = this.resolveClipNodeId(inputs.positive, workflow);
+        const negId = this.resolveClipNodeId(inputs.negative, workflow);
+        params.positivePrompt = posId ? (workflow[posId]?.inputs?.text ?? '') : '';
+        params.negativePrompt = negId && negId !== posId ? (workflow[negId]?.inputs?.text ?? '') : '';
       }
 
       if ('batch_size' in inputs) params.batchSize = inputs.batch_size;
@@ -755,7 +744,14 @@ export class GenerateDialog {
     return params;
   }
 
-  /** Find the node ID of the CLIPTextEncode reached by following ref in workflow. */
+  /**
+   * Find the node ID of the CLIPTextEncode a conditioning input traces back to.
+   *
+   * Stops at `ConditioningZeroOut`: it is the standard Flux way to say "no negative
+   * prompt", and it takes the *positive* conditioning as its input — so following
+   * through it would walk straight back to the positive encoder and report the
+   * positive text as the negative one.
+   */
   private resolveClipNodeId(ref: any, workflow: Record<string, any>): string | null {
     const visited = new Set<string>();
     let nodeId = Array.isArray(ref) ? ref[0] : null;
@@ -763,6 +759,7 @@ export class GenerateDialog {
       visited.add(nodeId);
       const node = workflow[nodeId];
       if (!node) break;
+      if (node.class_type === 'ConditioningZeroOut') return null;
       if (node.class_type === 'CLIPTextEncode') return nodeId;
       const next = Object.values(node.inputs ?? {}).find(v => Array.isArray(v));
       nodeId = next ? (next as any)[0] : null;

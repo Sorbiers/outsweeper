@@ -11,7 +11,6 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { catchError, of, switchMap } from 'rxjs';
 import { ConnectionStateService } from '../../services/connection-state.service';
 import { PhotoService } from '../../services/photo.service';
 
@@ -75,6 +74,9 @@ const OUTPAINT_WORKFLOW: Record<string, any> = {
     "class_type": "ConditioningZeroOut"
   }
 };
+
+/** Stand-in for the source image; the worker swaps it for the real uploaded name. */
+const UPLOAD_PLACEHOLDER = '__pp_pending_upload__';
 
 interface OutpaintParams {
   seed: number;
@@ -150,29 +152,19 @@ export class OutpaintDialog {
     this.params.seed = Math.floor(Math.random() * 2 ** 32);
   }
 
+  /** Queue the outpaint as an internal job — the backend starts/waits for ComfyUI,
+   *  frees LM Studio's VRAM and uploads the source image when the job actually runs. */
   send(): void {
     this.sending = true;
+    const workflow = this.buildWorkflow(UPLOAD_PLACEHOLDER);
+    const uploadNodeId = Object.keys(workflow).find(
+      id => workflow[id]?.inputs?.image === UPLOAD_PLACEHOLDER);
 
-    const lmstudioUrl = this.connState.lmstudio.url;
-    const unload$ = lmstudioUrl
-      ? this.photoService.unloadLmStudio(lmstudioUrl).pipe(catchError(() => of(null)))
-      : of(null);
-
-    unload$.pipe(
-      switchMap(() => this.photoService.uploadToComfy(this.comfy.comfyUrl, this.data.filename, this.data.folder))
-    ).subscribe({
-      next: (res) => this._doSend(res.name),
-      error: (err) => {
-        this.sending = false;
-        const msg = err.error?.error || err.message || 'Failed to upload image';
-        this.snackBar.open(`Upload error: ${msg}`, '', { duration: 5000 });
-      },
-    });
-  }
-
-  private _doSend(uploadedImageName: string): void {
-    const workflow = this.buildWorkflow(uploadedImageName);
-    this.photoService.sendToComfy(this.comfy.comfyUrl, workflow, this.copyResult).subscribe({
+    this.photoService.enqueueJob('comfy', `Outpaint · ${this.data.filename}`, {
+      prompts: [{ workflow, uploadNodeId }],
+      copyResult: this.copyResult,
+      upload: { path: this.data.folder ? `${this.data.folder}/${this.data.filename}` : this.data.filename },
+    }).subscribe({
       next: () => {
         this.sending = false;
         this.snackBar.open('Outpaint queued', '', { duration: 3000 });
@@ -180,7 +172,7 @@ export class OutpaintDialog {
       },
       error: (err) => {
         this.sending = false;
-        const msg = err.error?.error || err.message || 'Failed to send';
+        const msg = err.error?.error || err.message || 'Failed to queue';
         this.snackBar.open(`Error: ${msg}`, '', { duration: 5000 });
       },
     });

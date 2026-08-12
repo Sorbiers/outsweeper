@@ -12,6 +12,7 @@ import {
 /** Path prefix understood by the backend resolver for the local flows collection. */
 export const COLLECTION_PREFIX = '%collection%';
 import { AppConfig } from '../models/config.model';
+import { Job, JobPayload, JobQueueState } from '../models/job.model';
 
 @Injectable({ providedIn: 'root' })
 export class PhotoService {
@@ -192,6 +193,48 @@ export class PhotoService {
 
   setLmStudioWidgetPaused(paused: boolean, clientId: string): Observable<{ ok: boolean }> {
     return this.http.post<{ ok: boolean }>('/api/lmstudio/pause', { paused, client_id: clientId });
+  }
+
+  // --- internal job queue ---------------------------------------------------
+
+  /** Queue a non-interactive operation. The backend runs it one-at-a-time behind
+   *  the ComfyUI/LM Studio resource guards, independent of this browser tab. */
+  enqueueJob(kind: string, title: string, payload: JobPayload): Observable<{ ok: boolean; id: string }> {
+    return this.http.post<{ ok: boolean; id: string }>('/api/jobs', { kind, title, payload });
+  }
+
+  getJobs(): Observable<JobQueueState> {
+    return this.http.get<JobQueueState>('/api/jobs');
+  }
+
+  getJob(id: string): Observable<Job & { result: Record<string, any> }> {
+    return this.http.get<Job & { result: Record<string, any> }>(`/api/jobs/${id}`);
+  }
+
+  cancelJob(id: string): Observable<{ ok: boolean }> {
+    return this.http.post<{ ok: boolean }>(`/api/jobs/${id}/cancel`, {});
+  }
+
+  cancelAllJobs(): Observable<{ ok: boolean; cancelled: number }> {
+    return this.http.post<{ ok: boolean; cancelled: number }>('/api/jobs/cancel-all', {});
+  }
+
+  reorderJobs(ids: string[]): Observable<{ ok: boolean }> {
+    return this.http.post<{ ok: boolean }>('/api/jobs/reorder', { ids });
+  }
+
+  setJobsPaused(paused: boolean): Observable<{ ok: boolean }> {
+    return this.http.post<{ ok: boolean }>('/api/jobs/pause', { paused });
+  }
+
+  setJobSettings(settings: { force_clear_comfy?: boolean; auto_start?: boolean }):
+      Observable<{ ok: boolean; force_clear_comfy: boolean; auto_start: boolean }> {
+    return this.http.post<{ ok: boolean; force_clear_comfy: boolean; auto_start: boolean }>(
+      '/api/jobs/settings', settings);
+  }
+
+  clearFinishedJobs(): Observable<{ ok: boolean }> {
+    return this.http.post<{ ok: boolean }>('/api/jobs/clear-finished', {});
   }
 
   getTools(): Observable<{ tools: string[] }> {

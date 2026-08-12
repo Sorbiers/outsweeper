@@ -28,6 +28,17 @@ upscale_models_dir   = ""
 gpu_monitor = true   # requires nvidia-ml-py
 comfy_queue = true
 lmstudio    = true   # loaded model + model-load/prompt-processing progress
+jobs        = true   # internal job queue (Send / Outpaint / Upscale / LLM flows)
+
+# Internal job queue: every non-interactive operation is queued here and run one at a
+# time, so ComfyUI and LM Studio never hold VRAM simultaneously.
+[queue]
+# Launch ComfyUI / LM Studio on demand when a job needs them (uses the
+# run_comfy_command / run_lmstudio_command above).
+auto_start_services = true
+# When ComfyUI's own queue already has work, wait for it to drain (false) or
+# clear it and take over (true). Also toggleable at runtime in the queue manager.
+force_clear_comfy   = false
 
 # [tools]
 # Define shell commands callable from the info panel.
