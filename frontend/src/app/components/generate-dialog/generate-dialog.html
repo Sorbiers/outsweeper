@@ -193,9 +193,21 @@
   <div class="prompt-row">
     <mat-form-field class="prompt-field">
       <mat-label>Positive Prompt</mat-label>
-      <textarea matInput [(ngModel)]="params.positivePrompt" rows="4"></textarea>
+      <textarea matInput #positivePromptInput [(ngModel)]="params.positivePrompt" rows="4"></textarea>
     </mat-form-field>
     <div class="prompt-actions">
+      <!-- <button mat-icon-button (click)="openPhotoChart('camera')" title="Camera reference (photos)">
+        <mat-icon>photo_camera</mat-icon>
+      </button> -->
+      <button mat-icon-button (click)="openPhotoChart('lighting')" title="Lighting reference (photos)">
+        <mat-icon>wb_sunny</mat-icon>
+      </button>
+      <button mat-icon-button (click)="openPhotoChart('style')" title="Style reference">
+        <mat-icon>palette</mat-icon>
+      </button>
+      <button mat-icon-button (click)="openCameraChart()" title="Camera cheat chart (diagrams)">
+        <mat-icon>videocam</mat-icon>
+      </button>
       <button mat-icon-button (click)="openPrompter()" title="Prompter">
         <mat-icon>auto_awesome</mat-icon>
       </button>
@@ -208,10 +220,10 @@
     </div>
   </div>
 
-  <div class="prompt-row">
+  <div class="negative-prompt-row">
     <mat-form-field class="prompt-field">
       <mat-label>Negative Prompt</mat-label>
-      <textarea matInput [(ngModel)]="params.negativePrompt" rows="3"></textarea>
+      <textarea matInput [(ngModel)]="params.negativePrompt" rows="1"></textarea>
     </mat-form-field>
     <div class="prompt-actions">
       <button mat-icon-button (click)="resetNegativePrompt()"

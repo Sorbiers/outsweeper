@@ -1,0 +1,55 @@
+<h2 mat-dialog-title ppDialogTitle>{{ chart.title }}</h2>
+
+<mat-dialog-content>
+  <p class="intro">Pick one — its wording is inserted at the cursor in the positive prompt.
+    Double-click a tile to insert it straight away.</p>
+
+  <div class="chart-toolbar">
+    <mat-form-field class="filter-field" subscriptSizing="dynamic">
+      <mat-label>Filter</mat-label>
+      <input matInput [ngModel]="filter()" (ngModelChange)="filter.set($event)"
+             placeholder="close-up, backlight, 85mm…" />
+      @if (filter()) {
+        <button mat-icon-button matSuffix (click)="filter.set('')"><mat-icon>close</mat-icon></button>
+      }
+    </mat-form-field>
+
+    @if (chart.sets.length > 1) {
+      <mat-button-toggle-group class="set-toggle" [value]="set().id"
+                               (change)="setSet($event.value)" hideSingleSelectionIndicator>
+        @for (s of chart.sets; track s.id) {
+          <mat-button-toggle [value]="s.id">{{ s.label }}</mat-button-toggle>
+        }
+      </mat-button-toggle-group>
+    }
+  </div>
+
+  @for (section of sections(); track section.name) {
+    <h3 class="section">{{ section.name }}</h3>
+    <div class="grid">
+      @for (p of section.presets; track p.n) {
+        <button type="button" class="card" [class.selected]="isSelected(p)"
+                (click)="select(p)" (dblclick)="insertOne(p)" [matTooltip]="p.text">
+          @if (hasTile(p)) {
+            <img class="tile" [src]="tile(p)" [alt]="p.label" loading="lazy"
+                 (error)="onTileError(p)" />
+          } @else {
+            <span class="tile placeholder">{{ p.n }}</span>
+          }
+          <span class="label">{{ p.label }}</span>
+          <span class="text">{{ p.text }}</span>
+        </button>
+      }
+    </div>
+  } @empty {
+    <p class="empty">Nothing matches “{{ filter() }}”.</p>
+  }
+</mat-dialog-content>
+
+<mat-dialog-actions>
+  <div class="preview" [class.empty-preview]="!selected()">
+    {{ selected()?.text || 'Nothing selected yet' }}
+  </div>
+  <button mat-button mat-dialog-close>Cancel</button>
+  <button mat-flat-button (click)="insert()" [disabled]="!selected()">Insert</button>
+</mat-dialog-actions>

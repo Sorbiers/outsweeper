@@ -33,4 +33,6 @@ export const STORAGE_KEYS = {
   DICTIONARY_LIST_WIDTH: 'pp_dictionary_list_width',
   DICTIONARY_DIALOG_SIZE: 'pp_dictionary_dialog_size',
   COLLECTION_LAYOUT:  'pp_collection_layout',
+  CAMERA_CHART_MODE:  'pp_camera_chart_mode',
+  CHART_SET_PREFIX:   'pp_chart_set:',
 } as const;

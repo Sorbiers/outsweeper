@@ -1,5 +1,5 @@
 import { CdkDrag, CdkDragHandle } from '@angular/cdk/drag-drop';
-import { Component, inject } from '@angular/core';
+import { Component, ElementRef, inject, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCheckboxModule } from '@angular/material/checkbox';
@@ -20,10 +20,13 @@ import { DictionaryService, DictionaryValue, DictionaryValueLora } from '../../s
 import { LmStudioConnectionService } from '../../services/lmstudio-connection.service';
 import { PhotoService } from '../../services/photo.service';
 import { PromptHistoryService } from '../../services/prompt-history.service';
+import { CameraDialog } from '../camera-dialog/camera-dialog';
 import { ComfyUrlRowComponent } from '../comfy-url-row/comfy-url-row';
 import { DictionaryDialog } from '../dictionary-dialog/dictionary-dialog';
 import { GuidedGenerationData, GuidedGenerationDialog } from '../guided-generation-dialog/guided-generation-dialog';
 import { LlmModelDialog, LlmModelDialogData } from '../llm-model-dialog/llm-model-dialog';
+import { PhotoChartDialog, PhotoChartDialogData } from '../photo-chart-dialog/photo-chart-dialog';
+import { ChartId } from '../photo-chart-dialog/photo-chart-presets';
 import { PromptHistoryDialog } from '../prompt-history-dialog/prompt-history-dialog';
 import { PrompterDialog } from '../prompter-dialog/prompter-dialog';
 import { SaveFlowDialog } from '../save-flow-dialog/save-flow-dialog';
@@ -117,6 +120,9 @@ export class GenerateDialog {
   private lmStudio = inject(LmStudioConnectionService);
   comfy = inject(ComfyConnectionService);
 
+  /** Needed to splice cheat-chart text in at the caret. */
+  private positivePromptInput = viewChild<ElementRef<HTMLTextAreaElement>>('positivePromptInput');
+
   params: WorkflowParams;
   sending = false;
   /** Progress line shown while "Improve then send" runs its multi-phase flow. */
@@ -207,6 +213,69 @@ export class GenerateDialog {
    *  or none at all). */
   resetNegativePrompt(): void {
     this.params.negativePrompt = DEFAULT_NEGATIVE_PROMPT;
+  }
+
+  /**
+   * Illustrated camera cheat chart; the picked wording is spliced into the positive
+   * prompt where the caret was. The caret is captured *before* opening, because the
+   * modal takes focus and a re-rendered textarea would otherwise lose the position.
+   */
+  openCameraChart(): void {
+    const at = this.caretInPrompt();
+    this.dialog.open(CameraDialog, { width: '90vw', maxWidth: '900px', maxHeight: '86vh' })
+      .afterClosed().subscribe((text?: string) => {
+        if (text) this.insertIntoPrompt(text, at);
+      });
+  }
+
+  /** Photographic reference chart (camera framing/angles or lighting), single pick. */
+  openPhotoChart(chart: ChartId): void {
+    const at = this.caretInPrompt();
+    this.dialog.open(PhotoChartDialog, {
+      data: { chart } satisfies PhotoChartDialogData,
+      width: '92vw', maxWidth: '1040px', maxHeight: '88vh',
+    }).afterClosed().subscribe((text?: string) => {
+      if (text) this.insertIntoPrompt(text, at);
+    });
+  }
+
+  /** Caret position, captured before a modal opens and takes focus. */
+  private caretInPrompt(): { start: number; end: number } | null {
+    const el = this.positivePromptInput()?.nativeElement;
+    if (!el) return null;
+    return {
+      start: el.selectionStart ?? el.value.length,
+      end: el.selectionEnd ?? el.value.length,
+    };
+  }
+
+  /** Splice `text` into the positive prompt at `at`, tidying separators, and leave
+   *  the caret just after what was inserted. */
+  private insertIntoPrompt(text: string, at: { start: number; end: number } | null): void {
+    const current = this.params.positivePrompt ?? '';
+    const start = at ? Math.min(at.start, current.length) : current.length;
+    const end = at ? Math.min(at.end, current.length) : current.length;
+    const before = current.slice(0, start);
+    const after = current.slice(end);
+
+    // Only add separators where they're actually missing. Whitespace alone doesn't
+    // separate prompt clauses — a comma does — so look past it when deciding.
+    const beforeTrimmed = before.replace(/\s+$/, '');
+    const afterTrimmed = after.replace(/^\s+/, '');
+    const lead = !beforeTrimmed || /[,([]$/.test(beforeTrimmed)
+      ? (before.endsWith(' ') || !before ? '' : ' ')
+      : ', ';
+    const tail = !afterTrimmed || /^[,.)\]]/.test(afterTrimmed)
+      ? ''
+      : (/^\s/.test(after) ? ',' : ', ');   // reuse the space that's already there
+    this.params.positivePrompt = before + lead + text + tail + after;
+
+    const caret = (before + lead + text).length;
+    const el = this.positivePromptInput()?.nativeElement;
+    if (el) {
+      // After the model write has been flushed to the DOM.
+      setTimeout(() => { el.focus(); el.setSelectionRange(caret, caret); });
+    }
   }
 
   openPrompter(): void {

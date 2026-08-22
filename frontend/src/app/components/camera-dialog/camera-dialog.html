@@ -1,0 +1,193 @@
+<h2 mat-dialog-title ppDialogTitle>Camera cheat chart</h2>
+
+<mat-dialog-content>
+  <p class="intro">Click cards to build a camera description, then insert it at the cursor in the
+    positive prompt. Double-click a card to insert it on its own.</p>
+
+  <div class="chart-toolbar">
+    <mat-form-field class="filter-field" subscriptSizing="dynamic">
+      <mat-label>Filter</mat-label>
+      <input matInput [ngModel]="filter()" (ngModelChange)="filter.set($event)"
+             placeholder="close-up, low angle, bokeh…" />
+      @if (filter()) {
+        <button mat-icon-button matSuffix (click)="filter.set('')"><mat-icon>close</mat-icon></button>
+      }
+    </mat-form-field>
+
+    <mat-button-toggle-group class="mode-toggle" [value]="mode()"
+                             (change)="setMode($event.value)" hideSingleSelectionIndicator>
+      <mat-button-toggle value="schema" matTooltip="Drawn diagrams">
+        <mat-icon>schema</mat-icon> Schema
+      </mat-button-toggle>
+      <mat-button-toggle value="example" matTooltip="Example photographs">
+        <mat-icon>photo_camera</mat-icon> Example
+      </mat-button-toggle>
+    </mat-button-toggle-group>
+  </div>
+
+  @for (group of groups(); track group.name) {
+    <h3 class="group">{{ group.name }}</h3>
+    <div class="grid">
+      @for (p of group.presets; track p.id) {
+        <button type="button" class="card" [class.picked]="isPicked(p)"
+                (click)="toggle(p)" (dblclick)="insertOne(p)" [matTooltip]="p.text">
+          @if (showPhoto(p)) {
+          <img class="diagram photo" [src]="photo(p)" [alt]="p.label" loading="lazy"
+               (error)="onPhotoError(p)" />
+          } @else {
+          <svg class="diagram" viewBox="0 0 100 100" aria-hidden="true">
+            <rect class="frame" x="4" y="14" width="92" height="72" rx="3" />
+
+            @switch (p.diagram.kind) {
+
+              <!-- Shot size: the figure is scaled so the chosen band fills the frame -->
+              @case ('frame') {
+                <clipPath [attr.id]="'clip-' + p.id">
+                  <rect x="4" y="14" width="92" height="72" rx="3" />
+                </clipPath>
+                <g [attr.clip-path]="'url(#clip-' + p.id + ')'">
+                  <g [attr.transform]="'translate(0 14) scale(1 0.72)'">
+                    <g [attr.transform]="frameTransform(p.diagram.from, p.diagram.to)">
+                      <circle class="fig" cx="50" cy="14" r="8.5" />
+                      <path class="fig" [attr.d]="FIGURE" />
+                    </g>
+                  </g>
+                </g>
+              }
+
+              <!-- Vertical angle: camera on an arc around the subject, side view -->
+              @case ('angle') {
+                <line class="ground" x1="10" y1="80" x2="90" y2="80" />
+                <g transform="translate(0 -6) scale(0.62) translate(38 42)">
+                  <circle class="fig" cx="50" cy="14" r="8.5" />
+                  <path class="fig" [attr.d]="FIGURE" />
+                </g>
+                <line class="sight" [attr.x1]="camPos(p.diagram.deg).x" [attr.y1]="camPos(p.diagram.deg).y"
+                      x2="60" y2="52" />
+                <g [attr.transform]="'translate(' + camPos(p.diagram.deg).x + ' ' + camPos(p.diagram.deg).y + ')'">
+                  <rect class="cam" x="-9" y="-6" width="18" height="12" rx="2" />
+                  <circle class="cam-lens" cx="0" cy="0" r="3.2" />
+                </g>
+              }
+
+              <!-- Camera position: top-down bearing around a facing subject -->
+              @case ('view') {
+                <circle class="fig" cx="50" cy="52" r="9" />
+                <path class="nose" d="M50 40 l5 7 h-10 z" />
+                @if (p.diagram.overShoulder) {
+                  <circle class="fig ghost" cx="50" cy="76" r="7" />
+                }
+                @if (p.diagram.pov) {
+                  <text class="pov" x="50" y="34" text-anchor="middle">POV</text>
+                } @else {
+                  <line class="sight" [attr.x1]="viewPos(p.diagram.deg).x" [attr.y1]="viewPos(p.diagram.deg).y"
+                        x2="50" y2="52" />
+                  <g [attr.transform]="'translate(' + viewPos(p.diagram.deg).x + ' ' + viewPos(p.diagram.deg).y + ')'">
+                    <rect class="cam" x="-8" y="-5.5" width="16" height="11" rx="2" />
+                    <circle class="cam-lens" cx="0" cy="0" r="2.8" />
+                  </g>
+                }
+              }
+
+              <!-- Focal length: the angle of view it covers -->
+              @case ('lens') {
+                <path class="cone" [attr.d]="lensCone(p.diagram.half)" />
+                <rect class="cam" x="41" y="80" width="18" height="12" rx="2" />
+                <circle class="cam-lens" cx="50" cy="86" r="3.2" />
+              }
+
+              <!-- Depth of field: which distance plane stays sharp -->
+              @case ('dof') {
+                <filter [attr.id]="'b1-' + p.id">
+                  <feGaussianBlur [attr.stdDeviation]="dofBlur(p.diagram.sharp, 'far')" />
+                </filter>
+                <filter [attr.id]="'b2-' + p.id">
+                  <feGaussianBlur [attr.stdDeviation]="dofBlur(p.diagram.sharp, 'mid')" />
+                </filter>
+                <filter [attr.id]="'b3-' + p.id">
+                  <feGaussianBlur [attr.stdDeviation]="dofBlur(p.diagram.sharp, 'near')" />
+                </filter>
+                <circle class="fig faint" cx="26" cy="34" r="7" [attr.filter]="'url(#b1-' + p.id + ')'" />
+                <circle class="fig" cx="50" cy="48" r="10" [attr.filter]="'url(#b2-' + p.id + ')'" />
+                <circle class="fig" cx="74" cy="66" r="13" [attr.filter]="'url(#b3-' + p.id + ')'" />
+              }
+
+              <!-- Shutter: trailing streaks behind the subject -->
+              @case ('motion') {
+                @for (s of streaks(p.diagram.streak); track s.x) {
+                  <rect class="streak" [attr.x]="s.x" y="44" [attr.width]="s.w" height="12" rx="3"
+                        [attr.opacity]="s.o" />
+                }
+                <circle class="fig" cx="58" cy="50" r="11" />
+                @if (p.diagram.streak === 0) {
+                  <path class="sight" d="M44 36 l-6 -6 M72 36 l6 -6 M44 64 l-6 6 M72 64 l6 6" />
+                }
+              }
+
+              <!-- Dutch angle: the frame itself is canted -->
+              @case ('tilt') {
+                <g [attr.transform]="'rotate(' + p.diagram.deg + ' 50 50)'">
+                  <rect class="frame tilted" x="12" y="20" width="76" height="60" rx="3" />
+                  <g transform="translate(0 -4) scale(0.55) translate(40 52)">
+                    <circle class="fig" cx="50" cy="14" r="8.5" />
+                    <path class="fig" [attr.d]="FIGURE" />
+                  </g>
+                </g>
+              }
+
+              <!-- Composition overlays -->
+              @case ('compose') {
+                @switch (p.diagram.overlay) {
+                  @case ('thirds') {
+                    <g class="guide">
+                      <line x1="34.7" y1="14" x2="34.7" y2="86" /><line x1="65.3" y1="14" x2="65.3" y2="86" />
+                      <line x1="4" y1="38" x2="96" y2="38" /><line x1="4" y1="62" x2="96" y2="62" />
+                    </g>
+                    <circle class="fig" cx="34.7" cy="38" r="9" />
+                  }
+                  @case ('center') {
+                    <g class="guide"><line x1="50" y1="14" x2="50" y2="86" /></g>
+                    <circle class="fig" cx="50" cy="50" r="11" />
+                  }
+                  @case ('symmetry') {
+                    <g class="guide"><line x1="50" y1="14" x2="50" y2="86" /></g>
+                    <circle class="fig" cx="30" cy="50" r="9" />
+                    <circle class="fig" cx="70" cy="50" r="9" />
+                  }
+                  @case ('leading') {
+                    <g class="guide">
+                      <line x1="4" y1="86" x2="46" y2="46" /><line x1="96" y1="86" x2="54" y2="46" />
+                    </g>
+                    <circle class="fig" cx="50" cy="42" r="9" />
+                  }
+                  @case ('negative') {
+                    <circle class="fig" cx="74" cy="66" r="8" />
+                  }
+                }
+              }
+            }
+          </svg>
+          }
+          <span class="label">{{ p.label }}</span>
+          <span class="hint">{{ p.hint }}</span>
+        </button>
+      }
+    </div>
+  } @empty {
+    <p class="empty">Nothing matches “{{ filter() }}”.</p>
+  }
+</mat-dialog-content>
+
+<mat-dialog-actions>
+  <div class="preview" [class.empty-preview]="!snippet()">
+    {{ snippet() || 'Nothing selected yet' }}
+  </div>
+  <span class="spacer"></span>
+  @if (picked().length) {
+    <button mat-button (click)="clear()">Clear</button>
+  }
+  <button mat-button mat-dialog-close>Cancel</button>
+  <button mat-flat-button (click)="insert()" [disabled]="!snippet()">
+    Insert{{ picked().length > 1 ? ' ' + picked().length : '' }}
+  </button>
+</mat-dialog-actions>
