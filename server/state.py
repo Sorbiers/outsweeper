@@ -24,6 +24,7 @@ class AppState:
     monitor_enabled: bool
     comfy_queue_enabled: bool
     tools_cfg: dict
+    editors_cfg: dict
     validation_interval: int | None
 
     comfy_output_str: str = ''

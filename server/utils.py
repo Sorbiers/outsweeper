@@ -30,6 +30,10 @@ THUMBNAILS_DIR    = '__thumbnails'
 MASKS_DIR         = '__masks'
 #: How many painted masks to keep per folder before pruning the oldest.
 MASK_KEEP         = 40
+#: Step sheets/animations written when a job records its render steps.
+STEPS_DIR         = '__steps'
+#: Cap on a dataset sidecar shown in the info panel.
+SIDECAR_MAX_BYTES = 256 * 1024
 THUMBNAIL_SIZE    = (300, 300)
 THUMBNAIL_QUALITY = 80
 

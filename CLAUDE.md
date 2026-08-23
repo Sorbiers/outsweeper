@@ -45,6 +45,14 @@ npm run release
 - `POST /api/undo` — undo last move (in-memory stack)
 - `POST /api/photos/<fn>/describe` — AI description via LM Studio vision API
 - `POST /api/photos/<fn>/write-meta` — write description to PNG text chunk or JPEG/WebP EXIF
+- `GET  /api/comfy/preview` — the newest sampler step preview as raw image bytes
+  (204 when previews are off or the last frame is stale). Served as bytes rather
+  than pushed over SSE: frames are tens of kB and arrive several times a second
+- `GET  /api/sidecar?path=<image>` — same-stem `.txt` / `.json` beside the image
+  (dataset captions and tags), returned verbatim and capped at `SIDECAR_MAX_BYTES`
+- `POST /api/open-with?path=<image>` — hand the file to Paint or the system photo
+  editor and return immediately (unlike `/api/tools/run`, which waits); overridable
+  via config's `[editors]`
 - `POST /api/masks?path=<image>` — store an Inpaint mask: takes the painted coverage
   (white = repaint), merges it into the source's alpha with Pillow, writes it to a
   hidden `__masks/` folder beside the image and returns the path for a job's `upload`
@@ -63,6 +71,24 @@ npm run release
 - `POST /api/jobs/<id>/cancel` · `POST /api/jobs/cancel-all`
 - `POST /api/jobs/reorder` — new order for the *queued* jobs
 - `POST /api/jobs/pause` · `POST /api/jobs/settings` · `POST /api/jobs/clear-finished`
+
+## Step previews
+
+ComfyUI's sampler decodes `x0` — its running estimate of the finished image — once
+per step and pushes it as a **binary** websocket frame. `server/previews.py` parses
+those frames, keeps the newest for the COMFY widget's live thumbnail, and (when a
+job sets `recordSteps`) buffers a prompt's frames and writes a numbered contact
+sheet plus an animated WebP into `__steps/` beside the render.
+
+- **Requires `--preview-method taesd` on ComfyUI's command line** — the default is
+  `none` and no frames are sent at all. `taef1_decoder.safetensors` (the Flux TAESD
+  decoder) must be in `models/vae_approx/`.
+- Legacy frames carry no ids, but each is preceded by a JSON `progress` message
+  holding `prompt_id`, which is how frames are attributed to a job. Do **not**
+  negotiate `supports_preview_metadata`: ComfyUI then stops sending the legacy
+  frames, and the app would silently lose previews.
+- Previews are TAESD approximations capped at `--preview-size` (default 512), not
+  full VAE decodes — faithful in composition and colour, not in fine detail.
 
 ## Job queue (core architecture)
 
@@ -108,6 +134,12 @@ memory has been released. Work therefore survives closing a dialog or the whole 
 - `InfoPanel` — metadata display with ComfyUI workflow details
 - `PreviewPanel` — full-resolution image viewer with mouse-wheel zoom and click-drag pan
 - `GenerateDialog` — edit ComfyUI workflows and queue them as jobs; extracts variable nodes (LoRAs, checkpoints) for Cartesian product batch generation
+- `KontextDialog` — FLUX.1 Kontext: reference image + instruction. Two modes — **Edit**
+  (plain instruction) and **Next frame**, which prepends a continuation clause naming
+  what must stay fixed, since Kontext preserves identity but has no notion of time.
+  The reference is encoded once and used twice (`ReferenceLatent` conditioning *and*
+  the sampler's starting latent); `FluxKontextImageScale` handles odd aspect ratios.
+  Variants queue N seeds off one reference. Lazy-loaded
 - `InpaintDialog` — brush a mask over an image and queue a Flux Fill inpaint. Same graph
   as Outpaint minus `ImagePadForOutpaint`: the mask rides in the upload's alpha channel,
   since ComfyUI's `LoadImage` returns MASK as `1 - alpha`. Lazy-loaded. Mouse-wheel

@@ -127,6 +127,8 @@ export class GenerateDialog {
   /** Progress line shown while "Improve then send" runs its multi-phase flow. */
   sendStatus = '';
   copyResult = false;
+  /** Keep every sampler step preview and write a sheet + animation beside the render. */
+  recordSteps = false;
   randomizeSeedOnSend = false;
   jobsNumber = 1;
   hasDenoise = false;
@@ -432,6 +434,7 @@ export class GenerateDialog {
     this.enqueue(front ? 'Send to front' : 'Generate', {
       prompts,
       copyResult: this.copyResult,
+      recordSteps: this.recordSteps,
       front,
       upload: needsUpload ? { path: src!.folder ? `${src!.folder}/${src!.filename}` : src!.filename } : undefined,
     });
@@ -599,6 +602,7 @@ export class GenerateDialog {
     this.enqueue('Improve then send', {
       prompts,
       copyResult: this.copyResult,
+      recordSteps: this.recordSteps,
       front,
       lmModel: model,
       upload: needsUpload ? { path: src!.folder ? `${src!.folder}/${src!.filename}` : src!.filename } : undefined,

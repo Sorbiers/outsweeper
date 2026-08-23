@@ -14,6 +14,12 @@
     <div class="progress-row">
       <div class="progress-bar" [style.width.%]="s.progress.value / s.progress.max * 100"></div>
     </div>
+    <!-- Always requested, hidden until one actually decodes: previews are off
+         unless ComfyUI was started with --preview-method, and gating the request
+         on a flag the request itself sets would never start. -->
+    <img class="step-preview" [class.hidden]="!showPreview"
+         [src]="previewUrl(previewTick)" alt="step preview"
+         (error)="onPreviewMissing()" (load)="onPreviewLoaded()" />
   }
 } @else {
   <div class="row offline"><span>offline</span></div>

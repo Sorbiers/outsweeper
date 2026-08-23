@@ -3,6 +3,9 @@ import { STORAGE_KEYS } from '../../constants';
 import { DecimalPipe } from '@angular/common';
 import { ComfyQueueService } from '../../services/comfy-queue.service';
 
+/** How often the step preview refreshes while a render is running. */
+const PREVIEW_REFRESH_MS = 700;
+
 @Component({
   selector: 'pp-comfy-queue',
   imports: [DecimalPipe],
@@ -16,6 +19,15 @@ export class ComfyQueueWidget implements OnInit, OnDestroy {
   @HostBinding('style.top')  get styleTop()  { return this.y + 'px'; }
 
   readonly svc = inject(ComfyQueueService);
+
+  /** Hidden until a frame actually arrives: ComfyUI only streams previews when it
+   *  was started with --preview-method, and an empty box would just look broken. */
+  showPreview = false;
+  /** Drives the preview's cache-busting URL. Ticks on its own timer rather than
+   *  off the queue poll, which only broadcasts every 2s — far too coarse to watch
+   *  a render evolve. */
+  previewTick = 0;
+  private previewTimer: ReturnType<typeof setInterval> | undefined;
 
   private x = 0;
   private y = 0;
@@ -35,9 +47,29 @@ export class ComfyQueueWidget implements OnInit, OnDestroy {
       this.x = window.innerWidth - 130;
       this.y = 160;
     }
+    this.previewTimer = setInterval(() => {
+      // Only while something is rendering: idle polling would fetch 204s forever.
+      if (this.svc.status()?.progress) this.previewTick++;
+    }, PREVIEW_REFRESH_MS);
+  }
+
+  /** A changing query string is what makes the browser refetch each frame. */
+  previewUrl(tick: number): string {
+    return `/api/comfy/preview?t=${tick}`;
+  }
+
+  onPreviewLoaded(): void {
+    this.showPreview = true;
+  }
+
+  onPreviewMissing(): void {
+    // 204 while previews are off, or between renders — stop showing a broken image
+    // but keep trying on the next step, since it can start working mid-session.
+    this.showPreview = false;
   }
 
   ngOnDestroy(): void {
+    clearInterval(this.previewTimer);
     document.removeEventListener('mousemove', this.boundMove);
     document.removeEventListener('mouseup', this.boundUp);
   }

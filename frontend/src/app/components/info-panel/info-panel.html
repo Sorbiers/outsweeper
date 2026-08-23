@@ -7,39 +7,35 @@
           <mat-icon>more_vert</mat-icon>
         </button>
         <mat-menu #actionsMenu="matMenu">
-          <button mat-menu-item (click)="openDescribe()">
+          <button mat-menu-item (click)="openDescribe()"
+                  matTooltip="Ask a vision model to describe this image, and optionally write it into the metadata" matTooltipPosition="left"
+                  [matTooltipShowDelay]="TOOLTIP_DELAY">
             <mat-icon>visibility</mat-icon>
             <span class="menu-label">Describe</span>
           </button>
-          <button mat-menu-item (click)="openGenerateFrom()">
+          <button mat-menu-item (click)="openGenerateFrom()"
+                  matTooltip="Start a new generation using this image as the source (img2img)" matTooltipPosition="left"
+                  [matTooltipShowDelay]="TOOLTIP_DELAY">
             <mat-icon>auto_fix_high</mat-icon>
             <span class="menu-label">Generate from</span>
           </button>
           @if (info.png_metadata?.['prompt']) {
-            <button mat-menu-item (click)="extractWorkflow()">
+            <button mat-menu-item (click)="extractWorkflow()"
+                  matTooltip="Download the ComfyUI workflow embedded in this PNG" matTooltipPosition="left"
+                  [matTooltipShowDelay]="TOOLTIP_DELAY">
               <mat-icon>data_object</mat-icon>
               <span class="menu-label">Extract Workflow</span>
             </button>
           }
-          <button mat-menu-item (click)="openOutpaint()">
-            <mat-icon>open_with</mat-icon>
-            <span class="menu-label">Outpaint</span>
+          <button mat-menu-item [matMenuTriggerFor]="editSubMenu"
+                  matTooltip="Change the picture itself — extend, repaint, upscale or hand it to an editor" matTooltipPosition="left"
+                  [matTooltipShowDelay]="TOOLTIP_DELAY">
+            <mat-icon>tune</mat-icon>
+            <span class="menu-label">Edit</span>
           </button>
-          <button mat-menu-item (click)="openInpaint()">
-            <mat-icon>format_paint</mat-icon>
-            <span class="menu-label">Inpaint</span>
-          </button>
-          <button mat-menu-item [matMenuTriggerFor]="upscaleSubMenu">
-            <mat-icon>photo_size_select_large</mat-icon>
-            <span class="menu-label">Upscale</span>
-          </button>
-          <button mat-menu-item (click)="openRemoveBg()"
-                  [disabled]="!!bgRemoveUnavailable"
-                  [matTooltip]="bgRemoveUnavailable" matTooltipPosition="left">
-            <mat-icon>auto_fix_off</mat-icon>
-            <span class="menu-label">Remove background</span>
-          </button>
-          <button mat-menu-item (click)="addToCollection()">
+          <button mat-menu-item (click)="addToCollection()"
+                  matTooltip="Save this image to a named collection for later" matTooltipPosition="left"
+                  [matTooltipShowDelay]="TOOLTIP_DELAY">
             <mat-icon>collections_bookmark</mat-icon>
             <span class="menu-label">Add to Collection <kbd>c</kbd></span>
           </button>
@@ -47,17 +43,23 @@
             <mat-icon>download</mat-icon>
             <span class="menu-label">Download <kbd>Ctrl+S</kbd></span>
           </button>
-          <button mat-menu-item (click)="locate()">
+          <button mat-menu-item (click)="locate()"
+                  matTooltip="Show the file in Windows Explorer" matTooltipPosition="left"
+                  [matTooltipShowDelay]="TOOLTIP_DELAY">
             <mat-icon>folder_open</mat-icon>
             <span class="menu-label">Locate</span>
           </button>
           @if (exiftoolAvailable()) {
             <mat-divider />
-            <button mat-menu-item (click)="openMetadataView()">
+            <button mat-menu-item (click)="openMetadataView()"
+                  matTooltip="Inspect every EXIF/XMP tag via exiftool" matTooltipPosition="left"
+                  [matTooltipShowDelay]="TOOLTIP_DELAY">
               <mat-icon>info</mat-icon>
               <span class="menu-label">Metadata…</span>
             </button>
-            <button mat-menu-item (click)="openMetadataStrip()">
+            <button mat-menu-item (click)="openMetadataStrip()"
+                  matTooltip="Remove metadata groups from the file" matTooltipPosition="left"
+                  [matTooltipShowDelay]="TOOLTIP_DELAY">
               <mat-icon>delete_sweep</mat-icon>
               <span class="menu-label">Strip Metadata…</span>
             </button>
@@ -99,6 +101,52 @@
           @for (t of tools; track t) {
             <button mat-menu-item (click)="runTool(t)">{{ t }}</button>
           }
+        </mat-menu>
+        <mat-menu #editSubMenu="matMenu">
+          <button mat-menu-item (click)="openOutpaint()"
+                  matTooltip="Extend the picture beyond its current edges" matTooltipPosition="left"
+                  [matTooltipShowDelay]="TOOLTIP_DELAY">
+            <mat-icon>open_with</mat-icon>
+            <span class="menu-label">Outpaint</span>
+          </button>
+          <button mat-menu-item (click)="openInpaint()"
+                  matTooltip="Paint a mask over part of the image and regenerate just that area" matTooltipPosition="left"
+                  [matTooltipShowDelay]="TOOLTIP_DELAY">
+            <mat-icon>format_paint</mat-icon>
+            <span class="menu-label">Inpaint</span>
+          </button>
+          <button mat-menu-item (click)="openKontext()"
+                  matTooltip="Edit by instruction, or continue the shot to its next moment" matTooltipPosition="left"
+                  [matTooltipShowDelay]="TOOLTIP_DELAY">
+            <mat-icon>skip_next</mat-icon>
+            <span class="menu-label">Kontext / Next frame</span>
+          </button>
+          <button mat-menu-item [matMenuTriggerFor]="upscaleSubMenu"
+                  matTooltip="Enlarge the image with a model or plain interpolation" matTooltipPosition="left"
+                  [matTooltipShowDelay]="TOOLTIP_DELAY">
+            <mat-icon>photo_size_select_large</mat-icon>
+            <span class="menu-label">Upscale</span>
+          </button>
+          <button mat-menu-item (click)="openRemoveBg()"
+                  [disabled]="!!bgRemoveUnavailable"
+                  [matTooltip]="bgRemoveUnavailable || 'Cut the subject out and save a transparent PNG'"
+                  matTooltipPosition="left" [matTooltipShowDelay]="TOOLTIP_DELAY">
+            <mat-icon>auto_fix_off</mat-icon>
+            <span class="menu-label">Remove background</span>
+          </button>
+          <mat-divider />
+          <button mat-menu-item (click)="openIn('paint')"
+                  matTooltip="Open this file in Microsoft Paint" matTooltipPosition="left"
+                  [matTooltipShowDelay]="TOOLTIP_DELAY">
+            <mat-icon>brush</mat-icon>
+            <span class="menu-label">Open in Paint</span>
+          </button>
+          <button mat-menu-item (click)="openIn('photo_editor')"
+                  matTooltip="Open this file in the system photo editor"
+                  matTooltipPosition="left" [matTooltipShowDelay]="TOOLTIP_DELAY">
+            <mat-icon>image</mat-icon>
+            <span class="menu-label">Open in Photo Editor</span>
+          </button>
         </mat-menu>
         <mat-menu #upscaleSubMenu="matMenu">
           <button mat-menu-item (click)="openUpscale('spandrel')"
@@ -151,6 +199,37 @@
         }
       </mat-card-content>
     </mat-card>
+
+    @if (sidecarList().length) {
+      <mat-card class="info-card">
+        <mat-card-content>
+          @for (entry of sidecarList(); track entry.kind) {
+            @let kind = entry.kind;
+            @let file = entry.file;
+              <div class="sidecar">
+                <div class="sidecar-head">
+                  <mat-icon>{{ kind === 'json' ? 'data_object' : 'notes' }}</mat-icon>
+                  <span class="sidecar-name" [title]="file.name">{{ file.name }}</span>
+                  <span class="sidecar-size">{{ file.size }} B</span>
+                  <button mat-icon-button class="sidecar-toggle" (click)="toggleSidecar(kind)"
+                          [matTooltip]="sidecarExpanded()[kind] ? 'Collapse' : 'Expand'"
+                          [matTooltipShowDelay]="TOOLTIP_DELAY">
+                    <mat-icon>{{ sidecarExpanded()[kind] ? 'unfold_less' : 'unfold_more' }}</mat-icon>
+                  </button>
+                  <button mat-icon-button class="sidecar-toggle" [cdkCopyToClipboard]="file.content"
+                          matTooltip="Copy to clipboard" [matTooltipShowDelay]="TOOLTIP_DELAY">
+                    <mat-icon>content_copy</mat-icon>
+                  </button>
+                </div>
+                <pre class="sidecar-body" [class.collapsed]="!sidecarExpanded()[kind]">{{ file.content }}</pre>
+                @if (file.truncated) {
+                  <span class="sidecar-truncated">truncated — file is larger than the preview limit</span>
+                }
+              </div>
+          }
+        </mat-card-content>
+      </mat-card>
+    }
 
     @if (info.comfyui; as comfyui) {
       @if (comfyui.found) {
@@ -221,19 +300,24 @@
                 </div>
               }
             </div>
-            @if (comfyui.source_image && comfy.effectiveUrl) {
+            @if (comfyui.source_image) {
               <div class="source-image-row">
                 <h4>Source Image</h4>
                 <img class="source-thumb"
-                     #srcImg
-                     [src]="comfy.effectiveUrl + '/view?filename=' + comfyui.source_image + '&type=input'"
+                     [class.hidden]="sourceImageError === comfyui.source_image"
+                     [src]="sourceImageUrl(comfyui.source_image)"
                      [title]="comfyui.source_image"
                      alt="source"
-                     (error)="srcImg.classList.add('hidden'); srcErr.classList.remove('hidden')" />
-                <div #srcErr class="source-unavailable hidden">
-                  <mat-icon>broken_image</mat-icon>
-                  <span>{{ comfyui.source_image }} — not available</span>
-                </div>
+                     (error)="onSourceImageError(comfyui.source_image)"
+                     (load)="onSourceImageLoad()" />
+                @if (sourceImageError === comfyui.source_image) {
+                  <div class="source-unavailable">
+                    <mat-icon>broken_image</mat-icon>
+                    <span>{{ comfyui.source_image }} — not available</span>
+                  </div>
+                } @else {
+                  <span class="source-name" [title]="comfyui.source_image">{{ comfyui.source_image }}</span>
+                }
               </div>
             }
 

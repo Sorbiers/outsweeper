@@ -40,6 +40,13 @@ auto_start_services = true
 # clear it and take over (true). Also toggleable at runtime in the queue manager.
 force_clear_comfy   = false
 
+# [editors]
+# Desktop apps for the Edit submenu's "Open in ..." items. %filename% is replaced
+# with the absolute path. Leave a value out to use the built-in default: Paint for
+# `paint`, and the system's default handler for the file type for `photo_editor`.
+# paint        = "mspaint.exe %filename%"
+# photo_editor = ""
+
 # [tools]
 # Define shell commands callable from the info panel.
 # %filename% is replaced with the absolute path of the selected image.
