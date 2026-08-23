@@ -195,6 +195,13 @@ export class PhotoService {
     return this.http.post<{ ok: boolean }>('/api/lmstudio/pause', { paused, client_id: clientId });
   }
 
+  /** Post the painted coverage; the backend merges it into the source's alpha and
+   *  returns the path to hand to a job's `upload`, which uploads it at run time. */
+  saveMask(sourcePath: string, coverageDataUrl: string): Observable<{ path: string }> {
+    return this.http.post<{ path: string }>(
+      `/api/masks?path=${encodeURIComponent(sourcePath)}`, { coverage: coverageDataUrl });
+  }
+
   // --- internal job queue ---------------------------------------------------
 
   /** Queue a non-interactive operation. The backend runs it one-at-a-time behind

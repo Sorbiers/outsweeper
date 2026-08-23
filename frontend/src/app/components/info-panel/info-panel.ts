@@ -19,6 +19,7 @@ import { CollectionAddDialog, CollectionAddDialogData } from '../collection-add-
 import { DescribeDialog } from '../describe-dialog/describe-dialog';
 import { DEFAULT_FLUX_WORKFLOW, GenerateDialog, GenerateDialogData } from '../generate-dialog/generate-dialog';
 import { OutpaintDialog, OutpaintDialogData } from '../outpaint-dialog/outpaint-dialog';
+import type { InpaintDialogData } from '../inpaint-dialog/inpaint-dialog';
 import { MetadataEditDialog } from '../metadata-edit-dialog/metadata-edit-dialog';
 import { MetadataStripDialog } from '../metadata-strip-dialog/metadata-strip-dialog';
 import { MetadataViewDialog } from '../metadata-view-dialog/metadata-view-dialog';
@@ -238,6 +239,21 @@ export class InfoPanel implements OnInit {
       } satisfies CollectionAddDialogData,
       width: '90vw',
       maxWidth: '480px',
+    });
+  }
+
+  /** Loaded on demand: the mask editor is bulky and most sessions never open it. */
+  async openInpaint(): Promise<void> {
+    if (!this.info) return;
+    const { InpaintDialog } = await import('../inpaint-dialog/inpaint-dialog');
+    this.dialog.open(InpaintDialog, {
+      data: {
+        filename: this.info.filename,
+        folder: this.folder,
+      } satisfies InpaintDialogData,
+      width: '94vw',
+      maxWidth: '1100px',
+      maxHeight: '92vh',
     });
   }
 

@@ -1,0 +1,160 @@
+<h2 mat-dialog-title ppDialogTitle>Inpaint — {{ data.filename }}</h2>
+
+<mat-dialog-content>
+  <pp-comfy-url-row (connected)="onConnected()"></pp-comfy-url-row>
+
+  <div class="editor">
+    @if (loading) {
+      <p class="note">Loading image…</p>
+    } @else if (loadError) {
+      <p class="note error">{{ loadError }}</p>
+    } @else {
+      <div class="canvas-wrap" #wrap (wheel)="onWheel($event)">
+        <canvas #view [style.width.px]="displayWidth"
+                (pointerdown)="onCanvasPointerDown($event)"
+                (pointermove)="onCanvasPointerMove($event)"
+                (pointerup)="onCanvasPointerUp($event)"
+                (pointercancel)="onCanvasPointerUp($event)"
+                (auxclick)="$event.preventDefault()"></canvas>
+      </div>
+    }
+
+    <div class="tools">
+      <mat-button-toggle-group [(ngModel)]="erase" hideSingleSelectionIndicator>
+        <mat-button-toggle [value]="false" matTooltip="Paint the area to replace">
+          <mat-icon>brush</mat-icon>
+        </mat-button-toggle>
+        <mat-button-toggle [value]="true" matTooltip="Erase from the mask">
+          <mat-icon>ink_eraser</mat-icon>
+        </mat-button-toggle>
+      </mat-button-toggle-group>
+
+      <div class="brush-row">
+        <span class="tool-label">Brush</span>
+        <input class="brush-slider" type="range" min="4" max="400" step="2"
+               [(ngModel)]="brush" [attr.aria-label]="'Brush size'" />
+        <span class="tool-label brush-value">{{ brush }}</span>
+      </div>
+
+      <button mat-stroked-button (click)="undo()" [disabled]="!hasMask">
+        <mat-icon>undo</mat-icon> Undo
+      </button>
+      <button mat-stroked-button (click)="clearMask()" [disabled]="!hasMask">
+        <mat-icon>layers_clear</mat-icon> Clear
+      </button>
+
+      <button mat-stroked-button (click)="fitToPanel()" [disabled]="zoom === 1"
+              matTooltip="Wheel zooms, middle-drag pans">
+        <mat-icon>fit_screen</mat-icon> {{ zoom === 1 ? 'Fit' : (zoom * 100 | number:'1.0-0') + '%' }}
+      </button>
+
+      @if (imageWidth) {
+        <span class="dims">{{ imageWidth }}×{{ imageHeight }}</span>
+      }
+    </div>
+  </div>
+
+  @if (availableModels.length) {
+    <mat-form-field class="full-width">
+      <mat-label>Model</mat-label>
+      <mat-select [(ngModel)]="selectedModel">
+        @for (m of availableModels; track m) {
+          <mat-option [value]="m">{{ m }}</mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+  }
+
+  <div class="lora-section">
+    @for (lora of loras; track $index; let i = $index) {
+      <div class="lora-row">
+        <mat-form-field class="lora-name-field">
+          <mat-label>LoRA {{ i + 1 }}</mat-label>
+          <mat-select [(ngModel)]="lora.name">
+            @for (l of availableLoras; track l) {
+              <mat-option [value]="l">{{ l }}</mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
+        <mat-form-field class="lora-strength-field">
+          <mat-label>Str Model</mat-label>
+          <input matInput type="number" [(ngModel)]="lora.strengthModel" step="0.1" min="0" max="2" />
+        </mat-form-field>
+        <mat-form-field class="lora-strength-field">
+          <mat-label>Str Clip</mat-label>
+          <input matInput type="number" [(ngModel)]="lora.strengthClip" step="0.1" min="0" max="2" />
+        </mat-form-field>
+        <button mat-icon-button (click)="removeLora(i)" title="Remove" class="lora-remove-btn">
+          <mat-icon>remove_circle_outline</mat-icon>
+        </button>
+      </div>
+    }
+    <button mat-stroked-button (click)="addLora()" [disabled]="comfy.checkStatus !== 'ok'">
+      <mat-icon>add</mat-icon> Add LoRA
+    </button>
+  </div>
+
+  <div class="params-grid">
+    <mat-form-field>
+      <mat-label>Seed</mat-label>
+      <input matInput type="number" [(ngModel)]="params.seed" />
+      <button mat-icon-button matSuffix (click)="randomizeSeed()" title="Randomize">
+        <mat-icon>casino</mat-icon>
+      </button>
+    </mat-form-field>
+    <mat-form-field>
+      <mat-label>Steps</mat-label>
+      <input matInput type="number" [(ngModel)]="params.steps" />
+    </mat-form-field>
+    <mat-form-field>
+      <mat-label>Guidance</mat-label>
+      <input matInput type="number" [(ngModel)]="params.guidance" step="1" />
+    </mat-form-field>
+    <mat-form-field>
+      <mat-label>CFG</mat-label>
+      <input matInput type="number" [(ngModel)]="params.cfg" step="0.5" />
+    </mat-form-field>
+    <mat-form-field matTooltip="Grow the painted mask outwards; helps blend the seam">
+      <mat-label>Expand mask</mat-label>
+      <input matInput type="number" [(ngModel)]="params.maskExpand" step="1" />
+    </mat-form-field>
+    <mat-form-field>
+      <mat-label>Sampler</mat-label>
+      <mat-select [(ngModel)]="params.samplerName">
+        @for (s of availableSamplers; track s) {
+          <mat-option [value]="s">{{ s }}</mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+    <mat-form-field>
+      <mat-label>Scheduler</mat-label>
+      <mat-select [(ngModel)]="params.scheduler">
+        @for (s of availableSchedulers; track s) {
+          <mat-option [value]="s">{{ s }}</mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+  </div>
+
+  <mat-form-field class="full-width">
+    <mat-label>Positive Prompt</mat-label>
+    <textarea matInput [(ngModel)]="params.positivePrompt" rows="3"
+              placeholder="What should appear in the painted area"></textarea>
+  </mat-form-field>
+
+  <div class="footer-row">
+    <mat-checkbox [(ngModel)]="keepUnmasked"
+                  matTooltip="Paste the render back through the mask, so pixels outside it are untouched by the VAE round-trip">
+      Keep unmasked pixels exact
+    </mat-checkbox>
+    <mat-checkbox [(ngModel)]="copyResult">Copy result to working folder.</mat-checkbox>
+  </div>
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button mat-button mat-dialog-close>Close</button>
+  <button mat-flat-button (click)="send()"
+          [disabled]="sending || !hasMask || comfy.checkStatus !== 'ok'">
+    {{ sending ? 'Sending...' : 'Send' }}
+  </button>
+</mat-dialog-actions>

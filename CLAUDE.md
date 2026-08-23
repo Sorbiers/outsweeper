@@ -45,6 +45,9 @@ npm run release
 - `POST /api/undo` — undo last move (in-memory stack)
 - `POST /api/photos/<fn>/describe` — AI description via LM Studio vision API
 - `POST /api/photos/<fn>/write-meta` — write description to PNG text chunk or JPEG/WebP EXIF
+- `POST /api/masks?path=<image>` — store an Inpaint mask: takes the painted coverage
+  (white = repaint), merges it into the source's alpha with Pillow, writes it to a
+  hidden `__masks/` folder beside the image and returns the path for a job's `upload`
 
 **API endpoints — External integrations:**
 - `POST /api/comfy/check` — verify ComfyUI connection
@@ -105,6 +108,11 @@ memory has been released. Work therefore survives closing a dialog or the whole 
 - `InfoPanel` — metadata display with ComfyUI workflow details
 - `PreviewPanel` — full-resolution image viewer with mouse-wheel zoom and click-drag pan
 - `GenerateDialog` — edit ComfyUI workflows and queue them as jobs; extracts variable nodes (LoRAs, checkpoints) for Cartesian product batch generation
+- `InpaintDialog` — brush a mask over an image and queue a Flux Fill inpaint. Same graph
+  as Outpaint minus `ImagePadForOutpaint`: the mask rides in the upload's alpha channel,
+  since ComfyUI's `LoadImage` returns MASK as `1 - alpha`. Lazy-loaded. Mouse-wheel
+  zooms about the cursor and middle-drag pans; LoRAs chain between the UNET/CLIP loaders
+  and their consumers, so strength model/clip apply to the fill
 - `DescribeDialog` — AI image description via LM Studio vision model; can save description to image metadata
 - `PrompterDialog` — compose narrative prompts from randomized preset arrays (ambience, character, action, style)
 - `GuidedGenerationDialog` — configures a `guided` job, then *monitors* it (the loop runs on the backend, so closing the dialog doesn't stop it)

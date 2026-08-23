@@ -23,7 +23,7 @@ from urllib.parse import urlparse
 
 import requests as http_requests
 from flask import Flask, Response, abort, g, jsonify, request, send_file, send_from_directory, stream_with_context
-from PIL import Image
+from PIL import Image, ImageChops
 from PIL.PngImagePlugin import PngInfo
 
 from .background import _comfy_queue_loop, _comfy_ws_loop, _metrics_loop
@@ -47,6 +47,8 @@ from .utils import (
     LMS_TEXT_TEMPERATURE,
     LMS_VISION_TEMPERATURE,
     SSE_QUEUE_TIMEOUT,
+    MASK_KEEP,
+    MASKS_DIR,
     THUMBNAILS_DIR,
     THUMBNAIL_QUALITY,
     THUMBNAIL_SIZE,
@@ -570,6 +572,74 @@ def create_app(
             return jsonify(resp.json()), resp.status_code
         except Exception as e:
             return jsonify({'error': str(e)}), 502
+
+    @app.route('/api/masks', methods=['POST'])
+    def save_mask():
+        """Store a mask painted in the browser next to its source image.
+
+        The browser posts only the painted *coverage* (white = repaint); the RGBA
+        the job uploads is assembled here. Doing the merge with Pillow rather than
+        on a canvas matters: a canvas premultiplies, so every pixel it marks fully
+        transparent loses its colour, which would show up as black wherever the
+        graph reads the source image through a mask that doesn't line up exactly
+        with the hole — a shrunk `GrowMask`, or a soft brush edge.
+
+        It lands on disk because a job's `upload` takes a *path*: the worker sends
+        it to ComfyUI when the job runs, so this works with ComfyUI still down.
+        ComfyUI's LoadImage returns MASK as `1 - alpha`, so image and mask travel
+        as one file and the queue's one-upload-per-job contract is enough.
+        """
+        src_rel = (request.args.get('path') or '').strip().lstrip('/')
+        if not src_rel:
+            return jsonify({'error': 'path is required'}), 400
+
+        src_path = resolve_path(src_rel)
+        if not src_path.is_file():
+            return jsonify({'error': 'source image not found'}), 404
+
+        data = request.get_json(silent=True) or {}
+        raw = (data.get('coverage') or '').strip()
+        if raw.startswith('data:'):
+            raw = raw.split(',', 1)[-1]
+        if not raw:
+            return jsonify({'error': 'coverage is required'}), 400
+        try:
+            blob = base64.b64decode(raw, validate=True)
+        except Exception:
+            return jsonify({'error': 'coverage is not valid base64'}), 400
+
+        try:
+            coverage = Image.open(io.BytesIO(blob))
+            coverage.load()
+            coverage = coverage.convert('L')
+        except Exception as e:
+            return jsonify({'error': f'not a readable image: {e}'}), 400
+
+        with Image.open(src_path) as src_img:
+            # A size mismatch would silently inpaint the wrong region, so refuse it.
+            if src_img.size != coverage.size:
+                return jsonify({'error': f'coverage is {coverage.size[0]}x{coverage.size[1]} '
+                                         f'but the image is {src_img.size[0]}x{src_img.size[1]}'}), 400
+            merged = src_img.convert('RGB')
+            merged.putalpha(ImageChops.invert(coverage))
+
+        head, _, _ = src_rel.rpartition('/')
+        mask_rel = f'{head}/{MASKS_DIR}' if head else MASKS_DIR
+        mask_rel = f'{mask_rel}/{Path(src_rel).stem}.{_uuid.uuid4().hex[:8]}.png'
+
+        target = resolve_path(mask_rel)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        merged.save(target, format='PNG')
+
+        # Masks are throwaway; keep the directory from growing without bound.
+        try:
+            existing = sorted(target.parent.glob('*.png'), key=lambda f: f.stat().st_mtime)
+            for stale in existing[:-MASK_KEEP]:
+                stale.unlink(missing_ok=True)
+        except OSError:
+            pass
+
+        return jsonify({'path': mask_rel})
 
     @app.route('/api/comfy/samplers', methods=['POST'])
     def comfy_samplers():

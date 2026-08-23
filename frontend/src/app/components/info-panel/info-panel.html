@@ -15,7 +15,7 @@
             <mat-icon>auto_fix_high</mat-icon>
             <span class="menu-label">Generate from</span>
           </button>
-          @if (info.png_metadata['prompt']) {
+          @if (info.png_metadata?.['prompt']) {
             <button mat-menu-item (click)="extractWorkflow()">
               <mat-icon>data_object</mat-icon>
               <span class="menu-label">Extract Workflow</span>
@@ -24,6 +24,10 @@
           <button mat-menu-item (click)="openOutpaint()">
             <mat-icon>open_with</mat-icon>
             <span class="menu-label">Outpaint</span>
+          </button>
+          <button mat-menu-item (click)="openInpaint()">
+            <mat-icon>format_paint</mat-icon>
+            <span class="menu-label">Inpaint</span>
           </button>
           <button mat-menu-item [matMenuTriggerFor]="upscaleSubMenu">
             <mat-icon>photo_size_select_large</mat-icon>

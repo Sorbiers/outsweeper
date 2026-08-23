@@ -1,0 +1,106 @@
+.full-width { width: 100%; }
+
+.editor {
+  margin-bottom: 8px;
+}
+
+.canvas-wrap {
+  // Centring via `margin: auto` on the canvas rather than justify/align-content:
+  // a centred flex child that overflows puts half the overflow out of scroll
+  // reach, which breaks zooming towards the left/top edges.
+  display: flex;
+  height: 46vh;
+  overflow: auto;
+  overscroll-behavior: contain;   // wheel-zoom must not scroll the dialog behind it
+  background: #111;
+  border: 1px solid #333;
+  border-radius: 6px;
+  padding: 6px;
+
+  canvas {
+    // The canvas is the image's native size; its CSS width is driven by the zoom
+    // and the pointer handlers convert back, so strokes stay at full resolution.
+    height: auto;
+    display: block;
+    flex: 0 0 auto;
+    margin: auto;
+    cursor: crosshair;
+    touch-action: none;   // let pointer events drive painting, not scrolling
+  }
+}
+
+.note {
+  margin: 24px 0;
+  text-align: center;
+  font-size: 13px;
+  opacity: 0.7;
+
+  &.error { color: #ef5350; opacity: 1; }
+}
+
+.tools {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+.brush-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1 1 200px;
+  min-width: 160px;
+
+  .brush-slider { flex: 1 1 auto; min-width: 120px; accent-color: #ff2d2d; }
+  .brush-value { min-width: 28px; text-align: right; }
+}
+
+.tool-label {
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+.dims {
+  font-size: 12px;
+  opacity: 0.55;
+  margin-left: auto;
+}
+
+.params-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 0 12px;
+}
+
+.footer-row {
+  display: flex;
+  gap: 20px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+@media (max-width: 900px) {
+  .params-grid { grid-template-columns: repeat(3, 1fr); }
+}
+
+.lora-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin-bottom: 4px;
+
+  > button { align-self: flex-start; }
+}
+
+.lora-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.lora-name-field { flex: 1 1 auto; min-width: 0; }
+.lora-strength-field { flex: 0 0 110px; }
+.lora-remove-btn { flex: 0 0 auto; margin-bottom: 18px; }
