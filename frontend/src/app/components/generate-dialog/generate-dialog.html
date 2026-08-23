@@ -249,6 +249,10 @@
       Copy the result to the working folder.
     </mat-checkbox>
     <mat-checkbox [(ngModel)]="randomizeSeedOnSend">Randomize seed on send</mat-checkbox>
+    <mat-checkbox [(ngModel)]="recordSteps"
+                  matTooltip="Save a numbered contact sheet and an animation of the sampler steps, into __steps beside the render. Needs ComfyUI started with --preview-method taesd">
+      Record steps
+    </mat-checkbox>
     <mat-form-field class="jobs-field" subscriptSizing="dynamic">
       <mat-label>Jobs number</mat-label>
       <input matInput type="number" min="1" step="1" [(ngModel)]="jobsNumber" />

@@ -68,3 +68,13 @@
   border-radius: 2px;
   transition: width 0.3s;
 }
+
+.step-preview {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+  border-radius: 3px;
+  background: #111;
+
+  &.hidden { display: none; }
+}

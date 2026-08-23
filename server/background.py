@@ -5,12 +5,16 @@ import time
 from typing import TYPE_CHECKING
 
 from .events import _SSE_CLIENTS, _SSE_LOCK, _sse_broadcast
+from .previews import PreviewStore, parse_preview_frame
 from .utils import LMS_CHECK_TIMEOUT, SSE_QUEUE_TIMEOUT
 
 if TYPE_CHECKING:
     from .state import AppState
 
 _COMFY_PROGRESS: dict = {}
+
+#: Step previews from ComfyUI's websocket; shared with the routes and the worker.
+PREVIEWS = PreviewStore()
 
 
 def _metrics_loop(interval: float = 2.0) -> None:
@@ -64,14 +68,31 @@ def _comfy_ws_loop(state: 'AppState') -> None:
                 try:
                     msg = json.loads(message)
                     if msg['type'] == 'progress':
-                        _COMFY_PROGRESS = {'value': msg['data']['value'], 'max': msg['data']['max']}
+                        d = msg['data']
+                        _COMFY_PROGRESS = {'value': d['value'], 'max': d['max']}
+                        # Legacy preview frames carry no ids, but this message
+                        # always precedes them — so it is what attributes them.
+                        PREVIEWS.note_progress(d.get('prompt_id'), d.get('value', 0))
                     elif msg['type'] == 'execution_complete':
                         _COMFY_PROGRESS = {}
                     elif msg['type'] == 'executing' and msg.get('data', {}).get('node') is None:
                         _COMFY_PROGRESS = {}
                 except Exception:
                     pass
-            websocket.WebSocketApp(ws_url, on_message=on_message).run_forever()
+
+            def on_data(ws, data, data_type, _cont):
+                # Previews arrive as binary frames; websocket-client routes them
+                # here rather than to on_message.
+                if data_type != websocket.ABNF.OPCODE_BINARY:
+                    return
+                try:
+                    frame = parse_preview_frame(data if isinstance(data, bytes) else bytes(data))
+                    if frame:
+                        PREVIEWS.add_frame(*frame)
+                except Exception:
+                    pass
+
+            websocket.WebSocketApp(ws_url, on_message=on_message, on_data=on_data).run_forever()
         except Exception as e:
             print(f'[warn] comfy ws: {e}', flush=True)
         time.sleep(5)

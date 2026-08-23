@@ -12,6 +12,18 @@ import {
 /** Path prefix understood by the backend resolver for the local flows collection. */
 export const COLLECTION_PREFIX = '%collection%';
 import { AppConfig } from '../models/config.model';
+
+export interface SidecarFile {
+  name: string;
+  size: number;
+  truncated: boolean;
+  content: string;
+}
+
+export interface SidecarResponse {
+  txt: SidecarFile | null;
+  json: SidecarFile | null;
+}
 import { Job, JobPayload, JobQueueState } from '../models/job.model';
 
 @Injectable({ providedIn: 'root' })
@@ -193,6 +205,25 @@ export class PhotoService {
 
   setLmStudioWidgetPaused(paused: boolean, clientId: string): Observable<{ ok: boolean }> {
     return this.http.post<{ ok: boolean }>('/api/lmstudio/pause', { paused, client_id: clientId });
+  }
+
+  /** Launch a desktop editor on the file. Returns as soon as it is spawned. */
+  openWith(editor: 'paint' | 'photo_editor', filename: string, folder = ''): Observable<{ ok: boolean }> {
+    return this.http.post<{ ok: boolean }>('/api/open-with', { editor },
+      { params: { path: this.filePath(filename, folder) } });
+  }
+
+  /** Same-stem .txt / .json beside the image — dataset captions and tags. */
+  getSidecars(filename: string, folder = ''): Observable<SidecarResponse> {
+    return this.http.get<SidecarResponse>('/api/sidecar',
+      { params: { path: this.filePath(filename, folder) } });
+  }
+
+  /** Post the painted coverage; the backend merges it into the source's alpha and
+   *  returns the path to hand to a job's `upload`, which uploads it at run time. */
+  saveMask(sourcePath: string, coverageDataUrl: string): Observable<{ path: string }> {
+    return this.http.post<{ path: string }>(
+      `/api/masks?path=${encodeURIComponent(sourcePath)}`, { coverage: coverageDataUrl });
   }
 
   // --- internal job queue ---------------------------------------------------

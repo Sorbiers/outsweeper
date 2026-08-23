@@ -29,8 +29,10 @@ from typing import Any, Callable
 
 from . import lmstudio
 from . import prompts as prompts_text
+from . import previews
 from . import resources
 from .resources import ResourceError
+from .utils import STEPS_DIR
 from .utils import LMS_COMPLETION_TIMEOUT, VISION_COMPLETION_TIMEOUT
 
 # Lifecycle: queued -> running -> processed -> done, or failed / cancelled.
@@ -300,12 +302,17 @@ class JobQueue:
             return
 
         front = bool(payload.get('front'))
+        record_steps = bool(payload.get('recordSteps'))
         prompt_ids: list[str] = []
         for i, wf in enumerate(workflows, 1):
             if cancelled():
                 return
             self._step(job, f'Submitting {i}/{len(workflows)}…', i / len(workflows))
-            prompt_ids.append(resources.submit_prompt(cu, wf, front=front))
+            pid = resources.submit_prompt(cu, wf, front=front)
+            prompt_ids.append(pid)
+            if record_steps:
+                # Arm before the render starts: frames stream in as it samples.
+                self._previews().start_recording(pid)
 
         # Graphs accepted by ComfyUI — locally we're done, the GPU is not.
         job.status = STATUS_PROCESSED
@@ -324,7 +331,50 @@ class JobQueue:
                 raise ResourceError('ComfyUI did not report a result for one of the prompts.')
             if copy_result:
                 filenames.extend(self._ctx.copy_history_outputs(cu, entry))
+            if record_steps:
+                job.result.setdefault('steps', []).extend(self._write_step_review(pid, entry))
         job.result['filenames'] = filenames
+
+    @staticmethod
+    def _previews():
+        # Imported here rather than at module scope: background.py already imports
+        # from this package, and a top-level import would close the cycle.
+        from .background import PREVIEWS
+        return PREVIEWS
+
+    def _write_step_review(self, prompt_id: str, entry: dict) -> list[str]:
+        """Turn a prompt's captured step frames into a sheet and an animation.
+
+        Named after the rendered image so the two land beside it, and returns the
+        relative names for the job result. Never raises: a failed review must not
+        fail a render that already succeeded.
+        """
+        frames = self._previews().take_recording(prompt_id)
+        if not frames:
+            return []
+        try:
+            stem = None
+            for node_output in (entry.get('outputs') or {}).values():
+                for img in node_output.get('images', []):
+                    if img.get('type') == 'output':
+                        stem = Path(img['filename']).stem
+                        break
+                if stem:
+                    break
+            stem = stem or f'prompt_{prompt_id[:8]}'
+
+            out_dir = self._ctx.state.root_resolved / STEPS_DIR
+            written = []
+            sheet = previews.write_step_sheet(frames, out_dir / f'{stem}_steps.jpg')
+            if sheet:
+                written.append(f'{STEPS_DIR}/{sheet.name}')
+            anim = previews.write_step_animation(frames, out_dir / f'{stem}_steps.webp')
+            if anim:
+                written.append(f'{STEPS_DIR}/{anim.name}')
+            return written
+        except Exception as e:
+            print(f'[warn] step review failed for {prompt_id}: {e}', flush=True)
+            return []
 
     def _run_improve_send(self, job: Job) -> None:
         """"Improve then send": have the LLM enrich each prompt, then render them all.

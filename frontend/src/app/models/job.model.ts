@@ -39,6 +39,8 @@ export interface JobPrompt {
 export interface JobPayload {
   prompts: JobPrompt[];
   copyResult?: boolean;
+  /** Capture each sampler step and write a review sheet + animation. */
+  recordSteps?: boolean;
   front?: boolean;
   /** LM Studio model for the LLM stages of composite jobs. */
   lmModel?: string;

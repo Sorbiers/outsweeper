@@ -1,0 +1,127 @@
+<h2 mat-dialog-title ppDialogTitle>Kontext — {{ data.filename }}</h2>
+
+<mat-dialog-content>
+  <pp-comfy-url-row (connected)="onConnected()"></pp-comfy-url-row>
+
+  <div class="top-row">
+    <img class="reference" [src]="imageUrl" [alt]="data.filename" />
+
+    <div class="prompt-side">
+      <mat-button-toggle-group class="mode-toggle" [(ngModel)]="mode" hideSingleSelectionIndicator>
+        <mat-button-toggle value="next" matTooltip="Continue the shot to its next moment">
+          <mat-icon>skip_next</mat-icon> Next frame
+        </mat-button-toggle>
+        <mat-button-toggle value="edit" matTooltip="Plain instruction editing">
+          <mat-icon>edit</mat-icon> Edit
+        </mat-button-toggle>
+      </mat-button-toggle-group>
+
+      <mat-form-field class="full-width">
+        <mat-label>{{ mode === 'next' ? 'What happens next' : 'Edit instruction' }}</mat-label>
+        <textarea matInput [(ngModel)]="params.instruction" rows="4"
+                  [placeholder]="placeholder"></textarea>
+      </mat-form-field>
+
+      @if (mode === 'next') {
+        <p class="prefix-note">
+          <mat-icon inline>info</mat-icon>
+          Sent with: <em>{{ NEXT_FRAME_PREFIX }}</em>
+        </p>
+      }
+    </div>
+  </div>
+
+  @if (availableModels.length) {
+    <mat-form-field class="full-width">
+      <mat-label>Model</mat-label>
+      <mat-select [(ngModel)]="selectedModel">
+        @for (m of availableModels; track m) {
+          <mat-option [value]="m">{{ m }}</mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+  }
+
+  <div class="lora-section">
+    @for (lora of loras; track $index; let i = $index) {
+      <div class="lora-row">
+        <mat-form-field class="lora-name-field">
+          <mat-label>LoRA {{ i + 1 }}</mat-label>
+          <mat-select [(ngModel)]="lora.name">
+            @for (l of availableLoras; track l) {
+              <mat-option [value]="l">{{ l }}</mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
+        <mat-form-field class="lora-strength-field">
+          <mat-label>Str Model</mat-label>
+          <input matInput type="number" [(ngModel)]="lora.strengthModel" step="0.1" min="0" max="2" />
+        </mat-form-field>
+        <mat-form-field class="lora-strength-field">
+          <mat-label>Str Clip</mat-label>
+          <input matInput type="number" [(ngModel)]="lora.strengthClip" step="0.1" min="0" max="2" />
+        </mat-form-field>
+        <button mat-icon-button (click)="removeLora(i)" title="Remove" class="lora-remove-btn">
+          <mat-icon>remove_circle_outline</mat-icon>
+        </button>
+      </div>
+    }
+    <button mat-stroked-button (click)="addLora()" [disabled]="comfy.checkStatus !== 'ok'">
+      <mat-icon>add</mat-icon> Add LoRA
+    </button>
+  </div>
+
+  <div class="params-grid">
+    <mat-form-field>
+      <mat-label>Seed</mat-label>
+      <input matInput type="number" [(ngModel)]="params.seed" />
+      <button mat-icon-button matSuffix (click)="randomizeSeed()" title="Randomize">
+        <mat-icon>casino</mat-icon>
+      </button>
+    </mat-form-field>
+    <mat-form-field>
+      <mat-label>Steps</mat-label>
+      <input matInput type="number" [(ngModel)]="params.steps" />
+    </mat-form-field>
+    <mat-form-field matTooltip="Kontext works best around 2.5; higher follows the instruction harder">
+      <mat-label>Guidance</mat-label>
+      <input matInput type="number" [(ngModel)]="params.guidance" step="0.1" />
+    </mat-form-field>
+    <mat-form-field>
+      <mat-label>CFG</mat-label>
+      <input matInput type="number" [(ngModel)]="params.cfg" step="0.5" />
+    </mat-form-field>
+    <mat-form-field matTooltip="Queue this many candidates from the same reference, each with its own seed">
+      <mat-label>Variants</mat-label>
+      <input matInput type="number" [(ngModel)]="variants" min="1" max="24" step="1" />
+    </mat-form-field>
+    <mat-form-field>
+      <mat-label>Sampler</mat-label>
+      <mat-select [(ngModel)]="params.samplerName">
+        @for (s of availableSamplers; track s) {
+          <mat-option [value]="s">{{ s }}</mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+    <mat-form-field>
+      <mat-label>Scheduler</mat-label>
+      <mat-select [(ngModel)]="params.scheduler">
+        @for (s of availableSchedulers; track s) {
+          <mat-option [value]="s">{{ s }}</mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+  </div>
+
+  <div class="footer-row">
+    <mat-checkbox [(ngModel)]="copyResult">Copy result to working folder.</mat-checkbox>
+  </div>
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button mat-button mat-dialog-close>Close</button>
+  <button mat-flat-button (click)="send()"
+          [disabled]="sending || comfy.checkStatus !== 'ok'">
+    {{ sending ? 'Sending...' : (variants > 1 ? 'Send ' + variants : 'Send') }}
+  </button>
+</mat-dialog-actions>

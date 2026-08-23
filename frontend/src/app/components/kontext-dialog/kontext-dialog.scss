@@ -1,0 +1,79 @@
+.full-width { width: 100%; }
+
+.top-row {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  margin-bottom: 4px;
+}
+
+.reference {
+  flex: 0 0 auto;
+  max-width: 40%;
+  max-height: 34vh;
+  object-fit: contain;
+  background: #111;
+  border: 1px solid #333;
+  border-radius: 6px;
+}
+
+.prompt-side {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mode-toggle {
+  align-self: flex-start;
+  height: 36px;
+
+  .mat-icon { margin-right: 4px; font-size: 18px; width: 18px; height: 18px; }
+}
+
+// The continuation wording is prepended to the instruction, so it is shown rather
+// than hidden — otherwise the prompt that ran wouldn't match what was typed.
+.prefix-note {
+  margin: -4px 0 0;
+  font-size: 11px;
+  line-height: 1.4;
+  opacity: 0.6;
+
+  em { font-style: italic; }
+  .mat-icon { font-size: 14px; height: 14px; width: 14px; vertical-align: -2px; }
+}
+
+.lora-section {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 4px;
+
+  > button { align-self: flex-start; }
+}
+
+.lora-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.lora-name-field { flex: 1 1 auto; min-width: 0; }
+.lora-strength-field { flex: 0 0 110px; }
+.lora-remove-btn { flex: 0 0 auto; margin-bottom: 18px; }
+
+.params-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 0 12px;
+}
+
+.footer-row {
+  margin-top: 4px;
+}
+
+@media (max-width: 900px) {
+  .params-grid { grid-template-columns: repeat(3, 1fr); }
+  .top-row { flex-direction: column; }
+  .reference { max-width: 100%; }
+}

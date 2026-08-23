@@ -176,3 +176,65 @@ h3, h4 {
     cursor: pointer;
   }
 }
+
+.source-name {
+  display: block;
+  font-size: 11px;
+  opacity: 0.6;
+  margin-top: 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidecar + .sidecar { margin-top: 12px; }
+
+.sidecar-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+
+  .mat-icon { font-size: 16px; width: 16px; height: 16px; opacity: 0.7; }
+}
+
+.sidecar-name {
+  font-size: 12px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidecar-size {
+  font-size: 11px;
+  opacity: 0.5;
+  margin-left: auto;
+}
+
+.sidecar-toggle {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+}
+
+.sidecar-body {
+  margin: 4px 0 0;
+  padding: 6px 8px;
+  font-size: 11px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 4px;
+  overflow: auto;
+
+  // Collapsed by default so a long caption can't shove the rest of the panel down.
+  &.collapsed { max-height: 90px; }
+}
+
+.sidecar-truncated {
+  display: block;
+  font-size: 11px;
+  opacity: 0.55;
+  margin-top: 3px;
+}

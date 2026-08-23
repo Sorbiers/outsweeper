@@ -20,13 +20,12 @@ import { DictionaryService, DictionaryValue, DictionaryValueLora } from '../../s
 import { LmStudioConnectionService } from '../../services/lmstudio-connection.service';
 import { PhotoService } from '../../services/photo.service';
 import { PromptHistoryService } from '../../services/prompt-history.service';
-import { CameraDialog } from '../camera-dialog/camera-dialog';
 import { ComfyUrlRowComponent } from '../comfy-url-row/comfy-url-row';
 import { DictionaryDialog } from '../dictionary-dialog/dictionary-dialog';
 import { GuidedGenerationData, GuidedGenerationDialog } from '../guided-generation-dialog/guided-generation-dialog';
 import { LlmModelDialog, LlmModelDialogData } from '../llm-model-dialog/llm-model-dialog';
-import { PhotoChartDialog, PhotoChartDialogData } from '../photo-chart-dialog/photo-chart-dialog';
-import { ChartId } from '../photo-chart-dialog/photo-chart-presets';
+import type { PhotoChartDialogData } from '../photo-chart-dialog/photo-chart-dialog';
+import type { ChartId } from '../photo-chart-dialog/photo-chart-presets';
 import { PromptHistoryDialog } from '../prompt-history-dialog/prompt-history-dialog';
 import { PrompterDialog } from '../prompter-dialog/prompter-dialog';
 import { SaveFlowDialog } from '../save-flow-dialog/save-flow-dialog';
@@ -128,6 +127,8 @@ export class GenerateDialog {
   /** Progress line shown while "Improve then send" runs its multi-phase flow. */
   sendStatus = '';
   copyResult = false;
+  /** Keep every sampler step preview and write a sheet + animation beside the render. */
+  recordSteps = false;
   randomizeSeedOnSend = false;
   jobsNumber = 1;
   hasDenoise = false;
@@ -220,8 +221,10 @@ export class GenerateDialog {
    * prompt where the caret was. The caret is captured *before* opening, because the
    * modal takes focus and a re-rendered textarea would otherwise lose the position.
    */
-  openCameraChart(): void {
+  /** Loaded on demand — the chart ships 42 inline diagrams and their preset table. */
+  async openCameraChart(): Promise<void> {
     const at = this.caretInPrompt();
+    const { CameraDialog } = await import('../camera-dialog/camera-dialog');
     this.dialog.open(CameraDialog, { width: '90vw', maxWidth: '900px', maxHeight: '86vh' })
       .afterClosed().subscribe((text?: string) => {
         if (text) this.insertIntoPrompt(text, at);
@@ -229,8 +232,9 @@ export class GenerateDialog {
   }
 
   /** Photographic reference chart (camera framing/angles or lighting), single pick. */
-  openPhotoChart(chart: ChartId): void {
+  async openPhotoChart(chart: ChartId): Promise<void> {
     const at = this.caretInPrompt();
+    const { PhotoChartDialog } = await import('../photo-chart-dialog/photo-chart-dialog');
     this.dialog.open(PhotoChartDialog, {
       data: { chart } satisfies PhotoChartDialogData,
       width: '92vw', maxWidth: '1040px', maxHeight: '88vh',
@@ -430,6 +434,7 @@ export class GenerateDialog {
     this.enqueue(front ? 'Send to front' : 'Generate', {
       prompts,
       copyResult: this.copyResult,
+      recordSteps: this.recordSteps,
       front,
       upload: needsUpload ? { path: src!.folder ? `${src!.folder}/${src!.filename}` : src!.filename } : undefined,
     });
@@ -597,6 +602,7 @@ export class GenerateDialog {
     this.enqueue('Improve then send', {
       prompts,
       copyResult: this.copyResult,
+      recordSteps: this.recordSteps,
       front,
       lmModel: model,
       upload: needsUpload ? { path: src!.folder ? `${src!.folder}/${src!.filename}` : src!.filename } : undefined,
