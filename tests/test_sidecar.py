@@ -54,7 +54,8 @@ class TestSidecar:
         assert json.loads(d['json']['content']) == {'tags': ['library']}
 
     def test_null_when_absent(self, client):
-        assert client.get('/api/sidecar?path=bare.png').get_json() == {'txt': None, 'json': None}
+        d = client.get('/api/sidecar?path=bare.png').get_json()
+        assert d == {'txt': None, 'json': None, 'steps': []}
 
     def test_json_is_returned_verbatim(self, client, photo_dir):
         """Raw text, not re-serialised — a malformed file must still display."""
@@ -76,7 +77,7 @@ class TestSidecar:
 
     def test_missing_image_still_answers(self, client):
         """The sidecar lookup is by stem, so a missing image is simply "none"."""
-        assert client.get('/api/sidecar?path=ghost.png').get_json() == {'txt': None, 'json': None}
+        assert client.get('/api/sidecar?path=ghost.png').get_json() == {'txt': None, 'json': None, 'steps': []}
 
     def test_path_traversal(self, client):
         assert client.get('/api/sidecar?path=../escape.png').status_code == 400
@@ -111,3 +112,50 @@ class TestOpenWith:
                 break
             time.sleep(0.05)
         assert 'shot.png' in marker.read_text(errors='replace')
+
+
+class TestStepArtifacts:
+    """Step reviews live in <root>/__steps, keyed to the rendered file's stem."""
+
+    def _write_steps(self, photo_dir: Path, stem: str) -> None:
+        d = photo_dir / '__steps'
+        d.mkdir(exist_ok=True)
+        Image.new('RGB', (40, 20)).save(d / f'{stem}_steps.jpg')
+        Image.new('RGB', (20, 20)).save(d / f'{stem}_steps.webp')
+
+    def test_reports_sheet_and_animation(self, client, photo_dir):
+        self._write_steps(photo_dir, 'shot')
+        steps = client.get('/api/sidecar?path=shot.png').get_json()['steps']
+        assert [s['kind'] for s in steps] == ['sheet', 'animation']
+        assert [s['path'] for s in steps] == ['__steps/shot_steps.jpg', '__steps/shot_steps.webp']
+        assert all(s['size'] > 0 for s in steps)
+
+    def test_reported_path_is_servable(self, client, photo_dir):
+        self._write_steps(photo_dir, 'shot')
+        path = client.get('/api/sidecar?path=shot.png').get_json()['steps'][0]['path']
+        assert client.get(f'/api/photo?path={path}').status_code == 200
+
+    def test_found_for_an_image_moved_out_of_the_root(self, client, photo_dir):
+        """Steps stay at <root>/__steps even after the render is filed away."""
+        self._write_steps(photo_dir, 'shot')
+        sel = photo_dir / '__selected'
+        sel.mkdir(exist_ok=True)
+        Image.new('RGB', (16, 16)).save(sel / 'shot.png')
+        steps = client.get('/api/sidecar?path=__selected/shot.png').get_json()['steps']
+        assert len(steps) == 2
+
+    def test_only_what_exists_is_listed(self, client, photo_dir):
+        d = photo_dir / '__steps'
+        d.mkdir(exist_ok=True)
+        Image.new('RGB', (40, 20)).save(d / 'shot_steps.jpg')   # sheet only
+        steps = client.get('/api/sidecar?path=shot.png').get_json()['steps']
+        assert [s['kind'] for s in steps] == ['sheet']
+
+
+def test_webp_is_served_as_an_image(client, photo_dir):
+    """Windows often has no registry entry for WebP; without registering the type
+    Flask sends application/octet-stream and the browser downloads it."""
+    Image.new('RGB', (8, 8)).save(photo_dir / 'anim.webp')
+    r = client.get('/api/photo?path=anim.webp')
+    assert r.status_code == 200
+    assert r.mimetype == 'image/webp'

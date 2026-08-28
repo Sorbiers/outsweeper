@@ -248,7 +248,10 @@
     <mat-checkbox [(ngModel)]="copyResult" class="copy-result-checkbox">
       Copy the result to the working folder.
     </mat-checkbox>
-    <mat-checkbox [(ngModel)]="randomizeSeedOnSend">Randomize seed on send</mat-checkbox>
+    <mat-checkbox [(ngModel)]="randomizeSeedOnSend"
+                  matTooltip="A fresh seed for every flow sent — each prompt part and each LoRA/checkpoint combination gets its own">
+      Randomize seed on each send
+    </mat-checkbox>
     <mat-checkbox [(ngModel)]="recordSteps"
                   matTooltip="Save a numbered contact sheet and an animation of the sampler steps, into __steps beside the render. Needs ComfyUI started with --preview-method taesd">
       Record steps

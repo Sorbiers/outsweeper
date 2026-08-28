@@ -80,9 +80,14 @@ those frames, keeps the newest for the COMFY widget's live thumbnail, and (when 
 job sets `recordSteps`) buffers a prompt's frames and writes a numbered contact
 sheet plus an animated WebP into `__steps/` beside the render.
 
-- **Requires `--preview-method taesd` on ComfyUI's command line** — the default is
-  `none` and no frames are sent at all. `taef1_decoder.safetensors` (the Flux TAESD
-  decoder) must be in `models/vae_approx/`.
+- **Previews are off unless a job asks for them.** `submit_prompt` sends
+  `extra_data.preview_method`, which ComfyUI applies per prompt and resets afterwards
+  (`execution.py` -> `latent_preview.set_preview_method`) — `'none'` normally, `'taesd'`
+  only when the job set `recordSteps`. So ordinary renders pay nothing for the per-step
+  decode, and no ComfyUI command-line flag is needed: the per-prompt value overrides
+  `--preview-method` in both directions. TAESD does need
+  `taef1_decoder.safetensors` in `models/vae_approx/`, or ComfyUI warns and falls back
+  to the much cruder `latent2rgb`.
 - Legacy frames carry no ids, but each is preceded by a JSON `progress` message
   holding `prompt_id`, which is how frames are attributed to a job. Do **not**
   negotiate `supports_preview_metadata`: ComfyUI then stops sending the legacy

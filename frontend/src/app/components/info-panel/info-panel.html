@@ -428,6 +428,38 @@
         </mat-card-content>
       </mat-card>
     }
+
+    @if (stepArtifacts().length) {
+      <mat-card class="info-card">
+        <mat-card-content>
+          <button type="button" class="steps-heading" (click)="stepsOpen.set(!stepsOpen())"
+                  matTooltip="The sampler's own view of the render, step by step"
+                  [matTooltipShowDelay]="TOOLTIP_DELAY">
+            <mat-icon>filter_frames</mat-icon>
+            <span>Render steps</span>
+            <span class="steps-count">{{ stepArtifacts().length }}</span>
+            <mat-icon class="steps-chevron">{{ stepsOpen() ? 'expand_less' : 'expand_more' }}</mat-icon>
+          </button>
+          @if (stepsOpen()) {
+            <div class="steps-grid">
+              @for (a of stepArtifacts(); track a.name) {
+                <figure class="step-art">
+                  <img [src]="stepUrl(a)" [alt]="a.name" loading="lazy"
+                       (click)="openStep(a)"
+                       [matTooltip]="(a.kind === 'sheet' ? 'Contact sheet of every sampling step' : 'The render evolving, animated') + ' — click to open full size'"
+                       [matTooltipShowDelay]="TOOLTIP_DELAY" />
+                  <figcaption>
+                    <span>{{ a.kind === 'sheet' ? 'Contact sheet' : 'Animation' }}</span>
+                    <span class="step-size">{{ (a.size / 1024) | number:'1.0-0' }} kB</span>
+                  </figcaption>
+                </figure>
+              }
+            </div>
+          }
+        </mat-card-content>
+      </mat-card>
+    }
+
   </div>
 } @else {
   <div class="no-selection">Select an image</div>

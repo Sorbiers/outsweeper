@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import json
+import mimetypes
 import os
 import re
 import time
@@ -18,6 +19,12 @@ from PIL.PngImagePlugin import PngInfo  # re-exported for factory use  # noqa: F
 # guard, which otherwise makes Image.open() raise and reports 0×0 dimensions,
 # no thumbnails, etc. for such files.
 Image.MAX_IMAGE_PIXELS = None
+
+# Windows' registry frequently has no entry for WebP, so `mimetypes` guesses None
+# and Flask falls back to application/octet-stream — which makes a browser download
+# a .webp instead of displaying it, despite WebP being one of the formats this app
+# reads and writes. Registering it once fixes every route that serves or uploads.
+mimetypes.add_type('image/webp', '.webp')
 
 # ---------------------------------------------------------------------------
 # Constants

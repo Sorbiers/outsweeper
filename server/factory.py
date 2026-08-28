@@ -48,6 +48,7 @@ from .utils import (
     LMS_TEXT_TEMPERATURE,
     LMS_VISION_TEMPERATURE,
     SIDECAR_MAX_BYTES,
+    STEPS_DIR,
     SSE_QUEUE_TIMEOUT,
     MASK_KEEP,
     MASKS_DIR,
@@ -1388,6 +1389,23 @@ def create_app(
                 else:
                     out[key] = {'name': side.name, 'size': size, 'truncated': False,
                                 'content': side.read_text(encoding='utf-8', errors='replace')}
+            except OSError:
+                continue
+
+        # Step reviews are written to <root>/__steps by the job worker, keyed to the
+        # rendered file's stem — not beside the image, which may since have been
+        # moved to __selected or __dust.
+        out['steps'] = []
+        for suffix, kind in (('_steps.jpg', 'sheet'), ('_steps.webp', 'animation')):
+            art = state.root_resolved / STEPS_DIR / f'{file_path.stem}{suffix}'
+            try:
+                if art.is_file():
+                    out['steps'].append({
+                        'kind': kind,
+                        'name': art.name,
+                        'size': art.stat().st_size,
+                        'path': f'{STEPS_DIR}/{art.name}',
+                    })
             except OSError:
                 continue
         return jsonify(out)

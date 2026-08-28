@@ -530,9 +530,13 @@ export class GenerateDialog {
 
     const units: PromptUnit[] = [];
     for (let j = 0; j < this.jobCount; j++) {
-      if (this.randomizeSeedOnSend) this.randomizeSeed();
       for (const part of promptParts) {
         for (const combo of combinations) {
+          // Per variant, not per job. Randomising once per job would hand the same
+          // seed to every prompt part and every LoRA/checkpoint combination in it,
+          // so a "10 prompts x 3 LoRAs" send would render 30 flows off one seed.
+          // `resolvedParams` snapshots `this.params`, so this has to happen first.
+          if (this.randomizeSeedOnSend) this.randomizeSeed();
           const { params: resolved, loras: dictLoras } = this.resolvedParams(part);
           const assign = combo.map((value, i) => ({
             nodeId: variableNodes[i].nodeId,

@@ -308,7 +308,9 @@ class JobQueue:
             if cancelled():
                 return
             self._step(job, f'Submitting {i}/{len(workflows)}…', i / len(workflows))
-            pid = resources.submit_prompt(cu, wf, front=front)
+            pid = resources.submit_prompt(
+                cu, wf, front=front,
+                preview_method='taesd' if record_steps else 'none')
             prompt_ids.append(pid)
             if record_steps:
                 # Arm before the render starts: frames stream in as it samples.

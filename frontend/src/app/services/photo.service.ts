@@ -20,9 +20,19 @@ export interface SidecarFile {
   content: string;
 }
 
+/** A step-review artifact written by a "Record steps" job. */
+export interface StepArtifact {
+  kind: 'sheet' | 'animation';
+  name: string;
+  size: number;
+  /** Path under the working folder, for /api/photo. */
+  path: string;
+}
+
 export interface SidecarResponse {
   txt: SidecarFile | null;
   json: SidecarFile | null;
+  steps: StepArtifact[];
 }
 import { Job, JobPayload, JobQueueState } from '../models/job.model';
 

@@ -198,9 +198,17 @@ def upload_image(comfy_url: str, file_path: Path) -> str:
     return name
 
 
-def submit_prompt(comfy_url: str, workflow: dict, *, front: bool = False) -> str:
-    """Queue one graph; returns its prompt_id. Raises with ComfyUI's validation text."""
-    payload: dict = {'prompt': workflow}
+def submit_prompt(comfy_url: str, workflow: dict, *, front: bool = False,
+                  preview_method: str = 'none') -> str:
+    """Queue one graph; returns its prompt_id. Raises with ComfyUI's validation text.
+
+    `preview_method` rides along in `extra_data`, which ComfyUI applies per prompt
+    (`execution.py` -> `latent_preview.set_preview_method`) and resets afterwards.
+    Defaulting it to 'none' means step previews cost nothing on ordinary renders and
+    are switched on only for the job that asked to record them — and it works even
+    when ComfyUI was started without `--preview-method`.
+    """
+    payload: dict = {'prompt': workflow, 'extra_data': {'preview_method': preview_method}}
     if front:
         payload['front'] = True
     resp = http_requests.post(f'{comfy_url.rstrip("/")}/prompt', json=payload, timeout=30)

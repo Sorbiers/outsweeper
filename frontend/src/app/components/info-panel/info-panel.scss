@@ -238,3 +238,65 @@ h3, h4 {
   opacity: 0.55;
   margin-top: 3px;
 }
+
+.steps-heading {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  text-align: left;
+
+  &:hover { opacity: 0.85; }
+
+  .mat-icon { font-size: 18px; width: 18px; height: 18px; opacity: 0.75; }
+}
+
+.steps-count {
+  font-size: 11px;
+  opacity: 0.55;
+}
+
+.steps-chevron { margin-left: auto; }
+
+.steps-grid { margin-top: 8px; }
+
+.steps-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+.step-art {
+  margin: 0;
+
+  img {
+    display: block;
+    width: 100%;
+    border-radius: 4px;
+    background: #111;
+    cursor: zoom-in;
+    border: 1px solid #333;
+    transition: border-color 0.15s;
+
+    &:hover { border-color: #666; }
+  }
+
+  figcaption {
+    display: flex;
+    justify-content: space-between;
+    gap: 6px;
+    font-size: 11px;
+    opacity: 0.65;
+    margin-top: 3px;
+  }
+}
+
+.step-size { opacity: 0.75; }

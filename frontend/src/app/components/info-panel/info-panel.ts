@@ -1,5 +1,5 @@
 import { ClipboardModule } from '@angular/cdk/clipboard';
-import { DatePipe, KeyValuePipe } from '@angular/common';
+import { DatePipe, DecimalPipe, KeyValuePipe } from '@angular/common';
 import { Component, EventEmitter, Input, OnInit, Output, inject, signal, computed } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
@@ -12,7 +12,7 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { BgRemoveCapabilities, PhotoInfo, UpscaleCapabilities } from '../../models/photo.model';
 import { ComfyConnectionService } from '../../services/comfy-connection.service';
-import { PhotoService, SidecarFile, SidecarResponse } from '../../services/photo.service';
+import { PhotoService, SidecarFile, SidecarResponse, StepArtifact } from '../../services/photo.service';
 import { RemoveBgDialog, RemoveBgDialogData } from '../remove-bg-dialog/remove-bg-dialog';
 import { UpscaleDialog, UpscaleDialogData, UpscaleMethod } from '../upscale-dialog/upscale-dialog';
 import { CollectionAddDialog, CollectionAddDialogData } from '../collection-add-dialog/collection-add-dialog';
@@ -30,7 +30,7 @@ const COMFYUI_KEYS = new Set(['prompt', 'workflow']);
 
 @Component({
   selector: 'pp-info-panel',
-  imports: [DatePipe, KeyValuePipe, MatCardModule, MatDividerModule, MatChipsModule, MatButtonModule, MatIconModule, MatMenuModule, MatTooltipModule, ClipboardModule, MatChipsModule],
+  imports: [DatePipe, DecimalPipe, KeyValuePipe, MatCardModule, MatDividerModule, MatChipsModule, MatButtonModule, MatIconModule, MatMenuModule, MatTooltipModule, ClipboardModule, MatChipsModule],
   templateUrl: './info-panel.html',
   styleUrl: './info-panel.scss',
 })
@@ -78,12 +78,28 @@ export class InfoPanel implements OnInit {
   private loadSidecars(): void {
     this.sidecars.set(null);
     this.sidecarExpanded.set({});
+    this.stepsOpen.set(false);
     const f = this._info?.filename;
     if (!f) return;
     this.photoService.getSidecars(f, this.folder).subscribe({
-      next: r => this.sidecars.set(r.txt || r.json ? r : null),
+      next: r => this.sidecars.set(r.txt || r.json || r.steps?.length ? r : null),
       error: () => this.sidecars.set(null),
     });
+  }
+
+  /** Collapsed until asked for: it's a review aid, not part of reading the file. */
+  stepsOpen = signal(false);
+
+  /** Step reviews for the current image, or [] when the job didn't record any. */
+  readonly stepArtifacts = computed<StepArtifact[]>(() => this.sidecars()?.steps ?? []);
+
+  /** Served through the working folder, same as any other image in it. */
+  stepUrl(a: StepArtifact): string {
+    return `/api/photo?path=${encodeURIComponent(a.path)}`;
+  }
+
+  openStep(a: StepArtifact): void {
+    window.open(this.stepUrl(a), '_blank');
   }
 
   toggleSidecar(kind: string): void {
