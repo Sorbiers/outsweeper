@@ -14,6 +14,8 @@ import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
+from PIL import Image
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from server import create_app                      # noqa: E402
@@ -589,3 +591,87 @@ if __name__ == '__main__':
     test_synopsis_job_skips_story_when_supplied()
     test_failure_surfaces_message()
     print('\nall job-queue tests passed')
+
+
+# ---------------------------------------------------------------------------
+# Local upscaling as a queued job
+# ---------------------------------------------------------------------------
+
+def _upscale_app():
+    """An app over a temp folder holding one image, plus a fake models dir."""
+    tmp = Path(tempfile.mkdtemp())
+    Image.new('RGB', (32, 24), (90, 120, 160)).save(tmp / 'src.png')
+    models = Path(tempfile.mkdtemp())
+    (models / 'fake.pth').write_bytes(b'not a real model')
+    app = create_app(tmp, {}, '__selected', '__dust',
+                     jobs_widget_enabled=True, thumb_cache_days=0,
+                     upscale_models_dir=str(models))
+    return app, app.test_client(), tmp, models
+
+
+def test_interpolation_upscale_runs_as_a_job():
+    """Pillow resampling: no engines involved, but still queued."""
+    app, client, tmp, _ = _upscale_app()
+    r = client.post('/api/jobs', json={
+        'kind': 'upscale', 'title': 'up',
+        'payload': {'method': 'interpolation', 'path': 'src.png',
+                    'interpMethod': 'lanczos', 'scale': 2},
+    })
+    jid = r.get_json()['id']
+    assert wait_until(lambda: jobs_by_id(client)[jid]['status'] in ('done', 'failed'))
+
+    job = jobs_by_id(client)[jid]
+    assert job['status'] == 'done', job.get('error')
+    written = [p for p in tmp.iterdir() if p.name != 'src.png' and p.suffix == '.png']
+    assert len(written) == 1
+    with Image.open(written[0]) as im:
+        assert im.size == (64, 48)          # 32x24 doubled
+
+
+def test_upscale_job_frees_engines_before_using_the_gpu():
+    """spandrel loads a model onto the GPU, so the other tenants go first."""
+    app, client, tmp, models = _upscale_app()
+    timeline = []
+    orig_unload = job_resources.unload_all_lm_models
+    orig_free = job_resources.free_comfy_memory
+    job_resources.unload_all_lm_models = lambda url: timeline.append('unload_lm')
+    job_resources.free_comfy_memory = lambda url: timeline.append('free_comfy')
+    try:
+        r = client.post('/api/jobs', json={
+            'kind': 'upscale', 'title': 'up',
+            'payload': {'method': 'spandrel', 'path': 'src.png',
+                        'model': 'fake.pth', 'tile': 0},
+        })
+        jid = r.get_json()['id']
+        # The fake model can't load, so the job fails — but only *after* the
+        # engines were released, which is the invariant under test.
+        assert wait_until(lambda: jobs_by_id(client)[jid]['status'] in ('done', 'failed'))
+        assert timeline == ['unload_lm', 'free_comfy']
+    finally:
+        job_resources.unload_all_lm_models = orig_unload
+        job_resources.free_comfy_memory = orig_free
+
+
+def test_upscale_job_rejects_a_bad_method_and_a_missing_file():
+    app, client, tmp, _ = _upscale_app()
+    for payload, why in [
+        ({'method': 'magic', 'path': 'src.png'}, 'unknown method'),
+        ({'method': 'interpolation', 'path': 'ghost.png', 'scale': 2}, 'missing file'),
+        ({'method': 'interpolation', 'path': 'src.png', 'scale': 99}, 'scale out of range'),
+    ]:
+        jid = client.post('/api/jobs', json={
+            'kind': 'upscale', 'title': why, 'payload': payload}).get_json()['id']
+        assert wait_until(lambda: jobs_by_id(client)[jid]['status'] in ('done', 'failed'))
+        job = jobs_by_id(client)[jid]
+        assert job['status'] == 'failed', f'{why} should fail, got {job["status"]}'
+        assert job['error']
+
+
+def test_upscale_model_dir_traversal_is_refused():
+    app, client, tmp, _ = _upscale_app()
+    jid = client.post('/api/jobs', json={
+        'kind': 'upscale', 'title': 'escape',
+        'payload': {'method': 'spandrel', 'path': 'src.png', 'model': '../outside.pth'},
+    }).get_json()['id']
+    assert wait_until(lambda: jobs_by_id(client)[jid]['status'] in ('done', 'failed'))
+    assert jobs_by_id(client)[jid]['status'] == 'failed'

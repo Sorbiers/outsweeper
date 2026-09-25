@@ -55,6 +55,12 @@ export class DictionaryService {
     return this.dictionaries().find(d => d.name.trim().toLowerCase() === n);
   }
 
+  /** True when `text` holds any `{{...}}` placeholder, dictionary or inline. */
+  hasTokens(text: string): boolean {
+    // `search` ignores the pattern's global flag and lastIndex, so the shared regex is safe.
+    return !!text && text.search(DictionaryService.TOKEN) >= 0;
+  }
+
   /** Names of dictionaries referenced by `{{name}}` tokens (ignores inline `{{a|b|c}}`). */
   referencedNames(text: string): string[] {
     const names = new Set<string>();

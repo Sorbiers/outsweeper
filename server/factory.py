@@ -261,6 +261,12 @@ def create_app(
         if folder_key in state.tag_index:
             state.tag_index[folder_key].pop(file_path.name, None)
 
+    def _register_output(dst: Path) -> None:
+        """Make a freshly-written output visible: refresh its folder cache entry
+        and notify clients so the feed picks it up."""
+        _invalidate_cache(dst)
+        _sse_broadcast('source_changed:+1')
+
     # --- Routes ---
 
     @app.route('/api/photos')
@@ -887,6 +893,7 @@ def create_app(
         state=state,
         resolve_path=resolve_path,
         copy_history_outputs=_copy_history_outputs,
+        register_output=_register_output,
         broadcast=lambda snapshot: _sse_broadcast(
             'jobs:' + json.dumps({'jobs': snapshot, 'paused': job_queue.paused}),
             flag='jobs'),
@@ -1015,6 +1022,15 @@ def create_app(
         except Exception as e:
             return jsonify({'error': str(e)}), 502
 
+    @app.route('/api/lmstudio/loaded', methods=['POST'])
+    def lmstudio_loaded():
+        data = request.get_json()
+        lms_url = data.get('lmstudio_url', 'http://localhost:1234/v1')
+        try:
+            return jsonify(lmstudio_activity.loaded_model(lms_url, timeout=LMS_CHECK_TIMEOUT))
+        except Exception as e:
+            return jsonify({'error': str(e)}), 502
+
     @app.route('/api/lmstudio/prompt', methods=['POST'])
     def lmstudio_prompt():
         data    = request.get_json()
@@ -1118,57 +1134,13 @@ def create_app(
     def api_exiftool_capabilities():
         return jsonify(exiftool_capabilities(state))
 
-    def _register_output(dst: Path) -> None:
-        """Make a freshly-written output visible: refresh its folder cache entry
-        and notify clients so the feed picks it up."""
-        _invalidate_cache(dst)
-        _sse_broadcast('source_changed:+1')
-
     @app.route('/api/upscale/capabilities')
     def api_upscale_capabilities():
         return jsonify(upscale_capabilities(state))
 
-    @app.route('/api/upscale/spandrel', methods=['POST'])
-    def api_upscale_spandrel():
-        data = request.get_json() or {}
-        file_path = resolve_path(request.args.get('path', ''))
-        if not file_path.is_file():
-            return jsonify({'error': 'not found'}), 404
-        if not state.upscale_models_resolved:
-            return jsonify({'error': 'upscale_models_dir is not configured'}), 400
-        model_rel = (data.get('model') or '').strip()
-        model_path = (state.upscale_models_resolved / model_rel).resolve()
-        if not model_path.is_relative_to(state.upscale_models_resolved) or not model_path.is_file():
-            return jsonify({'error': 'model not found'}), 404
-        tile = int(data.get('tile') or 0)
-        try:
-            dst = unique_output_path(file_path, 'up')
-            scale = run_spandrel(model_path, file_path, dst, tile=tile)
-            _register_output(dst)
-            return jsonify({'ok': True, 'filename': dst.name, 'scale': scale})
-        except Exception as e:
-            return jsonify({'error': str(e)}), 500
-
-    @app.route('/api/upscale/interpolate', methods=['POST'])
-    def api_upscale_interpolate():
-        data = request.get_json() or {}
-        file_path = resolve_path(request.args.get('path', ''))
-        if not file_path.is_file():
-            return jsonify({'error': 'not found'}), 404
-        method = (data.get('method') or 'lanczos').lower()
-        try:
-            scale = float(data.get('scale') or 4)
-        except (TypeError, ValueError):
-            return jsonify({'error': 'invalid scale'}), 400
-        if scale <= 0 or scale > 16:
-            return jsonify({'error': 'scale must be between 0 and 16'}), 400
-        try:
-            dst = unique_output_path(file_path, f'x{scale:g}')
-            run_interpolation(file_path, dst, method, scale)
-            _register_output(dst)
-            return jsonify({'ok': True, 'filename': dst.name})
-        except Exception as e:
-            return jsonify({'error': str(e)}), 500
+    # The local upscalers used to run inline here. They are `upscale` jobs now:
+    # spandrel puts a model on the GPU, so it has to be arbitrated against ComfyUI
+    # like everything else, and a route would be a way around that.
 
     @app.route('/api/bgremove/capabilities')
     def api_bgremove_capabilities():

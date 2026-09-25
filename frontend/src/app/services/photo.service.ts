@@ -133,22 +133,9 @@ export class PhotoService {
     return this.http.get<UpscaleCapabilities>('/api/upscale/capabilities');
   }
 
-  /** Local model-based upscale via spandrel; writes a new image next to the source. */
-  spandrelUpscale(filename: string, folder: string, model: string, tile: number): Observable<{ ok: boolean; filename: string; scale: number }> {
-    return this.http.post<{ ok: boolean; filename: string; scale: number }>(
-      '/api/upscale/spandrel',
-      { model, tile },
-      { params: { path: this.filePath(filename, folder) } },
-    );
-  }
-
-  /** Local interpolation upscale (Pillow); writes a new image next to the source. */
-  interpolateUpscale(filename: string, folder: string, method: string, scale: number): Observable<{ ok: boolean; filename: string }> {
-    return this.http.post<{ ok: boolean; filename: string }>(
-      '/api/upscale/interpolate',
-      { method, scale },
-      { params: { path: this.filePath(filename, folder) } },
-    );
+  /** Path of an image relative to the working folder, for a job payload. */
+  jobPath(filename: string, folder = ''): string {
+    return this.filePath(filename, folder);
   }
 
   bgRemoveCapabilities(): Observable<BgRemoveCapabilities> {
@@ -421,6 +408,12 @@ export class PhotoService {
 
   checkLmStudio(lmstudioUrl: string): Observable<any> {
     return this.http.post('/api/lmstudio/check', { lmstudio_url: lmstudioUrl });
+  }
+
+  /** The model LM Studio currently has loaded (both null when none is). */
+  getLmStudioLoaded(lmstudioUrl: string): Observable<{ key: string | null; instance: string | null }> {
+    return this.http.post<{ key: string | null; instance: string | null }>(
+      '/api/lmstudio/loaded', { lmstudio_url: lmstudioUrl });
   }
 
   lmPrompt(lmstudioUrl: string, prompt: string, model: string): Observable<{ description: string }> {

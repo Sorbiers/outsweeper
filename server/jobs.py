@@ -32,6 +32,7 @@ from . import prompts as prompts_text
 from . import previews
 from . import resources
 from .resources import ResourceError
+from .upscale import run_interpolation, run_spandrel, unique_output_path
 from .utils import STEPS_DIR
 from .utils import LMS_COMPLETION_TIMEOUT, VISION_COMPLETION_TIMEOUT
 
@@ -104,6 +105,8 @@ class JobContext:
     resolve_path: Callable[[str], Path]
     copy_history_outputs: Callable[[str, dict], list[str]]
     broadcast: Callable[[list[dict]], None]
+    #: Make a freshly written file visible to the folder cache and the clients.
+    register_output: Callable[[Path], None]
 
 
 class JobQueue:
@@ -119,6 +122,7 @@ class JobQueue:
             'improve_send': self._run_improve_send,
             'guided': self._run_guided,
             'synopsis': self._run_synopsis,
+            'upscale': self._run_upscale,
         }
 
     # --- public API -------------------------------------------------------
@@ -377,6 +381,57 @@ class JobQueue:
         except Exception as e:
             print(f'[warn] step review failed for {prompt_id}: {e}', flush=True)
             return []
+
+    def _run_upscale(self, job: Job) -> None:
+        """Local upscaling — spandrel (torch) or plain interpolation (Pillow).
+
+        Queued for the same reason the ComfyUI work is: spandrel loads a model onto
+        the GPU, so running it while a render is in flight would put two things in
+        VRAM at once. Interpolation is CPU-only and needs no arbitration, but it
+        still goes through the queue so a long batch can't block the UI.
+        """
+        st = self._ctx.state
+        p = job.payload
+        method = (p.get('method') or '').strip()
+        src = self._ctx.resolve_path(p.get('path') or '')
+        if not src.is_file():
+            raise ResourceError(f'{src.name} no longer exists')
+
+        cancelled = lambda: job.cancel_requested       # noqa: E731
+
+        if method == 'spandrel':
+            if not st.upscale_models_resolved:
+                raise ResourceError('upscale_models_dir is not configured')
+            model_path = (st.upscale_models_resolved / (p.get('model') or '')).resolve()
+            if not model_path.is_relative_to(st.upscale_models_resolved) or not model_path.is_file():
+                raise ResourceError('Upscale model not found')
+
+            # Needs the GPU, so clear the other tenants first — same invariant the
+            # ComfyUI phase enforces, just in the other direction.
+            self._step(job, 'Freeing GPU memory…', 0.1)
+            resources.unload_all_lm_models(st.lmstudio_url)
+            resources.free_comfy_memory(st.comfy_url)
+            if cancelled():
+                return
+
+            self._step(job, f'Upscaling with {model_path.name}…', 0.3)
+            dst = unique_output_path(src, 'up')
+            scale = run_spandrel(model_path, src, dst, tile=int(p.get('tile') or 0))
+            job.result['scale'] = scale
+
+        elif method == 'interpolation':
+            scale = float(p.get('scale') or 4)
+            if scale <= 0 or scale > 16:
+                raise ResourceError('Scale must be between 0 and 16')
+            self._step(job, f'Resampling x{scale:g}…', 0.3)
+            dst = unique_output_path(src, f'x{scale:g}')
+            run_interpolation(src, dst, (p.get('interpMethod') or 'lanczos').lower(), scale)
+
+        else:
+            raise ResourceError(f'Unknown upscale method: {method!r}')
+
+        self._ctx.register_output(dst)
+        job.result['filenames'] = [dst.name]
 
     def _run_improve_send(self, job: Job) -> None:
         """"Improve then send": have the LLM enrich each prompt, then render them all.

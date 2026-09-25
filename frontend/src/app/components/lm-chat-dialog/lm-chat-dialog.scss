@@ -1,0 +1,45 @@
+// Title-bar styling (cursor/user-select) comes from the ppDialogTitle directive.
+
+.full-width {
+  width: 100%;
+}
+
+.model-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.model-field {
+  flex: 1;
+  min-width: 0;
+}
+
+// Stands in for the eject icon while unloading.
+.model-row mat-spinner {
+  display: inline-block;
+  margin-right: 8px;
+  vertical-align: middle;
+}
+
+.chat-field,
+.response-field {
+  margin-top: 12px;
+}
+
+.status-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  opacity: 0.85;
+  margin: 12px 0;
+
+  mat-icon { font-size: 18px; width: 18px; height: 18px; }
+}
+
+.loaded-tag {
+  margin-left: 8px;
+  font-size: 11px;
+  opacity: 0.6;
+}

@@ -37,7 +37,8 @@ export interface JobPrompt {
 }
 
 export interface JobPayload {
-  prompts: JobPrompt[];
+  /** Optional: a local upscale job carries no ComfyUI graphs at all. */
+  prompts?: JobPrompt[];
   copyResult?: boolean;
   /** Capture each sampler step and write a review sheet + animation. */
   recordSteps?: boolean;
@@ -47,6 +48,18 @@ export interface JobPayload {
   /** Source image uploaded to ComfyUI at execution time (so the operation no
    *  longer requires ComfyUI to be running when the dialog is used). */
   upload?: { path: string; nodeId?: string };
+
+  // --- local upscale only -----------------------------------------------
+  /** 'spandrel' (torch, needs the GPU) or 'interpolation' (Pillow, CPU). */
+  method?: 'spandrel' | 'interpolation';
+  /** Image to upscale, relative to the working folder. */
+  path?: string;
+  /** spandrel: model file, relative to `upscale_models_dir`; 0 tile = whole image. */
+  model?: string;
+  tile?: number;
+  /** interpolation: resampling filter and factor. */
+  interpMethod?: string;
+  scale?: number;
 
   // --- guided generation only -------------------------------------------
   /** The single graph the loop re-patches each iteration. */

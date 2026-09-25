@@ -1,0 +1,53 @@
+<h2 mat-dialog-title ppDialogTitle>Ask LM Studio</h2>
+
+<mat-dialog-content>
+  @if (lms.availableModels.length) {
+    <div class="model-row">
+      <mat-form-field class="model-field" subscriptSizing="dynamic">
+        <mat-label>Model</mat-label>
+        <mat-select [(ngModel)]="model" [disabled]="asking()">
+          @for (m of lms.availableModels; track m) {
+            <mat-option [value]="m">{{ m }}@if (m === loaded) { <span class="loaded-tag">loaded</span> }</mat-option>
+          }
+        </mat-select>
+      </mat-form-field>
+      <button mat-stroked-button (click)="eject()" [disabled]="!canEject"
+              matTooltip="Unload the model from LM Studio to free VRAM">
+        @if (ejecting()) { <mat-spinner diameter="16"></mat-spinner> } @else { <mat-icon>eject</mat-icon> }
+        Eject
+      </button>
+    </div>
+  } @else if (lms.checkStatus === 'checking') {
+    <div class="status-row"><mat-spinner diameter="18"></mat-spinner> Connecting to LM Studio…</div>
+  } @else {
+    <div class="status-row warn">
+      <mat-icon>error_outline</mat-icon> No LM Studio models available — is LM Studio running?
+    </div>
+  }
+
+  <mat-form-field class="full-width chat-field" subscriptSizing="dynamic">
+    <mat-label>Chat</mat-label>
+    <textarea matInput rows="4" [(ngModel)]="message" [disabled]="asking()"
+              (keydown.control.enter)="ask()"></textarea>
+    <button mat-icon-button matSuffix (click)="ask()" [disabled]="!canAsk" matTooltip="Send (Ctrl+Enter)">
+      <mat-icon>send</mat-icon>
+    </button>
+  </mat-form-field>
+
+  @if (asking()) {
+    <div class="status-row"><mat-spinner diameter="18"></mat-spinner> Waiting for the reply…</div>
+  } @else if (response) {
+    <mat-form-field class="full-width response-field" subscriptSizing="dynamic">
+      <mat-label>Response</mat-label>
+      <textarea matInput rows="12" [(ngModel)]="response"></textarea>
+    </mat-form-field>
+  }
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button mat-button (click)="close()">Close</button>
+  <button mat-flat-button (click)="paste()" [disabled]="!response.trim() || asking()"
+          matTooltip="Replace the prompt with the response">
+    <mat-icon>content_paste</mat-icon> Paste
+  </button>
+</mat-dialog-actions>

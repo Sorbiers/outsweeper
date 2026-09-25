@@ -63,6 +63,9 @@ npm run release
 - `POST /api/comfy/checkpoints` — list available checkpoints
 - `POST /api/comfy/prompt` — submit workflow to ComfyUI (low-level; prefer the job queue)
 - `POST /api/lmstudio/check` — verify LM Studio connection
+- `POST /api/lmstudio/loaded` — the model LM Studio has loaded (`{key, instance}`, both null
+  when none), read from its native API on demand rather than the widget's poll
+- `POST /api/lmstudio/unload` — unload every loaded LM Studio instance (frees VRAM)
 
 **API endpoints — Internal job queue:**
 - `GET  /api/jobs` — queue snapshot (`{jobs, paused}`); also pushed over SSE as `jobs:`
@@ -104,7 +107,8 @@ engine, enforces the invariants in `server/resources.py`: the service is running
 on demand), ComfyUI's own queue is drained (or force-cleared), and the *other* engine's
 memory has been released. Work therefore survives closing a dialog or the whole tab.
 
-- **Job kinds:** `comfy` (Send / Send to front / Outpaint / Upscale), `improve_send`
+- **Job kinds:** `comfy` (Send / Send to front / Outpaint / Inpaint / Kontext / ComfyUI
+  upscale), `upscale` (local: spandrel on the GPU, or Pillow interpolation), `improve_send`
   (LLM enriches each prompt, then renders), `guided` (improve → render → vision-judge →
   refine, looping until it matches or the budget runs out).
 - **Status lifecycle:** `queued → running → processed → done`, plus `failed` / `cancelled`.
@@ -116,8 +120,8 @@ memory has been released. Work therefore survives closing a dialog or the whole 
 - **Source images are uploaded by the worker**, not the browser, so img2img / Outpaint /
   Upscale no longer require ComfyUI to be running when the dialog is used.
 - **LLM instruction texts** live in `server/prompts.py` — the single place to tune wording.
-- **Interactive dialogs deliberately bypass the queue**: Describe, Synopsis to Illustrations
-  and LM Prompt call LM Studio directly and are *not* arbitrated, so they can collide with a
+- **Interactive dialogs deliberately bypass the queue**: Describe, Synopsis to Illustrations,
+  LM Prompt and Ask LM Studio call LM Studio directly and are *not* arbitrated, so they can collide with a
   running job. That's an accepted trade-off (the user is present and driving them).
 - Tests: `tests/test_job_queue.py` runs the worker against a stub ComfyUI + stub LM Studio
   (no GPU) and asserts serial execution, queue-drain waiting, engine mutual exclusion,
@@ -152,6 +156,12 @@ memory has been released. Work therefore survives closing a dialog or the whole 
   and their consumers, so strength model/clip apply to the fill
 - `DescribeDialog` — AI image description via LM Studio vision model; can save description to image metadata
 - `PrompterDialog` — compose narrative prompts from randomized preset arrays (ambience, character, action, style)
+- `LmChatDialog` — "Ask LM Studio" from the Generate dialog: model picker (defaults to the
+  loaded model) with Eject, a chat request, and Paste of the reply into the prompt (turning
+  on Multiple prompts when it has several paragraphs). Lazy-loaded
+- Generate dialog **Resolve** (▶) — freezes a `{{…}}` template into Jobs number × prompt-part
+  concrete prompts, one per paragraph, then turns on Multiple prompts and resets Jobs to 1.
+  Dictionary-attached LoRAs are dropped, since the resolved text no longer triggers them
 - `GuidedGenerationDialog` — configures a `guided` job, then *monitors* it (the loop runs on the backend, so closing the dialog doesn't stop it)
 - `JobQueueWidget` / `JobQueueDialog` — the internal queue: live status, drag-to-reorder, cancel, pause. Separate from the ComfyUI queue widget/dialog, which still show ComfyUI's own queue.
 

@@ -91,6 +91,20 @@ def poll_loop(state: Any, interval: float = 3.0) -> None:
             _broadcast_state()
 
 
+def loaded_model(lms_url: str, timeout: float = 5) -> dict[str, str | None]:
+    """The first loaded model, asked of LM Studio directly (the widget's poll only
+    runs while a widget wants it). `key` is the model id `/v1/models` lists; `instance`
+    the loaded instance's id, which differs when a model is loaded more than once."""
+    import requests as http_requests
+    resp = http_requests.get(f'{_native_base(lms_url)}/api/v1/models', timeout=timeout)
+    resp.raise_for_status()
+    for m in resp.json().get('models', []):
+        instances = m.get('loaded_instances') or []
+        if instances:
+            return {'key': m.get('key'), 'instance': instances[0].get('id')}
+    return {'key': None, 'instance': None}
+
+
 def complete(lms_url: str, model: str, text: str, *, image_data_url: str | None = None,
              timeout: float, temperature: float = 0.7) -> str:
     """One chat completion, text or vision.

@@ -23,6 +23,7 @@ import { PromptHistoryService } from '../../services/prompt-history.service';
 import { ComfyUrlRowComponent } from '../comfy-url-row/comfy-url-row';
 import { DictionaryDialog } from '../dictionary-dialog/dictionary-dialog';
 import { GuidedGenerationData, GuidedGenerationDialog } from '../guided-generation-dialog/guided-generation-dialog';
+import type { LmChatDialogData } from '../lm-chat-dialog/lm-chat-dialog';
 import { LlmModelDialog, LlmModelDialogData } from '../llm-model-dialog/llm-model-dialog';
 import type { PhotoChartDialogData } from '../photo-chart-dialog/photo-chart-dialog';
 import type { ChartId } from '../photo-chart-dialog/photo-chart-presets';
@@ -355,6 +356,54 @@ export class GenerateDialog {
     return this.positivePromptParts().length;
   }
 
+  /** Resolve is only offered while the prompt still holds `{{...}}` placeholders. */
+  get canResolve(): boolean {
+    return this.dictionaries.hasTokens(this.params.positivePrompt);
+  }
+
+  get resolveTooltip(): string {
+    if (!this.canResolve) return 'Resolve — needs {{…}} placeholders in the prompt';
+    const n = this.jobCount * this.promptPartCount;
+    return `Resolve {{…}} into ${n} prompt${n > 1 ? 's' : ''} (Jobs number × prompts)`;
+  }
+
+  /**
+   * Freeze the template into concrete prompts: Jobs number × each prompt part, every
+   * one resolved independently — the same draws a send would make — and written back
+   * one per paragraph, with Multiple prompts on (empty-line delimiter) and Jobs reset
+   * to 1, so the next send queues exactly the prompts on screen. The template goes to
+   * prompt history, since the field no longer holds it.
+   */
+  resolveTemplate(): void {
+    if (!this.canResolve) return;
+    const loraSink: DictionaryValueLora[] = [];
+    const prompts: string[] = [];
+    const parts = this.positivePromptParts();
+    for (let j = 0; j < this.jobCount; j++) {
+      for (const part of parts) {
+        // A blank line inside one prompt would split it under the empty-line delimiter.
+        const text = this.dictionaries.substitute(part, loraSink).replace(/\n\s*\n/g, '\n');
+        if (text) prompts.push(text);
+      }
+    }
+    if (!prompts.length) {
+      this.snackBar.open('Nothing to resolve — every placeholder came out empty', '', { duration: 4000 });
+      return;
+    }
+
+    this.promptHistory.add(this.params.positivePrompt);
+    this.params.positivePrompt = prompts.join('\n\n');
+    this.multiplePrompts = true;
+    this.promptDelimiter = '';
+    this.jobsNumber = 1;
+
+    // Values can carry a LoRA, injected at send time — but only while the token is
+    // still there to pick it. Once resolved, the text no longer knows about them.
+    const note = loraSink.length ? ' — dictionary LoRAs are not kept, add them manually' : '';
+    this.snackBar.open(`Resolved into ${prompts.length} prompt${prompts.length > 1 ? 's' : ''}${note}`, '',
+      { duration: note ? 6000 : 3000 });
+  }
+
   extractWorkflow(): void {
     const workflow = this.injectManualLoras(
       this.removeEmptyLoraNodes(this.applyParams(this.data.workflow, this.params)),
@@ -447,7 +496,7 @@ export class GenerateDialog {
   /** POST a job and report the outcome; the dialog stays open and usable. */
   private enqueue(label: string, payload: JobPayload, kind = 'comfy'): void {
     this.sending = true;
-    const n = payload.prompts.length;
+    const n = payload.prompts?.length ?? 0;   // upscale jobs carry no graphs
     const title = `${label}${n > 1 ? ` ×${n}` : ''} · ${this.shortPrompt()}`;
     this.photoService.enqueueJob(kind, title, payload).subscribe({
       next: () => {
@@ -680,6 +729,35 @@ export class GenerateDialog {
     this.dialog.open(SynopsisDialog, {
       data: { lmUrl, applyPrompts } satisfies SynopsisDialogData,
       width: '90vw', maxWidth: '760px', height: '85vh', maxHeight: '92vh',
+    });
+  }
+
+  /**
+   * Ask LM Studio for prompts in a small chat dialog; Paste replaces the positive
+   * prompt with its reply, and the dialog stays open for another go. A reply of
+   * several blank-line-separated paragraphs — the shape the default request asks
+   * for — also turns on Multiple prompts with the empty-line delimiter.
+   * Loaded on demand.
+   */
+  async openLmChat(): Promise<void> {
+    const lmUrl = this.connState.lmstudio.url;
+    if (!lmUrl) {
+      this.snackBar.open('Set the LM Studio URL first (open the Prompt/Describe dialog to connect).', 'Dismiss', { duration: 6000 });
+      return;
+    }
+
+    const paste = (text: string) => {
+      this.params.positivePrompt = text;
+      if (text.split(/\r?\n\s*\r?\n/).filter(p => p.trim()).length > 1) {
+        this.multiplePrompts = true;
+        this.promptDelimiter = '';
+      }
+    };
+
+    const { LmChatDialog } = await import('../lm-chat-dialog/lm-chat-dialog');
+    this.dialog.open(LmChatDialog, {
+      data: { lmUrl, paste } satisfies LmChatDialogData,
+      width: '90vw', maxWidth: '720px',
     });
   }
 

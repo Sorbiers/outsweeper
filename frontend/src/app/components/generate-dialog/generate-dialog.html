@@ -214,6 +214,13 @@
       <button mat-icon-button (click)="openDictionaries()" title="Dictionaries — {{ '{{' }}name{{ '}}' }} substitution">
         <mat-icon>menu_book</mat-icon>
       </button>
+      <button mat-icon-button (click)="resolveTemplate()" [disabled]="!canResolve" disabledInteractive
+              [matTooltip]="resolveTooltip">
+        <mat-icon>play_arrow</mat-icon>
+      </button>
+      <button mat-icon-button (click)="openLmChat()" title="Ask LM Studio — paste its reply as the prompt">
+        <mat-icon>smart_toy</mat-icon>
+      </button>
       <button mat-icon-button (click)="openPromptHistory()" title="Prompt history">
         <mat-icon>history</mat-icon>
       </button>

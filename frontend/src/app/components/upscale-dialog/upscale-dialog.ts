@@ -111,19 +111,36 @@ export class UpscaleDialog {
     }
   }
 
+  /** Queued like every other non-interactive operation: spandrel loads a model onto
+   *  the GPU, so it must not run while ComfyUI holds VRAM. Interpolation is CPU-only
+   *  but goes through the queue too, so a slow one can't block the dialog. */
   private runSpandrel(): void {
     if (!this.spandrelModel) return;
-    this.running.set(true);
-    this.photoService.spandrelUpscale(this.data.filename, this.data.folder, this.spandrelModel, this.tile).subscribe({
-      next: res => this.done(`Upscaled ×${res.scale} → ${res.filename}`),
-      error: err => this.fail(err),
+    this.enqueueUpscale(`Upscale · ${this.data.filename}`, {
+      method: 'spandrel',
+      path: this.photoService.jobPath(this.data.filename, this.data.folder),
+      model: this.spandrelModel,
+      tile: this.tile,
     });
   }
 
   private runInterpolation(): void {
+    this.enqueueUpscale(`Upscale ×${this.interpScale} · ${this.data.filename}`, {
+      method: 'interpolation',
+      path: this.photoService.jobPath(this.data.filename, this.data.folder),
+      interpMethod: this.interpMethod,
+      scale: this.interpScale,
+    });
+  }
+
+  private enqueueUpscale(title: string, payload: Record<string, any>): void {
     this.running.set(true);
-    this.photoService.interpolateUpscale(this.data.filename, this.data.folder, this.interpMethod, this.interpScale).subscribe({
-      next: res => this.done(`Upscaled → ${res.filename}`),
+    this.photoService.enqueueJob('upscale', title, payload).subscribe({
+      next: () => {
+        this.running.set(false);
+        this.snackBar.open('Upscale queued', '', { duration: 4000 });
+        this.dialogRef.close();
+      },
       error: err => this.fail(err),
     });
   }
