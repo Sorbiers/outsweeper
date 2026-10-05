@@ -132,7 +132,9 @@
         </button>
 
         <p class="usage">Use <code>{{ usageToken }}</code> in a prompt.</p>
-        <p class="usage">Inline (no dictionary needed): <code>{{ '{{' }}a|b|c{{ '}}' }}</code> picks one at random.</p>
+        <p class="usage">Inline (no dictionary needed): <code>{{ '{{' }}a|b|c{{ '}}' }}</code> picks one at random.
+          An empty option picks nothing (<code>{{ '{{' }}story|{{ '}}' }}</code>), and they nest:
+          <code>{{ '{{' }}about {{ '{{' }}war|circus{{ '}}' }}|{{ '}}' }}</code>.</p>
         <p class="usage">Values can reference other dictionaries too — circular references are ignored.</p>
       } @else {
         <p class="hint pad">Select or create a dictionary.</p>

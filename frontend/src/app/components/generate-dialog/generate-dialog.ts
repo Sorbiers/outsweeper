@@ -733,10 +733,11 @@ export class GenerateDialog {
   }
 
   /**
-   * Ask LM Studio for prompts in a small chat dialog; Paste replaces the positive
-   * prompt with its reply, and the dialog stays open for another go. A reply of
-   * several blank-line-separated paragraphs — the shape the default request asks
-   * for — also turns on Multiple prompts with the empty-line delimiter.
+   * Ask LM Studio for prompts in a small chat dialog; the dialog stays open for
+   * another go. Its first Paste replaces the positive prompt with the reply, later
+   * ones append after an empty line, so several asks build up one list. Once the
+   * prompt holds several blank-line-separated paragraphs — the shape the default
+   * request asks for — Multiple prompts is turned on with the empty-line delimiter.
    * Loaded on demand.
    */
   async openLmChat(): Promise<void> {
@@ -746,9 +747,10 @@ export class GenerateDialog {
       return;
     }
 
-    const paste = (text: string) => {
-      this.params.positivePrompt = text;
-      if (text.split(/\r?\n\s*\r?\n/).filter(p => p.trim()).length > 1) {
+    const paste = (text: string, append: boolean) => {
+      const current = this.params.positivePrompt.trimEnd();
+      this.params.positivePrompt = append && current ? `${current}\n\n${text}` : text;
+      if (this.params.positivePrompt.split(/\r?\n\s*\r?\n/).filter(p => p.trim()).length > 1) {
         this.multiplePrompts = true;
         this.promptDelimiter = '';
       }

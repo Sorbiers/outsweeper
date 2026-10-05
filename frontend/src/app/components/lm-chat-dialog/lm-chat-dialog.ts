@@ -16,8 +16,9 @@ import { PhotoService } from '../../services/photo.service';
 
 export interface LmChatDialogData {
   lmUrl: string;
-  /** Hand the reply back to the still-open Generate dialog's prompt field. */
-  paste: (text: string) => void;
+  /** Hand the reply back to the still-open Generate dialog's prompt field — replacing
+   *  what is there, or with `append`, adding to it. */
+  paste: (text: string, append: boolean) => void;
 }
 
 /**
@@ -48,6 +49,9 @@ export class LmChatDialog {
   private loadedIds: { key: string | null; instance: string | null } | null = null;
   /** The user's own pick, which outranks the loaded model. */
   private picked = '';
+  /** The first Paste replaces the prompt; later ones, while this dialog stays open,
+   *  append — so several asks build up one list of prompts. */
+  private pasted = false;
 
   constructor() {
     this.dialogRef.disableClose = true;
@@ -127,11 +131,16 @@ export class LmChatDialog {
     });
   }
 
+  get pasteTooltip(): string {
+    return this.pasted ? 'Append the response to the prompt' : 'Replace the prompt with the response';
+  }
+
   paste(): void {
     const text = this.response.trim();
     if (!text) return;
-    this.data.paste(text);
-    this.snackBar.open('Pasted into the prompt', '', { duration: 2000 });
+    this.data.paste(text, this.pasted);
+    this.snackBar.open(this.pasted ? 'Appended to the prompt' : 'Pasted into the prompt', '', { duration: 2000 });
+    this.pasted = true;
   }
 
   close(): void {

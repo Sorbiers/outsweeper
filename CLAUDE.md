@@ -157,8 +157,9 @@ memory has been released. Work therefore survives closing a dialog or the whole 
 - `DescribeDialog` — AI image description via LM Studio vision model; can save description to image metadata
 - `PrompterDialog` — compose narrative prompts from randomized preset arrays (ambience, character, action, style)
 - `LmChatDialog` — "Ask LM Studio" from the Generate dialog: model picker (defaults to the
-  loaded model) with Eject, a chat request, and Paste of the reply into the prompt (turning
-  on Multiple prompts when it has several paragraphs). Lazy-loaded
+  loaded model) with Eject, a chat request, and Paste of the reply into the prompt — the
+  first Paste replaces it, later ones while the dialog stays open append after an empty
+  line; Multiple prompts turns on once it has several paragraphs. Lazy-loaded
 - Generate dialog **Resolve** (▶) — freezes a `{{…}}` template into Jobs number × prompt-part
   concrete prompts, one per paragraph, then turns on Multiple prompts and resets Jobs to 1.
   Dictionary-attached LoRAs are dropped, since the resolved text no longer triggers them

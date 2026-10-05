@@ -6,6 +6,8 @@
       <mat-form-field class="model-field" subscriptSizing="dynamic">
         <mat-label>Model</mat-label>
         <mat-select [(ngModel)]="model" [disabled]="asking()">
+          <!-- Just the id: the option's text would run the "loaded" tag into it. -->
+          <mat-select-trigger>{{ model }}</mat-select-trigger>
           @for (m of lms.availableModels; track m) {
             <mat-option [value]="m">{{ m }}@if (m === loaded) { <span class="loaded-tag">loaded</span> }</mat-option>
           }
@@ -47,7 +49,7 @@
 <mat-dialog-actions align="end">
   <button mat-button (click)="close()">Close</button>
   <button mat-flat-button (click)="paste()" [disabled]="!response.trim() || asking()"
-          matTooltip="Replace the prompt with the response">
+          [matTooltip]="pasteTooltip">
     <mat-icon>content_paste</mat-icon> Paste
   </button>
 </mat-dialog-actions>

@@ -37,7 +37,6 @@ from urllib.parse import urlparse
 import requests
 
 COMFY = os.environ.get("COMFY_URL", "http://127.0.0.1:8188").rstrip("/")
-TOKEN = re.compile(r"\{\{\s*([^{}]+?)\s*\}\}")
 
 # Hard cap on nesting depth, in case a chain of *distinct* dictionaries runs long.
 MAX_DEPTH = 8
@@ -61,10 +60,16 @@ def pick_weighted_value(values: list[dict]) -> dict | None:
 def substitute(text: str, dictionaries: dict[str, list[dict]], lora_sink: list[dict] | None = None) -> str:
     """Resolve every {{...}} placeholder:
       - {{a|b|c}} — pick one of the pipe-separated options at random (equal odds).
+        An empty option is a real choice of nothing: {{ story | }} drops the word
+        half the time, {{ x | | | }} three times in four.
       - {{name}}  — pick a weighted-random value from the matching dictionary.
-    A picked value is itself resolved, so dictionary values may reference other
-    dictionaries (nested substitution). Unknown/empty dictionaries, empty option
-    lists, and dictionary self-references (direct or via a cycle) are removed.
+    Placeholders nest — {{ about {{war|circus}} | }} — and resolve outermost first:
+    one option is picked, then only the picked text is resolved further, so inner
+    draws (and the LoRAs they carry) happen only when the outer choice keeps them.
+    A dictionary value is resolved the same way, so it may reference other
+    dictionaries. Unknown/empty dictionaries and dictionary self-references (direct
+    or via a cycle) are removed; an unclosed {{ is left as literal text.
+    Mirrors DictionaryService.substitute in the frontend — keep the two in step.
 
     When a picked value carries a 'lora', it's appended to lora_sink (if given) —
     callers can pass the same list across multiple substitute() calls (e.g.
@@ -87,30 +92,88 @@ def _resolve(text: str, by_name: dict[str, list[dict]], visited: set[str],
     current chain, so a cycle (A -> B -> A) collapses to '' instead of looping."""
     if not text or depth >= MAX_DEPTH:
         return text
+    out: list[str] = []
+    i = 0
+    while i < len(text):
+        start = text.find("{{", i)
+        end = -1 if start < 0 else _matching_close(text, start)
+        if end < 0:
+            break  # no more placeholders, or an unclosed one: the rest is literal
+        out.append(text[i:start])
+        out.append(_resolve_token(text[start + 2:end], by_name, visited, lora_sink, depth))
+        i = end + 2
+    out.append(text[i:])
+    return "".join(out)
 
-    def repl(m: re.Match) -> str:
-        raw = m.group(1)
-        if "|" in raw:
-            opts = [o.strip() for o in raw.split("|") if o.strip()]
-            if not opts:
-                return ""
-            return _resolve(random.choice(opts), by_name, visited, lora_sink, depth + 1)
-        key = raw.strip().lower()
-        if key in visited:
-            print(f"[dictionaries] circular reference detected at {{{{{raw.strip()}}}}} -- skipped", file=sys.stderr)
-            return ""
-        vals = by_name.get(key)
-        if not vals:
-            return ""
-        picked = pick_weighted_value(vals)
-        if not picked:
-            return ""
-        lora = picked.get("lora")
-        if lora and lora.get("name"):
-            lora_sink.append(lora)
-        return _resolve(picked.get("value", ""), by_name, visited | {key}, lora_sink, depth + 1)
 
-    return TOKEN.sub(repl, text)
+def _resolve_token(raw: str, by_name: dict[str, list[dict]], visited: set[str],
+                   lora_sink: list[dict], depth: int) -> str:
+    """Resolve one placeholder's inner text (between its own {{ and }})."""
+    options = _split_options(raw)
+    if len(options) > 1:
+        return _resolve(random.choice(options).strip(), by_name, visited, lora_sink, depth + 1)
+    # A dictionary reference; its name may itself be built from placeholders.
+    name = _resolve(raw, by_name, visited, lora_sink, depth + 1).strip()
+    if not name:
+        return ""
+    key = name.lower()
+    if key in visited:
+        print(f"[dictionaries] circular reference detected at {{{{{name}}}}} -- skipped", file=sys.stderr)
+        return ""
+    vals = by_name.get(key)
+    if not vals:
+        return ""
+    picked = pick_weighted_value(vals)
+    if not picked:
+        return ""
+    lora = picked.get("lora")
+    if lora and lora.get("name"):
+        lora_sink.append(lora)
+    return _resolve(picked.get("value", ""), by_name, visited | {key}, lora_sink, depth + 1)
+
+
+def _matching_close(text: str, start: int) -> int:
+    """Index of the }} that closes the {{ at `start`, counting nested pairs; -1 when
+    it is never closed."""
+    level = 0
+    i = start
+    while i < len(text) - 1:
+        pair = text[i:i + 2]
+        if pair == "{{":
+            level += 1
+            i += 2
+        elif pair == "}}":
+            level -= 1
+            if level == 0:
+                return i
+            i += 2
+        else:
+            i += 1
+    return -1
+
+
+def _split_options(raw: str) -> list[str]:
+    """Split a placeholder's inner text on the |s that belong to it — not those inside
+    a nested placeholder. Empty options are kept: they are real choices."""
+    options: list[str] = []
+    level = 0
+    start = 0
+    i = 0
+    while i < len(raw):
+        pair = raw[i:i + 2]
+        if pair == "{{":
+            level += 1
+            i += 2
+        elif pair == "}}":
+            level -= 1
+            i += 2
+        else:
+            if raw[i] == "|" and level == 0:
+                options.append(raw[start:i])
+                start = i + 1
+            i += 1
+    options.append(raw[start:])
+    return options
 
 
 def dedupe_loras(lora_sink: list[dict]) -> list[dict]:
